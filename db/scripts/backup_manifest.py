@@ -155,8 +155,8 @@ def snapshot_sql(url, sql):
             import re
             if not re.fullmatch(r"[A-Fa-f0-9]+-[A-Fa-f0-9]+-[0-9]+", snapshot):
                 raise ValueError("invalid snapshot")
-            return "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "';\nSET LOCAL search_path TO pg_catalog;\n" + sql + ";\nCOMMIT;"
-    return "SET search_path TO pg_catalog;\n" + sql
+            return "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "';\nSET LOCAL search_path TO pg_catalog;\nSET LOCAL statement_timeout TO '900s';\n" + sql + ";\nCOMMIT;"
+    return "SET search_path TO pg_catalog;\nSET statement_timeout TO '900s';\n" + sql
 
 
 def stream_table_digest(url, sql, relation):

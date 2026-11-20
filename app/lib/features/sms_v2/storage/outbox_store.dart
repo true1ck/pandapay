@@ -75,6 +75,15 @@ ON CONFLICT(namespace, id) DO UPDATE SET payload=excluded.payload,
     return db.updatedRows;
   }
 
+  /// Whether any record is due now. Cheap enough for a timer: the sender wakes
+  /// itself when a back-off ends instead of waiting for the next app resume.
+  bool hasDue(DateTime now) => db
+      .select(
+        'SELECT 1 FROM v2_outbox WHERE namespace=? AND next_attempt_at<=? LIMIT 1',
+        [namespace, now.millisecondsSinceEpoch],
+      )
+      .isNotEmpty;
+
   /// Holds [id] back until [until], without counting an attempt.
   void deferUntil(String id, DateTime until) {
     db.execute(

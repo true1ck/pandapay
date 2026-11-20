@@ -38,6 +38,8 @@ import '../storage/stats_store.dart';
 import '../sync/learning_signals.dart';
 import '../sync/sharing_consent_mirror.dart';
 import '../sync/draft_feedback.dart';
+import '../sync/ai_server_status.dart';
+import '../sync/template_resend.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
 import '../telemetry/client_metrics.dart';
@@ -627,6 +629,36 @@ class SmsV2Runtime {
     }
     _keyFacts();
     _resendCardsOnce();
+    // Unknown formats go to the AI first. They need only what is already on the
+    // phone, and the fact upload behind them can take minutes on a long inbox
+    // or a slow server; the AI must not wait for it.
+    // Layouts held from before this phone counted are released without the
+    // person having to open the review screen.
+    await networked(() async {
+      if (!await hasSharingConsent()) return;
+      await releaseHeldTemplatesInBackground(
+        financial.database.db,
+        namespace: namespace,
+        now: clock(),
+        fetchStatus: () => fetchAiServerStatus(
+          client: client,
+          baseUri: baseUri,
+          headers: headers,
+        ),
+      );
+    });
+    await networked(
+      () => TemplateUpload(
+        intake: intake,
+        queue: OutboxStore(financial.database.db, namespace: namespace),
+        client: client,
+        baseUri: baseUri,
+        headers: headers,
+        hasConsent: hasSharingConsent,
+        accountIsCurrent: accountIsCurrent,
+        clock: clock,
+      ).drain(),
+    );
     await networked(() => _upload.drain());
     final senders = (await activeBundle()).senders;
     final correctionQueue = OutboxStore(
@@ -651,18 +683,6 @@ class SmsV2Runtime {
           eventId: eventId,
           brandOf: (sender) => uploadBrandOfSender(sender, senders),
         ),
-        clock: clock,
-      ).drain(),
-    );
-    await networked(
-      () => TemplateUpload(
-        intake: intake,
-        queue: OutboxStore(financial.database.db, namespace: namespace),
-        client: client,
-        baseUri: baseUri,
-        headers: headers,
-        hasConsent: hasSharingConsent,
-        accountIsCurrent: accountIsCurrent,
         clock: clock,
       ).drain(),
     );

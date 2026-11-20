@@ -9,7 +9,7 @@
 const DEFAULT_AI_MODEL = 'gemini-3.1-flash-lite';
 
 const SETTINGS = Object.freeze({
-  templates_per_user_per_day: { type: 'int', default: 50, min: 1, max: 500, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY' },
+  templates_per_user_per_day: { type: 'int', default: 10000, min: 1, max: 10000, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY' },
   corrections_per_user_per_day: { type: 'int', default: 200, min: 1, max: 2000, env: 'SMS_V2_CORRECTIONS_PER_DAY' },
   signals_per_user_per_day: { type: 'int', default: 500, min: 1, max: 5000, env: 'SMS_V2_LEARNING_SIGNALS_PER_DAY' },
   // 1 during the friends run (every tester has opted in); raise it before a public launch so one person cannot decide.

@@ -98,7 +98,7 @@ test('each route has its budget and Retry-After comes from shared storage', asyn
     assert.equal(await security.checkRate(req, route, 2), false);
     assert.equal(req.res.headers['Retry-After'], '17');
   }
-  assert.deepEqual(captured.map(checks => checks.map(x => x.limit)), [[60,20000],[30],[120],[50],[200],[24]]);
+  assert.deepEqual(captured.map(checks => checks.map(x => x.limit)), [[60,20000],[30],[120],[10000],[200],[24]]);
   assert.deepEqual(captured.map(checks => checks.map(x => x.units)), [[1,2],[1],[1],[2],[2],[1]]);
 });
 
@@ -140,6 +140,23 @@ test('a tester the owner chose to count is eligible without App Check; limits st
   assert.equal(second.smsV2Security.sharedLearningEligible, true);
   assert.equal(asked.length, 1, 'asked once a minute per account, not on every request');
   assert.match(asked[0], /sms_v2_tester_counts/);
+});
+
+test('a counted phone without App Check has no practical layout-upload limit; other routes and uncounted phones stay limited', async () => {
+  for (const [counts, upload, facts] of [[true, 10000, 30], [false, 25, 30]]) {
+    const recorded = [];
+    const security = createSecurity({
+      env: { SMS_V2_ATTESTATION_BINDING: 'off' }, verifyToken: verifier(), now: () => now,
+      withUserClient: async (_profile, operation) => operation({ query: async () => ({ rows: [{ counts }] }) }),
+      consume: async (_p, _d, checks) => { recorded.push(checks); return { allowed: true, retryAfterSeconds: 0 }; },
+      log: () => {},
+    });
+    const req = request();
+    await security.checkRate(req, 'unknown-templates', 10);
+    await security.checkRate(req, 'facts:batch', 10);
+    assert.equal(recorded[0][0].limit, upload, `layout uploads, counted=${counts}`);
+    assert.equal(recorded[1][0].limit, facts, `facts, counted=${counts}`);
+  }
 });
 
 test('a phone that is not counted, or when the question fails, stays not eligible and the request is never refused for it', async () => {

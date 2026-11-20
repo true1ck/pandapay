@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { SETTINGS, readPublicSettings } = require('./settings');
 
 const HOUR = 3600;
+const COUNTED_UPLOADS_PER_DAY = 10000;
 const DAY = 86400;
 const JWKS_URL = 'https://firebaseappcheck.googleapis.com/v1/jwks';
 const ROUTES = Object.freeze({
@@ -312,11 +313,17 @@ function createSecurity({
         log({ event: 'sms_v2_attestation', mode, outcome: 'replayed' });
         if (mode === 'enforce') return false;
       }
-      const multiplier = req.smsV2Security.verified ? 1 : 0.5;
+      // A phone that cannot attest but whom the owner chose to count (a tester, or every member when
+      // members_count_without_attestation is on) gets the full allowance for layout uploads. Halving it left
+      // a person with a backlog of unknown formats uploading about 25 a day, so most never reached the AI.
+      const counted = route === 'unknown-templates' && req.smsV2Security.sharedLearningEligible === true;
+      const multiplier = req.smsV2Security.verified || counted ? 1 : 0.5;
       const stored = specs.some(spec => spec.setting) ? await security.storedSettings(req) : {};
       const checks = specs.map(spec => {
+        // A counted phone's layouts all go to the AI, however many a long inbox holds: no daily limit unless the
+        // owner set one in the console (which then applies). The AI worker's own pace is the throttle.
         const chosen = spec.setting && Number.isSafeInteger(stored[spec.setting]) && stored[spec.setting] >= 1
-          ? Math.min(stored[spec.setting], spec.ceiling) : spec.limit;
+          ? Math.min(stored[spec.setting], spec.ceiling) : counted ? COUNTED_UPLOADS_PER_DAY : spec.limit;
         return {
           bucket: spec.bucket, seconds: spec.seconds,
           limit: Math.max(1, Math.floor(chosen * multiplier)),

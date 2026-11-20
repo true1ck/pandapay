@@ -189,15 +189,10 @@ services:
     # The shared API image probes /ready, but this worker has no HTTP server.
     # Check the actual PID 1 command instead; deeper liveness is monitored via
     # the worker heartbeat table.
+    # grep, not `node -e`: no Node process per probe (see api/Dockerfile).
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - >-
-          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
-          .includes('src/rewards_worker.js') ? 0 : 1)
-      interval: 10s
+      test: ["CMD-SHELL", "grep -qa src/rewards_worker.js /proc/1/cmdline"]
+      interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s
@@ -252,14 +247,8 @@ services:
     command: ["node", "src/sms_v2/jobs/template_worker_main.js"]
     # No HTTP server; check the actual PID 1 command, as rewards-worker does.
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - >-
-          process.exit(require('fs').readFileSync('/proc/1/cmdline', 'utf8')
-          .includes('template_worker_main.js') ? 0 : 1)
-      interval: 10s
+      test: ["CMD-SHELL", "grep -qa template_worker_main.js /proc/1/cmdline"]
+      interval: 30s
       timeout: 3s
       retries: 3
       start_period: 10s

@@ -13,6 +13,7 @@ import '../../../app/env.dart';
 import '../../../app/local_sms_rig_http_client.dart';
 import '../../../app/local_sms_rig_build.dart';
 import '../pipeline/sms_v2_runtime.dart';
+import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
 import '../sync/ai_status.dart' show hasFormatWaitingForAnswer;
@@ -142,6 +143,7 @@ final smsV2LifecycleProvider = Provider<void>((ref) {
   });
   // A draft takes seconds on the server, but the next ordinary sync can be minutes away. While a format this phone
   // sent in the last 10 minutes has no final answer yet, look for it every 30 seconds.
+  DateTime? lastDueWake;
   final waiting = Timer.periodic(const Duration(seconds: 30), (_) async {
     if (disposed ||
         WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
@@ -155,7 +157,23 @@ final smsV2LifecycleProvider = Provider<void>((ref) {
         db,
         namespace: ref.read(app.cacheNamespaceProvider),
       );
-      if (hasFormatWaitingForAnswer(state, now: DateTime.now())) {
+      // Also wake when an upload's back-off has ended. Without this a failed
+      // first try (an expired token, a slow server) waited for the next app
+      // resume or the 15-minute tick, so layouts reached the AI hours late.
+      // At most once every 2 minutes, so a record that stays due cannot make
+      // a busy server answer a full sync every 30 seconds.
+      final now = DateTime.now();
+      final dueWakeAllowed =
+          lastDueWake == null ||
+          now.difference(lastDueWake!) >= const Duration(minutes: 2);
+      final dueWake =
+          dueWakeAllowed &&
+          OutboxStore(
+            db,
+            namespace: ref.read(app.cacheNamespaceProvider),
+          ).hasDue(now);
+      if (dueWake) lastDueWake = now;
+      if (hasFormatWaitingForAnswer(state, now: now) || dueWake) {
         unawaited(run());
       }
     } catch (_) {

@@ -13,7 +13,7 @@ class ContainerDefaultsTest(unittest.TestCase):
         port = re.search(r'^ENV PORT=(\d+)$', source, re.MULTILINE)
         self.assertIsNotNone(port, 'The image needs an explicit default PORT')
         self.assertRegex(source, rf'(?m)^EXPOSE {port.group(1)}$')
-        self.assertIn(f'process.env.PORT||{port.group(1)}', source)
+        self.assertIn('${PORT:-' + port.group(1) + '}', source)
 
 
 if __name__ == '__main__':

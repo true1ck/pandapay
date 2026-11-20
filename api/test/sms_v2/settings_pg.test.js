@@ -53,7 +53,7 @@ test('settings and per-user limits on a fully migrated Postgres', { skip: !url |
   const limit = async (id, key, fallback) => (await pool.query('SELECT pandapay.sms_v2_limit($1,$2,$3) AS n', [id, key, fallback])).rows[0].n;
 
   // ---- sms_v2_limit: override, then setting, then default; expired overrides are ignored.
-  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 50);
+  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 10000);
   await pool.query("INSERT INTO sms_v2_settings(key,value,updated_by,reason) VALUES('templates_per_user_per_day','20'::jsonb,$1,'test setting')", [admin]);
   assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 20);
   await pool.query("INSERT INTO sms_v2_user_limits(profile_id,key,value,expires_at,updated_by,reason) VALUES($1,'templates_per_user_per_day',99,now()+interval '2 days',$2,'test override')", [profile, admin]);
@@ -160,7 +160,7 @@ test('settings and per-user limits on a fully migrated Postgres', { skip: !url |
   await assert.rejects(submit(item(4)), { code: 'P0050' });
   assert.equal((await call('DELETE', limitPath, { reason: 'done' })).status, 200);
   assert.equal((await call('DELETE', limitPath, { reason: 'done again' })).status, 404);
-  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 50);
+  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 10000);
   assert.equal((await submit(item(4))).rows.length, 1);
   await pool.query("DELETE FROM sms_v2_unknown_templates WHERE template_hash = ANY($1::text[])", [[1, 2, 3, 4].map((n) => item(n).templateHash)]);
 

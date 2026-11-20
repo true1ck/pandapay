@@ -48,8 +48,10 @@ EXPOSE 4000
 
 # The orchestrator needs a readiness signal that exercises the database, not
 # just the process. GET /ready is a real route in src/index.js.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# busybox wget, not `node -e`: a Node process per probe costs ~50 MB and ~0.4 s of CPU, which on the 1 GB
+# production host (a fraction of one core) starved the API itself. wget exits non-zero on any non-2xx answer.
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -T 4 -O /dev/null "http://127.0.0.1:${PORT:-4000}/ready" || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["node", "src/index.js"]

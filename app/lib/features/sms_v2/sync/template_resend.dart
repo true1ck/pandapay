@@ -33,3 +33,33 @@ bool resendHeldTemplates(
   state.put('ai:resend:at', now.toUtc().toIso8601String());
   return true;
 }
+
+/// Held layouts used to be released only when the person opened the review
+/// screen (its status bar asked the server and called [resendHeldTemplates]).
+/// Someone who never opens it, or whose layouts were held before the owner
+/// counted unattested members, kept them held for ever. This does the same from
+/// the background sync: ask the server how this phone's layouts stand at most
+/// every [every], and release held ones when the phone is counted now. A
+/// failed ask is tried again in about five minutes. Returns true when it reset
+/// the sent marks.
+Future<bool> releaseHeldTemplatesInBackground(
+  Database db, {
+  required String namespace,
+  required DateTime now,
+  required Future<AiServerStatus?> Function() fetchStatus,
+  Duration every = const Duration(minutes: 30),
+}) async {
+  final state = SyncStateStore(db, namespace: namespace);
+  final last = DateTime.tryParse(state.get('template:heldcheck:at') ?? '');
+  if (last != null && now.difference(last).abs() < every) return false;
+  final status = await fetchStatus();
+  // Success waits the full interval; a failure only about five minutes.
+  state.put(
+    'template:heldcheck:at',
+    (status == null ? now.subtract(every - const Duration(minutes: 5)) : now)
+        .toUtc()
+        .toIso8601String(),
+  );
+  if (status == null) return false;
+  return resendHeldTemplates(db, namespace: namespace, status: status, now: now);
+}

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -38,8 +39,19 @@ class TemplateUpload {
   final bool shareWording;
   final DateTime Function() clock;
 
+  /// When consent was last confirmed during this drain. A pass checks it before
+  /// every batch and again after the answer; each check is a call to the server
+  /// (a slow, busy one on a bad day), so 36 calls went out for 16 batches.
+  /// Within ten seconds of a confirmation the answer stands; a "no" is never
+  /// remembered, and a new drain always asks again.
+  Stopwatch? _consentConfirmed;
+
   Future<bool> _canShare() async {
     if (!accountIsCurrent()) return false;
+    final confirmed = _consentConfirmed;
+    if (confirmed != null && confirmed.elapsed < const Duration(seconds: 10)) {
+      return true;
+    }
     final bool consent;
     try {
       consent = await hasConsent();
@@ -48,7 +60,10 @@ class TemplateUpload {
     }
     if (!accountIsCurrent()) return false;
     if (!consent) {
+      _consentConfirmed = null;
       forgetSharedState(queue);
+    } else {
+      _consentConfirmed = Stopwatch()..start();
     }
     return consent;
   }
@@ -59,7 +74,7 @@ class TemplateUpload {
     queue.db.execute('SAVEPOINT sms_v2_template_revoke');
     try {
       queue.db.execute(
-        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'draft:%')",
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'draft:%')",
         [queue.namespace],
       );
       queue.db.execute(
@@ -100,8 +115,46 @@ class TemplateUpload {
   /// few have been sent; small ones always fit what is left.
   static const _batchSize = 10;
 
+  /// Flat wait after a failure that is the session's or the server's, not the layout's.
+  static const _transientRetry = Duration(seconds: 60);
+
+  /// How long to wait after a 5xx: the server's Retry-After when it sent one
+  /// (a paused intake says an hour), never under a minute, never over an hour.
+  static Duration _serverWait(http.Response response) => Duration(
+    seconds: (int.tryParse(response.headers['retry-after'] ?? '') ?? 60).clamp(
+      60,
+      3600,
+    ),
+  );
+
+  /// Earlier builds held the whole queue for up to six hours after a 429 and
+  /// pushed a failed layout's next try out to 30 minutes by doubling. A phone
+  /// that updates would keep honouring those waits, so layouts that were
+  /// already waiting would still sit unsent. Once per account, after the
+  /// update, make them due now and forget the old hold.
+  void _clearWaitsLeftByOlderBuilds() {
+    final state = SyncStateStore(queue.db, namespace: queue.namespace);
+    const marker = 'template:waits:cleared:v2';
+    if (state.get(marker) != null) return;
+    queue.db.execute(
+      "UPDATE v2_outbox SET next_attempt_at=0 WHERE namespace=? AND kind='template'",
+      [queue.namespace],
+    );
+    queue.db.execute(
+      "DELETE FROM v2_sync_state WHERE namespace=? AND key='template:wait'",
+      [queue.namespace],
+    );
+    state.put(marker, clock().toUtc().toIso8601String());
+  }
+
   Future<void> drain() async {
+    _consentConfirmed = null; // every pass asks the server afresh
+    // One layout the server refuses (400) must not hold up the ones behind it:
+    // after a 400 the next requests carry one layout each until it is found.
+    var singly = false;
+    var refused = 0;
     if (!await _canShare()) return;
+    _clearWaitsLeftByOlderBuilds();
     // The server told us to wait (HTTP 429): hold the whole queue until then.
     final holdUntil = DateTime.tryParse(
       SyncStateStore(
@@ -134,6 +187,7 @@ class TemplateUpload {
     }
     final state = SyncStateStore(queue.db, namespace: queue.namespace);
     final origins = TemplateOriginStore(state);
+    var processed = 0;
     for (final row in queue.db.select(
       "SELECT payload FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'",
       [queue.namespace],
@@ -143,6 +197,20 @@ class TemplateUpload {
       if (key is! String) continue;
       // Waiting for history, or already read by it: no rule can be drafted.
       if (review['aiHold'] != null) continue;
+      // Already queued or sent on an earlier pass: skip the redaction, which is
+      // the costly part (about a second for 1,500 open items, on the UI thread,
+      // at every pass). The marker holds the layout's hash; if its sent mark and
+      // its queue entry are both gone (a re-send, a cleaned-up entry), the item
+      // is processed afresh.
+      final scanned = state.get('template:scanned:$key');
+      if (scanned != null &&
+          (state.get('template:sent:$scanned') != null ||
+              queue.db.select(
+                'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
+                [queue.namespace, 'template:$scanned'],
+              ).isNotEmpty)) {
+        continue;
+      }
       final message = intake.capturedById(queue.namespace, key)?.message;
       if (message == null) continue;
       final salt = base64UrlEncode(
@@ -185,21 +253,23 @@ class TemplateUpload {
           )) {
         continue;
       }
-      if (state.get('template:sent:$hash') != null ||
+      if (state.get('template:sent:$hash') == null &&
           queue.db.select(
             'SELECT 1 FROM v2_outbox WHERE namespace=? AND id=?',
             [queue.namespace, 'template:$hash'],
-          ).isNotEmpty) {
-        continue;
+          ).isEmpty) {
+        queue.enqueue('template', hash, payload);
       }
-      queue.enqueue('template', hash, payload);
+      state.put('template:scanned:$key', hash);
+      // Hand the thread back every few items so a long backlog never freezes the screen.
+      if (++processed % 20 == 0) await Future<void>.delayed(Duration.zero); // perf-ok: a chunk is 20 items (~15 ms) and the first big scan only; later passes skip them
     }
     while (accountIsCurrent()) {
       if (!await _canShare()) return;
       final records = queue
           .due(clock(), limit: 2500)
           .where((item) => item.kind == 'template')
-          .take(_batchSize)
+          .take(singly ? 1 : _batchSize)
           .toList();
       if (records.isEmpty) return;
       try {
@@ -228,12 +298,14 @@ class TemplateUpload {
             .timeout(const Duration(seconds: 30));
         if (!await _canShare()) return;
         if (response.statusCode == 429) {
-          // Over the daily allowance or the rate limit: come back when the
-          // server says, not every few minutes.
+          // A limit the server applies (counted phones have none unless the
+          // owner sets one): try again within a couple of minutes, whatever
+          // Retry-After says. It can be a whole day, and waiting that long left
+          // a backlog of formats unsent for hours.
           final wait = Duration(
             seconds:
-                (int.tryParse(response.headers['retry-after'] ?? '') ?? 3600)
-                    .clamp(300, 21600),
+                (int.tryParse(response.headers['retry-after'] ?? '') ?? 60)
+                    .clamp(30, 120),
           );
           for (final record in records) {
             queue.retry(record, clock(), after: wait);
@@ -242,6 +314,36 @@ class TemplateUpload {
             queue.db,
             namespace: queue.namespace,
           ).put('template:wait', clock().add(wait).toUtc().toIso8601String());
+          return;
+        }
+        if (response.statusCode == 400) {
+          // The server refused the request as invalid. With several layouts in
+          // it, send them one at a time to find the one it dislikes; a single
+          // refused layout is set aside for six hours (not lost, and it blocks
+          // nothing), then the rest carry on in tens again.
+          // A server that refuses everything is not one bad layout: after six
+          // refusals in a pass, stop and leave the rest for the next pass.
+          if (++refused >= 6) return;
+          if (records.length > 1) {
+            singly = true;
+            continue;
+          }
+          queue.retry(records.single, clock(), after: const Duration(hours: 6));
+          singly = false;
+          continue;
+        }
+        if (response.statusCode == 401 ||
+            response.statusCode == 408 ||
+            response.statusCode >= 500) {
+          // The session or the server is the problem, not the layout: try again
+          // soon at a flat pace (or when the server said). The usual doubling
+          // back-off pushed the next try out to 30 minutes.
+          final wait = response.statusCode >= 500
+              ? _serverWait(response)
+              : _transientRetry;
+          for (final record in records) {
+            queue.retry(record, clock(), after: wait);
+          }
           return;
         }
         if (response.statusCode != 200 && response.statusCode != 202) {
@@ -266,9 +368,11 @@ class TemplateUpload {
           }
         }
         if (accepted.isEmpty) return;
-      } catch (_) {
+      } catch (error) {
+        // A timeout or a dropped connection says nothing about the layout either.
+        final transient = error is TimeoutException || error is http.ClientException;
         for (final record in records) {
-          queue.retry(record, clock());
+          queue.retry(record, clock(), after: transient ? _transientRetry : null);
         }
         return;
       }

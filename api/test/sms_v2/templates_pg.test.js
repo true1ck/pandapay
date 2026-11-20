@@ -8,6 +8,7 @@ const {
   runTemplateWorkerOnce,
 } = require("../../src/sms_v2/template_worker");
 const { validateResponse } = require("../../src/sms_v2/contracts");
+const { clearSettingsCache } = require("../../src/sms_v2/settings");
 const {
   startLoopHarness,
   registerAllLoopAdminRoutes,
@@ -126,9 +127,17 @@ test(
       (await store.results(profiles[2], empty.cursor)).items[0].status,
       "ready",
     );
+    // A member has no daily layout limit by default; an owner who sets one in the console gets it enforced.
+    await pool.query(
+      "INSERT INTO sms_v2_settings(key,value,updated_by,reason) VALUES('templates_per_user_per_day','50'::jsonb,$1,'cap test') ON CONFLICT (key) DO UPDATE SET value=excluded.value",
+      [rig.admin],
+    );
+    clearSettingsCache();
     const batch = Array.from({ length: 48 }, () => item);
     assert.equal((await submit(profiles[0], true, batch)).status, 202);
     assert.equal((await submit(profiles[0], true)).status, 429);
+    await pool.query("DELETE FROM sms_v2_settings WHERE key='templates_per_user_per_day'");
+    clearSettingsCache();
     await consent(profiles[0], false);
     assert.equal((await store.results(profiles[0], null)).items.length, 0);
     assert.equal((await submit(profiles[0], true)).status, 403);

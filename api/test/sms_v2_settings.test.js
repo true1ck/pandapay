@@ -113,9 +113,9 @@ test('security limits follow the stored setting and never exceed the environment
     readStoredSettings: async () => stored,
   });
   const req = () => ({ userId: 'u1', headers: { 'x-device-attestation': 'tok', 'x-sms-device-id': 'device-1234' } });
-  // No stored value: the built-in default.
+  // No stored value: a counted phone has no practical daily limit.
   await build({}, {}).checkRate(req(), 'unknown-templates', 3);
-  assert.equal(seen.at(-1)[0].limit, 50);
+  assert.equal(seen.at(-1)[0].limit, 10000);
   // A lowered setting applies.
   await build({}, { templates_per_user_per_day: 20 }).checkRate(req(), 'unknown-templates', 3);
   assert.equal(seen.at(-1)[0].limit, 20);
@@ -143,7 +143,7 @@ test('a settings read failure falls back to defaults instead of blocking phones'
   });
   const req = { userId: 'u1', headers: { 'x-device-attestation': 'tok', 'x-sms-device-id': 'device-1234' } };
   assert.equal(await security.checkRate(req, 'unknown-templates', 1), true);
-  assert.equal(seen[0][0].limit, 50);
+  assert.equal(seen[0][0].limit, 10000);
   assert.deepEqual(await security.storedSettings(req), {});
 });
 

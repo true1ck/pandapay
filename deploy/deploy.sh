@@ -462,6 +462,9 @@ ai_worker_env() {
   [ -n "$(ai_worker_env_value "$1")" ]
 }
 echo "==> Building target images before the maintenance window"
+# One image build at a time: on the 1 GB production host parallel builds push it into swap, and the running
+# API and the later preflights starve (two deploys failed that way on 20 Nov).
+export COMPOSE_PARALLEL_LIMIT=1
 "${TARGET_COMPOSE[@]}" build api auth rewards-worker backup db-migrate
 if ai_worker_configured; then
   "${TARGET_COMPOSE[@]}" build "$AI_WORKER"     || echo "WARNING: $AI_WORKER build failed; this release goes out without it." >&2
@@ -470,9 +473,10 @@ else
 fi
 
 echo "==> Read-only product migration and auth contact preflight before downtime"
-timeout --kill-after=10s --foreground 240s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
+# Generous limits: a slow host made the 240 s and 120 s ones fire on a healthy release (20 Nov).
+timeout --kill-after=10s --foreground 600s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
   --entrypoint node db-migrate /db/scripts/product_migrate.js --check
-timeout --kill-after=10s --foreground 120s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
+timeout --kill-after=10s --foreground 420s "${TARGET_COMPOSE[@]}" run --rm --no-deps \
   --entrypoint node db-migrate /workspace/auth/scripts/auditContactUniqueness.js --require-unique
 
 # The drafts worker is always fenced with the writers: a copy left running from an
