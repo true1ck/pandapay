@@ -5935,6 +5935,10 @@ app.get('/transactions/:id/category-related-preview', requireAuth, async (req, r
         userCategoryId: targetUserCategoryId,
       });
       if (target.error) return { status: 400, error: target.error };
+      // Bulk apply only ever changes spends, so the category must be a spend one.
+      if (!(await categoryFitsEntryKind(client, target.categoryId, 'spend'))) {
+        return { status: 400, error: 'category does not fit spending' };
+      }
 
       const source = await loadBulkTransaction(client, req.userId, req.params.id);
       if (!source) return { status: 404, error: 'transaction not found' };
@@ -6156,6 +6160,10 @@ app.post('/transactions/category-bulk-apply', requireAuth, async (req, res) => {
         userCategoryId: targetUserCategoryId || null,
       });
       if (target.error) return { status: 400, error: target.error };
+      // Bulk apply only ever changes spends, so the category must be a spend one.
+      if (!(await categoryFitsEntryKind(client, target.categoryId, 'spend'))) {
+        return { status: 400, error: 'category does not fit spending' };
+      }
 
       const lockIds = [...new Set([String(preview.source_transaction_id), ...selectedIds])].sort();
       const locked = await client.query(
