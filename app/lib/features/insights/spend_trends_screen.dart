@@ -1213,6 +1213,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
 
   void _setMonth(DateTime? month) {
     setState(() => _monthFilter = month);
+    _notifyFilters();
   }
 
   @override
@@ -1222,7 +1223,62 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         (oldWidget.report.periodStart != widget.report.periodStart ||
             oldWidget.report.periodEnd != widget.report.periodEnd)) {
       _monthFilter = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _notifyFilters();
+      });
     }
+    if (oldWidget.transactionDetailsLoading !=
+            widget.transactionDetailsLoading ||
+        oldWidget.transactions != widget.transactions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _dropStaleFilters();
+      });
+    }
+  }
+
+  /// A new date range keeps the filters, but one whose value has no spending
+  /// in that range (a category, merchant, account or payment method) would
+  /// only show an empty page, so it is cleared and the person is told.
+  void _dropStaleFilters() {
+    if (widget.transactionDetailsLoading || _spendEntries.isEmpty) return;
+    final cleared = <String>[];
+    final categories = _categoryOptions;
+    if (_categoryFilters.any((key) => !categories.containsKey(key))) {
+      _categoryFilters.removeWhere((key) => !categories.containsKey(key));
+      cleared.add('category');
+    }
+    bool missing(String? value, List<String> options) =>
+        value != null &&
+        !options.any(
+          (o) =>
+              SpendingSelection.normalize(o) ==
+              SpendingSelection.normalize(value),
+        );
+    if (missing(_merchantFilter, _merchantOptions)) {
+      _merchantFilter = null;
+      cleared.add('merchant');
+    }
+    if (missing(_cardFilter, _cardOptions)) {
+      _cardFilter = null;
+      cleared.add('account');
+    }
+    if (_paymentFilter != null &&
+        !_spendEntries.any(
+          (e) => SpendingSelection.effectiveInstrument(e) == _paymentFilter,
+        )) {
+      _paymentFilter = null;
+      cleared.add('payment method');
+    }
+    if (cleared.isEmpty) return;
+    setState(() {});
+    _notifyFilters();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Cleared the ${cleared.join(', ')} filter: nothing matched in this period.',
+        ),
+      ),
+    );
   }
 
   List<BankAccountSummary> get _bankAccounts =>
@@ -1239,14 +1295,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         untagged: _untagged,
       ),
     );
-    widget.onFiltersActiveChanged(_sheetFiltersActive);
+    widget.onFiltersActiveChanged(_filtersActive);
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _notifyFilters();
+      if (!mounted) return;
+      _dropStaleFilters();
+      _notifyFilters();
     });
   }
 
@@ -5011,10 +5069,7 @@ class _InvestmentsRow extends StatelessWidget {
                         const SizedBox(height: 2),
                         Text(
                           'Not counted in your spending · Tap to see them',
-                          style: BambooFonts.ui(
-                            11.5,
-                            color: BambooInk.ink500,
-                          ),
+                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
                         ),
                       ],
                     ),
