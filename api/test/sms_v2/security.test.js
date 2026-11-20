@@ -98,7 +98,7 @@ test('each route has its budget and Retry-After comes from shared storage', asyn
     assert.equal(await security.checkRate(req, route, 2), false);
     assert.equal(req.res.headers['Retry-After'], '17');
   }
-  assert.deepEqual(captured.map(checks => checks.map(x => x.limit)), [[60,20000],[30],[120],[10000],[200],[24]]);
+  assert.deepEqual(captured.map(checks => checks.map(x => x.limit)), [[60,20000],[30],[480],[10000],[200],[24]]);
   assert.deepEqual(captured.map(checks => checks.map(x => x.units)), [[1,2],[1],[1],[2],[2],[1]]);
 });
 

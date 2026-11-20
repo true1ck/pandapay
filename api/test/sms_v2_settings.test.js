@@ -130,7 +130,7 @@ test('security limits follow the stored setting and never exceed the environment
   assert.equal(seen.at(-1)[0].units, 4);
   // Routes without a setting are untouched.
   await build({}, { templates_per_user_per_day: 5 }).checkRate(req(), 'sync', 1);
-  assert.equal(seen.at(-1)[0].limit, 120);
+  assert.equal(seen.at(-1)[0].limit, 480);
 });
 
 test('a settings read failure falls back to defaults instead of blocking phones', async () => {

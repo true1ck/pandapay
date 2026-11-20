@@ -14,7 +14,10 @@ const ROUTES = Object.freeze({
     { bucket: 'facts:items', seconds: DAY, limit: 20000, env: 'SMS_V2_FACTS_ITEMS_PER_DAY', items: true },
   ],
   rules: [{ bucket: 'rules', seconds: HOUR, limit: 30, env: 'SMS_V2_RULES_PER_HOUR' }],
-  sync: [{ bucket: 'sync', seconds: HOUR, limit: 120, env: 'SMS_V2_SYNC_PER_HOUR' }],
+  // Per page, not per sync: since 21 Nov a page holds 250 rows of each kind instead of 1,000, so a phone makes about
+  // four requests where it made one, each about a quarter of the work. 120 an hour (60 without App Check) then
+  // refused phones in the middle of a first sync and between live messages (429s on the iPhone, 21 Nov).
+  sync: [{ bucket: 'sync', seconds: HOUR, limit: 480, env: 'SMS_V2_SYNC_PER_HOUR' }],
   // `setting` names the console setting that may lower or raise this limit; the
   // environment value, when set, is its hard ceiling (see settings.js).
   'unknown-templates': [{ bucket: 'unknown-templates', seconds: DAY, limit: 50, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY', items: true, setting: 'templates_per_user_per_day' }],
