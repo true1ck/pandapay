@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../app/category_picker.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart' show AppRoute;
@@ -171,11 +172,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
         initialRange = DateTimeRange(start: start, end: end);
       }
       if (!context.mounted) return;
-      final range = await showDateRangePicker(
+      final range = await showBambooDateRangeDialog(
         context: context,
         firstDate: firstDate,
         lastDate: lastDate,
-        initialDateRange: initialRange,
+        initialRange: initialRange,
+        helpText: 'Choose dates',
       );
       if (range != null && mounted) {
         ref

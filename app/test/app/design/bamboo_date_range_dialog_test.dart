@@ -6,7 +6,12 @@ import 'package:pandapay/app/design/bamboo_date_range_dialog.dart';
 DateTimeRange? _result;
 bool _closed = false;
 
-Future<void> _open(WidgetTester tester, {DateTimeRange? initial}) async {
+Future<void> _open(
+  WidgetTester tester, {
+  DateTimeRange? initial,
+  DateTime? lastDate,
+  DateTime? currentDate,
+}) async {
   _result = null;
   _closed = false;
   await tester.pumpWidget(
@@ -19,8 +24,9 @@ Future<void> _open(WidgetTester tester, {DateTimeRange? initial}) async {
               _result = await showBambooDateRangeDialog(
                 context: context,
                 firstDate: DateTime(2020),
-                lastDate: DateTime(2026, 11, 20),
+                lastDate: lastDate ?? DateTime(2026, 11, 20),
                 initialRange: initial,
+                currentDate: currentDate ?? DateTime(2026, 11, 20),
                 helpText: 'Pick range',
               );
               _closed = true;
@@ -139,5 +145,72 @@ void main() {
     await tester.pumpAndSettle();
     expect(_closed, isTrue);
     expect(_result, isNull);
+  });
+
+  testWidgets('tapping the month title jumps to another year', (tester) async {
+    await _open(tester);
+    expect(find.text('November 2026'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('range-calendar-years')), findsOneWidget);
+    // Day grid is replaced by the year list while jumping.
+    expect(
+      find.descendant(of: find.byType(Dialog), matching: find.text('15')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('2022'));
+    await tester.pumpAndSettle();
+    expect(find.text('November 2022'), findsOneWidget);
+    expect(find.byKey(const Key('range-calendar-years')), findsNothing);
+  });
+
+  testWidgets('a range can span years and Apply returns both ends', (
+    tester,
+  ) async {
+    await _open(tester);
+    Future<void> jumpTo(String year) async {
+      await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(year));
+      await tester.pumpAndSettle();
+    }
+
+    await jumpTo('2022');
+    await _day(tester, '5');
+    await jumpTo('2026');
+    await _day(tester, '10');
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(
+      _result,
+      DateTimeRange(start: DateTime(2022, 11, 5), end: DateTime(2026, 11, 10)),
+    );
+  });
+
+  testWidgets('jumping to the last year stops at the last allowed month', (
+    tester,
+  ) async {
+    await _open(
+      tester,
+      initial: DateTimeRange(
+        start: DateTime(2023, 12, 1),
+        end: DateTime(2023, 12, 3),
+      ),
+    );
+    expect(find.text('December 2023'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2026')); // last month is November 2026
+    await tester.pumpAndSettle();
+    expect(find.text('November 2026'), findsOneWidget);
+  });
+
+  testWidgets('with no earlier range it opens on today, not the far end', (
+    tester,
+  ) async {
+    await _open(tester, lastDate: DateTime(2027, 12, 31));
+    expect(find.text('November 2026'), findsOneWidget);
   });
 }

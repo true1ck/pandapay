@@ -3107,4 +3107,58 @@ void main() {
       expect(withLedger.investedOut, Money.fromRupees(15000));
     });
   });
+
+  testWidgets('From and To open one calendar that sets both ends', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          transactionTagsProvider.overrideWith((ref) => null),
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 1750),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => const [],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SpendTrendsScreen)),
+    );
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('From'));
+    await tester.pumpAndSettle();
+    expect(find.text('Select dates'), findsOneWidget);
+    for (final day in const ['2', '5']) {
+      await tester.tap(
+        find.descendant(of: find.byType(Dialog), matching: find.text(day)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    // The calendar closed after one pass: no second "end date" prompt.
+    expect(find.text('Select dates'), findsNothing);
+    expect(find.text('Select end date'), findsNothing);
+
+    await tester.tap(find.text('Apply range'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Show results'));
+    await tester.pumpAndSettle();
+    final query = container.read(selectedSpendQueryProvider);
+    expect(query.isCustom, isTrue);
+    expect(query.from!.day, 2);
+    expect(query.to!.day, 5);
+  });
 }

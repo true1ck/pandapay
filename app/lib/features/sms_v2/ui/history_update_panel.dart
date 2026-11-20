@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/bamboo_date_range_dialog.dart';
 import '../../../app/design/widgets.dart';
 
 import '../../../app/providers.dart' as app;
@@ -26,11 +27,12 @@ class _HistoryUpdatePanelState extends ConsumerState<HistoryUpdatePanel> {
   String? _status;
 
   Future<void> _choosePeriod() async {
-    final chosen = await showDateRangePicker(
+    final chosen = await showBambooDateRangeDialog(
       context: context,
       firstDate: DateTime(2000),
       lastDate: DateTime.now(),
-      initialDateRange: _period,
+      initialRange: _period,
+      helpText: 'Choose period',
     );
     if (!mounted || chosen == null) return;
     setState(() {

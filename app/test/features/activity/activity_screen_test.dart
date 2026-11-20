@@ -1570,6 +1570,36 @@ void main() {
       expect(find.text('Show 5 transactions'), findsOneWidget);
     });
 
+    testWidgets('Custom range opens one calendar and applies the range', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(shops()),
+        cards: const [],
+      );
+      await tester.tap(find.text('This month'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Custom range'));
+      await tester.tap(find.text('Custom range'));
+      await tester.pumpAndSettle();
+
+      // One calendar for both ends, not a start prompt then an end prompt.
+      expect(find.text('Choose dates'), findsOneWidget);
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(
+          find.descendant(of: find.byType(Dialog), matching: find.text('1')),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Choose dates'), findsNothing);
+      expect(find.text('This month'), findsNothing);
+    });
+
     testWidgets('a saved view comes back on a fresh start', (tester) async {
       SharedPreferences.setMockInitialValues({
         'activity_view_v1':

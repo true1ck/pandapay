@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/design/app_icons.dart';
 import '../../app/design/merchant_brand.dart';
 import '../../app/design/merchant_brand_tile.dart';
@@ -791,36 +792,29 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
         '(${_monthCount(from, to)} ${_monthCount(from, to) == 1 ? 'month' : 'months'})';
   }
 
-  Future<void> _pickDate({required bool from}) async {
+  /// One calendar for the whole range: tap the first day, then the last day.
+  Future<void> _pickRange() async {
     final firstDate = DateTime(2020);
     final today = DateTime(widget.now.year, widget.now.month, widget.now.day);
     // Presets use complete calendar months, so a selected range can end
     // after today (for example, 31 Oct while the clock is 17 Oct). Keep that
-    // existing boundary selectable instead of handing showDatePicker an
-    // invalid initial date.
+    // existing boundary selectable.
     final lastDate = _customTo.isAfter(today) ? _customTo : today;
-    final requestedInitial = from ? _customFrom : _customTo;
-    final initialDate = requestedInitial.isBefore(firstDate)
-        ? firstDate
-        : requestedInitial.isAfter(lastDate)
-        ? lastDate
-        : requestedInitial;
-    final picked = await showDatePicker(
+    final start = _customFrom.isBefore(firstDate) ? firstDate : _customFrom;
+    final picked = await showBambooDateRangeDialog(
       context: context,
       firstDate: firstDate,
       lastDate: lastDate,
-      initialDate: initialDate,
-      helpText: from ? 'Select start date' : 'Select end date',
+      initialRange: DateTimeRange(
+        start: start,
+        end: _customTo.isBefore(start) ? start : _customTo,
+      ),
+      helpText: 'Select dates',
     );
     if (picked == null) return;
     setState(() {
-      if (from) {
-        _customFrom = picked;
-        if (_customFrom.isAfter(_customTo)) _customTo = picked;
-      } else {
-        _customTo = picked;
-        if (_customTo.isBefore(_customFrom)) _customFrom = picked;
-      }
+      _customFrom = picked.start;
+      _customTo = picked.end;
       _draft = _custom(_customFrom, _customTo);
     });
   }
@@ -1027,7 +1021,7 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
                   child: _DateField(
                     label: 'From',
                     value: _customFrom,
-                    onTap: () => _pickDate(from: true),
+                    onTap: _pickRange,
                   ),
                 ),
                 const SizedBox(width: AppSpace.sm),
@@ -1035,7 +1029,7 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
                   child: _DateField(
                     label: 'To',
                     value: _customTo,
-                    onTap: () => _pickDate(from: false),
+                    onTap: _pickRange,
                   ),
                 ),
               ],

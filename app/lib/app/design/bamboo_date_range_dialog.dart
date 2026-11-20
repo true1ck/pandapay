@@ -17,6 +17,7 @@ Future<DateTimeRange?> showBambooDateRangeDialog({
   required DateTime firstDate,
   required DateTime lastDate,
   DateTimeRange? initialRange,
+  DateTime? currentDate,
   String helpText = 'Select dates',
   String confirmText = 'Apply',
 }) {
@@ -26,6 +27,7 @@ Future<DateTimeRange?> showBambooDateRangeDialog({
       firstDate: _dateOnly(firstDate),
       lastDate: _dateOnly(lastDate),
       initialRange: initialRange,
+      currentDate: currentDate,
       helpText: helpText,
       confirmText: confirmText,
     ),
@@ -39,6 +41,7 @@ class _RangeCalendar extends StatefulWidget {
     required this.firstDate,
     required this.lastDate,
     required this.initialRange,
+    required this.currentDate,
     required this.helpText,
     required this.confirmText,
   });
@@ -46,6 +49,7 @@ class _RangeCalendar extends StatefulWidget {
   final DateTime firstDate;
   final DateTime lastDate;
   final DateTimeRange? initialRange;
+  final DateTime? currentDate;
   final String helpText;
   final String confirmText;
 
@@ -60,6 +64,27 @@ class _RangeCalendarState extends State<_RangeCalendar> {
   late DateTime? _start;
   late DateTime? _end;
   late DateTime _month;
+  bool _pickingYear = false;
+  ScrollController? _yearScroll;
+
+  @override
+  void dispose() {
+    _yearScroll?.dispose();
+    super.dispose();
+  }
+
+  void _setPickingYear(bool on) {
+    _yearScroll?.dispose();
+    _yearScroll = null;
+    if (on) {
+      // Open the list with the shown year about one row from the top.
+      final row = (_month.year - widget.firstDate.year) ~/ 3;
+      _yearScroll = ScrollController(
+        initialScrollOffset: (row * 48.0 - 48.0).clamp(0, 1e9),
+      );
+    }
+    setState(() => _pickingYear = on);
+  }
 
   @override
   void initState() {
@@ -67,9 +92,19 @@ class _RangeCalendarState extends State<_RangeCalendar> {
     final r = widget.initialRange;
     _start = r == null ? null : _dateOnly(r.start);
     _end = r == null ? null : _dateOnly(r.end);
-    final shown = _start ?? widget.lastDate;
+    // No earlier range: open on today's month, kept inside the allowed dates.
+    final today = _today;
+    final shown =
+        _start ??
+        (today.isBefore(widget.firstDate)
+            ? widget.firstDate
+            : today.isAfter(widget.lastDate)
+            ? widget.lastDate
+            : today);
     _month = DateTime(shown.year, shown.month);
   }
+
+  DateTime get _today => _dateOnly(widget.currentDate ?? DateTime.now());
 
   bool _enabled(DateTime d) =>
       !d.isBefore(widget.firstDate) && !d.isAfter(widget.lastDate);
@@ -99,6 +134,17 @@ class _RangeCalendarState extends State<_RangeCalendar> {
   void _page(int delta) =>
       setState(() => _month = DateTime(_month.year, _month.month + delta));
 
+  /// Jumps to [year], keeping the month where the range allows it.
+  void _pickYear(int year) {
+    var next = DateTime(year, _month.month);
+    final first = DateTime(widget.firstDate.year, widget.firstDate.month);
+    final last = DateTime(widget.lastDate.year, widget.lastDate.month);
+    if (next.isBefore(first)) next = first;
+    if (next.isAfter(last)) next = last;
+    _month = next;
+    _setPickingYear(false);
+  }
+
   String _headline(MaterialLocalizations l) {
     final s = _start;
     if (s == null) return 'Start date – End date';
@@ -124,11 +170,15 @@ class _RangeCalendarState extends State<_RangeCalendar> {
           children: [
             _header(l),
             _monthBar(l),
-            _weekdays(l),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: _grid(l),
-            ),
+            if (_pickingYear)
+              _years()
+            else ...[
+              _weekdays(l),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _grid(l),
+              ),
+            ],
             _actions(l),
           ],
         ),
@@ -166,28 +216,91 @@ class _RangeCalendarState extends State<_RangeCalendar> {
       children: [
         IconButton(
           tooltip: l.previousMonthTooltip,
-          onPressed: _canGoBack ? () => _page(-1) : null,
+          onPressed: !_pickingYear && _canGoBack ? () => _page(-1) : null,
           icon: const Icon(Icons.chevron_left),
         ),
         Expanded(
-          child: Text(
-            l.formatMonthYear(_month),
-            textAlign: TextAlign.center,
-            style: BambooFonts.ui(
-              14.5,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
+          child: InkWell(
+            key: const Key('range-calendar-month-title'),
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _setPickingYear(!_pickingYear),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    l.formatMonthYear(_month),
+                    style: BambooFonts.ui(
+                      14.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                  Icon(
+                    _pickingYear ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                    color: BambooInk.ink900,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
         IconButton(
           tooltip: l.nextMonthTooltip,
-          onPressed: _canGoForward ? () => _page(1) : null,
+          onPressed: !_pickingYear && _canGoForward ? () => _page(1) : null,
           icon: const Icon(Icons.chevron_right),
         ),
       ],
     ),
   );
+
+  /// A scrollable grid of years, same height as the weekday row plus day grid
+  /// so the dialog does not change size.
+  Widget _years() {
+    final first = widget.firstDate.year;
+    final count = widget.lastDate.year - first + 1;
+    const rowHeight = 48.0;
+    return SizedBox(
+      height: 32 + _rows * _cell,
+      child: GridView.builder(
+        key: const Key('range-calendar-years'),
+        controller: _yearScroll,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisExtent: rowHeight,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 8,
+        ),
+        itemCount: count,
+        itemBuilder: (context, i) {
+          final year = first + i;
+          final current = year == _month.year;
+          return InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () => _pickYear(year),
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              decoration: ShapeDecoration(
+                shape: const StadiumBorder(),
+                color: current ? BambooInk.slate : null,
+              ),
+              child: Text(
+                '$year',
+                style: BambooFonts.ui(
+                  14.5,
+                  weight: current ? FontWeight.w700 : FontWeight.w500,
+                  color: current ? BambooInk.lime : BambooInk.ink900,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   Widget _weekdays(MaterialLocalizations l) {
     final first = l.firstDayOfWeekIndex;
@@ -245,7 +358,7 @@ class _RangeCalendarState extends State<_RangeCalendar> {
     final selected = isStart || isEnd;
     final inside =
         start != null && end != null && day.isAfter(start) && day.isBefore(end);
-    final today = day == _dateOnly(DateTime.now());
+    final today = day == _today;
     // The soft band runs between the two end circles, half-width on each end.
     final bandLeft = inside || (isEnd && start != end);
     final bandRight = inside || (isStart && end != null && start != end);
