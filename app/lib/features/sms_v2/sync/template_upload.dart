@@ -262,7 +262,7 @@ class TemplateUpload {
       }
       state.put('template:scanned:$key', hash);
       // Hand the thread back every few items so a long backlog never freezes the screen.
-      if (++processed % 20 == 0) await Future<void>.delayed(Duration.zero);
+      if (++processed % 20 == 0) await Future<void>.delayed(Duration.zero); // perf-ok: a chunk is 20 items (~15 ms) and the first big scan only; later passes skip them
     }
     while (accountIsCurrent()) {
       if (!await _canShare()) return;
