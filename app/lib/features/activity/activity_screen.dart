@@ -1378,6 +1378,31 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                           showDate: !sort.groupsByDay,
                                           foreignPayment:
                                               foreignByTransaction[entry.id],
+                                          // Only on the Money in filter, where
+                                          // the kind map is already paid for
+                                          // (one cached pass over the ledger).
+                                          moneyInKindLabel:
+                                              filter.type ==
+                                                      _ActivityTypeFilter
+                                                          .moneyIn &&
+                                                  ledgerModel != null
+                                              ? _moneyInKindLabel(
+                                                  _moneyInKindOf(
+                                                    entry,
+                                                    ledgerModel
+                                                        .moneyInKindByEvent,
+                                                  ),
+                                                )
+                                              : null,
+                                          investmentKindLabel:
+                                              filter.type ==
+                                                      _ActivityTypeFilter
+                                                          .investments &&
+                                                  ledgerModel != null
+                                              ? ledgerModel
+                                                    .investmentKindByEvent[entry
+                                                    .eventId]
+                                              : null,
                                           selecting: _selecting,
                                           selected: _selectedIds.contains(
                                             entry.id,
@@ -1674,12 +1699,9 @@ class ActivityFilter {
         entry.entryKind == TxnEntryKind.refund;
     if (!type.matches(entry) && !refundAsked) return false;
     if (moneyInKinds.isNotEmpty && type == _ActivityTypeFilter.moneyIn) {
-      final kind = switch (entry.entryKind) {
-        TxnEntryKind.investmentReturn => 'investment_return',
-        TxnEntryKind.refund => 'refund',
-        _ => moneyInKindByEvent[entry.eventId] ?? 'other',
-      };
-      if (!moneyInKinds.contains(kind)) return false;
+      if (!moneyInKinds.contains(_moneyInKindOf(entry, moneyInKindByEvent))) {
+        return false;
+      }
     }
     if (cardIds.isNotEmpty && !cardIds.contains(entry.userCardId)) return false;
     if (categoryIds.isNotEmpty || categoryLabels.isNotEmpty) {
@@ -2062,6 +2084,21 @@ const _activityMoneyInKinds = [
   ...moneyInKindLabels,
   ('investment_return', 'From investments'),
 ];
+
+/// The one place an entry's Money in kind is decided: the filter chips and the
+/// row pill both use it, so they can never disagree. Anything the ledger did
+/// not classify (a hand-added income, say) is 'other'.
+String _moneyInKindOf(TransactionEntry entry, Map<String, String> byEvent) =>
+    switch (entry.entryKind) {
+      TxnEntryKind.investmentReturn => 'investment_return',
+      TxnEntryKind.refund => 'refund',
+      _ => byEvent[entry.eventId] ?? 'other',
+    };
+
+String _moneyInKindLabel(String kind) => [
+  for (final (k, label) in _activityMoneyInKinds)
+    if (k == kind) label,
+].firstOrNull ?? 'Other money in';
 
 enum _ActivityDatePreset {
   allTime,
@@ -4050,10 +4087,19 @@ class _TransactionTile extends StatelessWidget {
   final bool selecting;
   final bool selected;
 
+  /// Salary, Dividends, Cashback...: set on the Money in filter only.
+  final String? moneyInKindLabel;
+
+  /// Investment, IPO application, Redemption, Dividend: set on the Investments
+  /// filter only, from the ledger's event type.
+  final String? investmentKindLabel;
+
   /// Shows the day before the time: for a list that is not grouped by day.
   final bool showDate;
   const _TransactionTile(
     this.entry, {
+    this.moneyInKindLabel,
+    this.investmentKindLabel,
     this.showDate = false,
     this.foreignPayment,
     required this.onTap,
@@ -4292,10 +4338,14 @@ class _TransactionTile extends StatelessWidget {
                         ] else if (showInvestmentChip) ...[
                           const SizedBox(width: AppSpace.xs),
                           TransactionBadgePill.plain(
-                            isInvestmentReturn
-                                ? 'Investment return'
-                                : 'Investment',
+                            investmentKindLabel ??
+                                (isInvestmentReturn
+                                    ? 'Investment return'
+                                    : 'Investment'),
                           ),
+                        ] else if (moneyInKindLabel != null) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          TransactionBadgePill.plain(moneyInKindLabel!),
                         ],
                       ],
                     ),

@@ -104,6 +104,21 @@ class LedgerReadModel {
       i.eventId: i.kind,
   });
 
+  /// What an investment-side event is, by event id: the ledger's own event type
+  /// in words. Activity's Investments filter reads it for the row pill.
+  late final Map<String, String> investmentKindByEvent = Map.unmodifiable({
+    for (final e in snapshot().events)
+      if (switch (e.type) {
+        v2.EventType.investment => 'Investment',
+        v2.EventType.ipoApplication => 'IPO application',
+        v2.EventType.investmentWithdrawal => 'Redemption',
+        v2.EventType.dividend => 'Dividend',
+        _ => null,
+      }
+          case final label?)
+        e.eventId: label,
+  });
+
   // snapshot() with no selection is a pure function of this immutable model,
   // and every report, total, home summary and review list asks for it.
   late final LedgerSnapshot _fullSnapshot = _buildSnapshot(null);

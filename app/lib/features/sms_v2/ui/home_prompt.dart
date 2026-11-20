@@ -125,7 +125,9 @@ class SmsV2HomePrompt extends ConsumerWidget {
                 _ShortcutChip(
                   icon: Icons.south_west_rounded,
                   label: 'Money in',
-                  onPressed: () => context.push('/sms-v2/money-in'),
+                  // Activity is the one Money in page (kind pills and chips),
+                  // the same place the Investments chip above opens.
+                  onPressed: () => context.push('/activity?type=moneyIn'),
                 ),
               ],
             ),
