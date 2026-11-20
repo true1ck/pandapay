@@ -39,8 +39,19 @@ class TemplateUpload {
   final bool shareWording;
   final DateTime Function() clock;
 
+  /// When consent was last confirmed during this drain. A pass checks it before
+  /// every batch and again after the answer; each check is a call to the server
+  /// (a slow, busy one on a bad day), so 36 calls went out for 16 batches.
+  /// Within ten seconds of a confirmation the answer stands; a "no" is never
+  /// remembered, and a new drain always asks again.
+  Stopwatch? _consentConfirmed;
+
   Future<bool> _canShare() async {
     if (!accountIsCurrent()) return false;
+    final confirmed = _consentConfirmed;
+    if (confirmed != null && confirmed.elapsed < const Duration(seconds: 10)) {
+      return true;
+    }
     final bool consent;
     try {
       consent = await hasConsent();
@@ -49,7 +60,10 @@ class TemplateUpload {
     }
     if (!accountIsCurrent()) return false;
     if (!consent) {
+      _consentConfirmed = null;
       forgetSharedState(queue);
+    } else {
+      _consentConfirmed = Stopwatch()..start();
     }
     return consent;
   }
@@ -104,7 +118,21 @@ class TemplateUpload {
   /// Flat wait after a failure that is the session's or the server's, not the layout's.
   static const _transientRetry = Duration(seconds: 60);
 
+  /// How long to wait after a 5xx: the server's Retry-After when it sent one
+  /// (a paused intake says an hour), never under a minute, never over an hour.
+  static Duration _serverWait(http.Response response) => Duration(
+    seconds: (int.tryParse(response.headers['retry-after'] ?? '') ?? 60).clamp(
+      60,
+      3600,
+    ),
+  );
+
   Future<void> drain() async {
+    _consentConfirmed = null; // every pass asks the server afresh
+    // One layout the server refuses (400) must not hold up the ones behind it:
+    // after a 400 the next requests carry one layout each until it is found.
+    var singly = false;
+    var refused = 0;
     if (!await _canShare()) return;
     // The server told us to wait (HTTP 429): hold the whole queue until then.
     final holdUntil = DateTime.tryParse(
@@ -203,7 +231,7 @@ class TemplateUpload {
       final records = queue
           .due(clock(), limit: 2500)
           .where((item) => item.kind == 'template')
-          .take(_batchSize)
+          .take(singly ? 1 : _batchSize)
           .toList();
       if (records.isEmpty) return;
       try {
@@ -250,14 +278,33 @@ class TemplateUpload {
           ).put('template:wait', clock().add(wait).toUtc().toIso8601String());
           return;
         }
+        if (response.statusCode == 400) {
+          // The server refused the request as invalid. With several layouts in
+          // it, send them one at a time to find the one it dislikes; a single
+          // refused layout is set aside for six hours (not lost, and it blocks
+          // nothing), then the rest carry on in tens again.
+          // A server that refuses everything is not one bad layout: after six
+          // refusals in a pass, stop and leave the rest for the next pass.
+          if (++refused >= 6) return;
+          if (records.length > 1) {
+            singly = true;
+            continue;
+          }
+          queue.retry(records.single, clock(), after: const Duration(hours: 6));
+          singly = false;
+          continue;
+        }
         if (response.statusCode == 401 ||
             response.statusCode == 408 ||
             response.statusCode >= 500) {
           // The session or the server is the problem, not the layout: try again
-          // soon at a flat pace. The usual doubling back-off pushed the next
-          // try out to 30 minutes after a few failed attempts.
+          // soon at a flat pace (or when the server said). The usual doubling
+          // back-off pushed the next try out to 30 minutes.
+          final wait = response.statusCode >= 500
+              ? _serverWait(response)
+              : _transientRetry;
           for (final record in records) {
-            queue.retry(record, clock(), after: _transientRetry);
+            queue.retry(record, clock(), after: wait);
           }
           return;
         }

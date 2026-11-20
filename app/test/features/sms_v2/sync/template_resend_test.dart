@@ -94,4 +94,51 @@ void main() {
     expect(state.get('template:sent:aaa'), isNotNull);
     expect(state.get('ai:resend:at'), isNull);
   });
+
+  test('the background release asks the server at most every half hour and releases held layouts', () async {
+    var asked = 0;
+    Future<AiServerStatus?> fetch() async {
+      asked++;
+      return counted;
+    }
+
+    expect(
+      await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0, fetchStatus: fetch),
+      isTrue,
+    );
+    expect(asked, 1);
+    expect(state.get('template:sent:aaa'), isNull, reason: 'held layouts will be sent again');
+    // Ten minutes later: not asked again.
+    expect(
+      await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0.add(const Duration(minutes: 10)), fetchStatus: fetch),
+      isFalse,
+    );
+    expect(asked, 1);
+    // Half an hour later it asks again; the six-hour rule in the release itself still holds.
+    state.put('template:sent:aaa', 'again');
+    expect(
+      await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0.add(const Duration(minutes: 31)), fetchStatus: fetch),
+      isFalse,
+    );
+    expect(asked, 2);
+    expect(state.get('template:sent:aaa'), 'again');
+  });
+
+  test('a failed ask is tried again in about five minutes; a phone that is not counted releases nothing', () async {
+    var asked = 0;
+    AiServerStatus? answer;
+    Future<AiServerStatus?> fetch() async {
+      asked++;
+      return answer;
+    }
+
+    expect(await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0, fetchStatus: fetch), isFalse);
+    expect(asked, 1);
+    await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0.add(const Duration(minutes: 2)), fetchStatus: fetch);
+    expect(asked, 1, reason: 'too soon after a failure');
+    answer = const AiServerStatus(countedNow: false, eligible: false, total: 2, held: 2);
+    await releaseHeldTemplatesInBackground(db, namespace: 'user:a', now: t0.add(const Duration(minutes: 6)), fetchStatus: fetch);
+    expect(asked, 2);
+    expect(state.get('template:sent:aaa'), isNotNull, reason: 'not counted: nothing is released');
+  });
 }

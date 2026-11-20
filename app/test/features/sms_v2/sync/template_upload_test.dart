@@ -201,6 +201,161 @@ void main() {
     expect(queue.hasDue(now), isFalse);
   });
 
+  test('one layout the server refuses (400) is set aside; the rest of the inbox still goes up', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    for (var i = 1; i <= 25; i++) {
+      final raw = 'Alert ${List.filled(i, 'info').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a', source, 'template',
+        jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open',
+      ]);
+    }
+    bool isPoison(Map item) => 'info'.allMatches(item['redactedBody'] as String).length == 3;
+    var requests = 0;
+    final accepted = <String>{};
+    final queue = OutboxStore(db.db, namespace: 'a');
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        requests++;
+        final items = ((jsonDecode(request.body) as Map)['items'] as List).cast<Map>();
+        if (items.any(isPoison)) return http.Response('{"error":"template_invalid"}', 400);
+        accepted.addAll(items.map((item) => item['templateHash'] as String));
+        return http.Response(jsonEncode({'accepted': [for (final item in items) item['templateHash']]}), 202);
+      }),
+    );
+    await uploader.drain();
+    expect(accepted, hasLength(24), reason: 'every layout but the refused one is sent in the same pass');
+    final left = db.db.select("SELECT * FROM v2_outbox WHERE kind='template'");
+    expect(left, hasLength(1), reason: 'the refused layout is kept, not lost');
+    expect(queue.due(now), isEmpty, reason: 'and it is not retried straight away');
+    expect(queue.due(now.add(const Duration(hours: 7))), hasLength(1));
+    expect(requests, lessThan(40), reason: 'finding it costs a few requests, not one per layout every pass');
+  });
+
+  test('a server that refuses everything with 400 is given up on after a few requests', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    for (var i = 1; i <= 40; i++) {
+      final raw = 'Alert ${List.filled(i, 'info').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a', source, 'template',
+        jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open',
+      ]);
+    }
+    var requests = 0;
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: OutboxStore(db.db, namespace: 'a'),
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        requests++;
+        return http.Response('{}', 400);
+      }),
+    );
+    await uploader.drain();
+    expect(requests, lessThanOrEqualTo(6), reason: 'it gives up after six refusals');
+  });
+
+  test('a 503 with Retry-After is waited out (a paused intake says an hour), never under a minute', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    var now = DateTime.utc(2026, 11);
+    const raw = 'Alert info Rs.500.00 debited from A/c XX6789';
+    final source = smsSourceKey('a', 'HDFCBK', raw);
+    intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+    db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+      'a', source, 'template',
+      jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open',
+    ]);
+    final queue = OutboxStore(db.db, namespace: 'a');
+    var retryAfter = '3600';
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async => http.Response('{"error":"learning_paused"}', 503, headers: {'retry-after': retryAfter})),
+    );
+    await uploader.drain();
+    now = now.add(const Duration(minutes: 30));
+    expect(queue.due(now), isEmpty, reason: 'the server asked for an hour');
+    now = now.add(const Duration(minutes: 31));
+    expect(queue.due(now), hasLength(1));
+    retryAfter = '5';
+    await uploader.drain();
+    expect(queue.due(now.add(const Duration(seconds: 30))), isEmpty, reason: 'never under a minute');
+    expect(queue.due(now.add(const Duration(seconds: 61))), hasLength(1));
+  });
+
+  test('consent is asked of the server once per few seconds, not three times for every batch', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    final now = DateTime.utc(2026, 11);
+    for (var i = 1; i <= 60; i++) {
+      final raw = 'Alert ${List.filled(i, 'info').join(' ')} Rs.500.00 debited from A/c XX6789';
+      final source = smsSourceKey('a', 'HDFCBK', raw);
+      intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+      db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+        'a', source, 'template',
+        jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}), 'open',
+      ]);
+    }
+    var consentReads = 0;
+    var uploads = 0;
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: OutboxStore(db.db, namespace: 'a'),
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async {
+        consentReads++;
+        return true;
+      },
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        uploads++;
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        return http.Response(jsonEncode({'accepted': [for (final item in items) item['templateHash']]}), 202);
+      }),
+    );
+    await uploader.drain();
+    expect(uploads, 6);
+    expect(consentReads, lessThanOrEqualTo(2), reason: 'it was 3 per batch: 18 for these 6 batches');
+    consentReads = 0;
+    await uploader.drain();
+    expect(consentReads, greaterThanOrEqualTo(1), reason: 'a new pass always asks again');
+  });
+
   test('layouts go in batches of at most ten, and a 429 is waited out', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(db.db.dispose);
