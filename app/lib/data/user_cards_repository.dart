@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -2398,8 +2399,78 @@ class UserCardsRepository {
   static String _dateOnly(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  // Points ledgers asked for within a few milliseconds go out as one request. The app opened with one request per
+  // card (about 10 at once on every app open, 3.6-5 s each on the server, 21 Nov 2026); each card's provider still
+  // gets exactly its own list and the same errors, so the cache and the screens behave as before.
+  static const _ledgerBatchWindow = Duration(milliseconds: 25);
+  static const _ledgerBatchMax = 50;
+  final Map<String, Completer<List<PointsLedgerEntry>>> _pendingLedgers = {};
+  Timer? _ledgerFlush;
+  // A server without GET /points-ledgers (older than this build) is asked per card for the rest of the session.
+  bool _ledgerBatchUnsupported = false;
+
+  /// Task C-6: one card's points ledger (sent together with the other cards' through GET /points-ledgers).
+  Future<List<PointsLedgerEntry>> fetchPointsLedger(String userCardId) {
+    if (_ledgerBatchUnsupported) return _fetchPointsLedgerSingle(userCardId);
+    final pending = _pendingLedgers[userCardId];
+    if (pending != null) return pending.future;
+    final completer = Completer<List<PointsLedgerEntry>>();
+    _pendingLedgers[userCardId] = completer;
+    if (_pendingLedgers.length >= _ledgerBatchMax) {
+      unawaited(_flushPointsLedgers());
+    } else {
+      _ledgerFlush ??= Timer(_ledgerBatchWindow, () => unawaited(_flushPointsLedgers()));
+    }
+    return completer.future;
+  }
+
+  Future<void> _flushPointsLedgers() async {
+    _ledgerFlush?.cancel();
+    _ledgerFlush = null;
+    final batch = Map.of(_pendingLedgers);
+    _pendingLedgers.clear();
+    if (batch.isEmpty) return;
+    // The per-card call's wording, so ApiException.statusCode/errorCode and isAuthenticationFailure read it the same.
+    ApiException failure(int status, String body) =>
+        ApiException('GET /user-cards/:id/points-ledger failed: $status $body');
+    try {
+      final uri = Uri.parse('$apiBaseUrl/points-ledgers').replace(
+        queryParameters: {'userCardIds': batch.keys.join(',')},
+      );
+      final response = await _client.get(uri, headers: _headers);
+      if (response.statusCode == 404) {
+        _ledgerBatchUnsupported = true;
+        for (final MapEntry(key: id, value: completer) in batch.entries) {
+          _fetchPointsLedgerSingle(id).then(completer.complete, onError: completer.completeError);
+        }
+        return;
+      }
+      if (response.statusCode != 200) {
+        final error = failure(response.statusCode, response.body);
+        for (final completer in batch.values) {
+          completer.completeError(error);
+        }
+        return;
+      }
+      final ledgers = (jsonDecode(response.body) as Map<String, dynamic>)['pointsLedgers'] as Map<String, dynamic>;
+      for (final MapEntry(key: id, value: completer) in batch.entries) {
+        final list = ledgers[id];
+        if (list is List) {
+          completer.complete(list.cast<Map<String, dynamic>>().map(PointsLedgerEntry.fromJson).toList());
+        } else {
+          // Not this person's card: the per-card route answered 404.
+          completer.completeError(failure(404, '{"error":"user_card not found"}'));
+        }
+      }
+    } catch (error, stack) {
+      for (final completer in batch.values) {
+        if (!completer.isCompleted) completer.completeError(error, stack);
+      }
+    }
+  }
+
   /// Task C-6: GET /user-cards/:id/points-ledger.
-  Future<List<PointsLedgerEntry>> fetchPointsLedger(String userCardId) async {
+  Future<List<PointsLedgerEntry>> _fetchPointsLedgerSingle(String userCardId) async {
     final response = await _client.get(
       Uri.parse('$apiBaseUrl/user-cards/$userCardId/points-ledger'),
       headers: _headers,
