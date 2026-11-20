@@ -100,6 +100,38 @@ class IosSmsIntakeState {
         .length;
   }
 
+  /// Live alerts, from the phone's spool: messages the automation handed over
+  /// (security codes never count), how many today, and what became of the
+  /// newest one.
+  int get liveTotal => snapshot['live_total'] as int? ?? 0;
+  int get liveToday => snapshot['live_today'] as int? ?? 0;
+  DateTime? get enabledAt =>
+      DateTime.tryParse(snapshot['enabledAt'] as String? ?? '')?.toLocal();
+  String? get lastLiveIntake => snapshot['last_live_intake'] as String?;
+  String? get lastLiveState => snapshot['last_live_state'] as String?;
+  String? get lastLiveProcessed => snapshot['last_live_processed'] as String?;
+
+  /// A catch-up plan nobody has started: its ranges are queued or waiting, no
+  /// message ever arrived for any of them. The daily check is optional, so
+  /// for most people this plan just sits there; it is not an import.
+  bool get catchUpIdle {
+    final job = activeJob;
+    if (job == null || job['kind'] != 'catchup' || job['state'] != 'active') {
+      return false;
+    }
+    return currentWindows.every(
+      (w) =>
+          const ['queued', 'waiting'].contains(w['state']) &&
+          (w['enumerated'] as int? ?? 0) == 0,
+    );
+  }
+
+  /// Whether the SMS page shows the import card (and the strip counts it).
+  bool get showsImportCard => activeJob != null && !catchUpIdle;
+
+  /// A catch-up that really started (a range received messages or stopped).
+  bool get catchUpStarted => activeJob?['kind'] == 'catchup' && !catchUpIdle;
+
   /// Every date range already imported for this account (local time).
   List<(DateTime, DateTime)> get importedRanges => [
     for (final row in _rows(snapshot['coverage']))
@@ -197,7 +229,7 @@ class IosSmsIntakeState {
   bool get paused => activeJob?['state'] == 'paused';
   bool get visible =>
       enabled &&
-      (processing || activeJob != null || error != null || pending > 0);
+      (processing || showsImportCard || error != null || pending > 0);
 
   /// "1 Jul – 31 Jul" for a window; the end is exclusive.
   static String rangeLabel(Map<String, Object?> window) {
@@ -251,9 +283,19 @@ class IosSmsIntakeState {
           ? 'Importing history'
           : 'Importing history · ${rangeLabel(window)}';
     }
-    if (waiting) return 'Waiting for message import…';
-    if (activeJob != null) return 'Recent-message check pending';
+    if (catchUpStarted) {
+      final window = currentWindow;
+      return window == null
+          ? 'Checking for missed messages'
+          : 'Checking for missed messages · ${rangeLabel(window)}';
+    }
     if (processing) return 'Updating recent activity…';
+    if (pending > 0) {
+      return '$pending ${pending == 1 ? 'message' : 'messages'} waiting to be added';
+    }
+    if (waiting && !catchUpIdle) return 'Waiting for message import…';
+    if (activeJob != null && !catchUpIdle)
+      return 'Recent-message check pending';
     return 'Recent messages checked';
   }
 
@@ -859,8 +901,12 @@ class IosSmsIntakeController extends ChangeNotifier {
               _check(expected, revision);
               // Queue catch-up without launching another app. An active historical
               // job takes precedence, and resume joins its issued attempt.
-              if (state.activeJob == null && _automaticJob == null) {
-                await service.call('prepareCatchup');
+              // An idle plan is offered too: the phone retires it when no daily check exists.
+              if ((state.activeJob == null || state.catchUpIdle) &&
+                  _automaticJob == null) {
+                // Automatic: the phone only continues a daily check that has
+                // run before; making plans nobody can run showed a stuck import.
+                await service.call('prepareCatchup', {'explicit': false});
                 _check(expected, revision);
                 await _load();
               }
@@ -1015,6 +1061,48 @@ class IosSmsIntakeController extends ChangeNotifier {
     _check(expected, revision);
     // A retry of local processing must never replace an acquisition attempt.
     if (!canResumeImport) return;
+    await _runActiveJob(shortcutName, expected, revision, automatic: automatic);
+  });
+
+  /// Whether "Check for missed messages" can start: nothing else is moving
+  /// and no history import is open (an idle catch-up plan does not count).
+  bool get canCheckMissedMessages =>
+      state.enabled &&
+      !state.processing &&
+      !state.launching &&
+      !canRetryProcessing &&
+      _automaticJob == null &&
+      (state.activeJob == null || state.catchUpIdle);
+
+  /// The person asked to look for messages the live alerts may have missed
+  /// (the phone was off, an update, the automation paused). The phone plans
+  /// the days after what is already covered, and the history Shortcut reads
+  /// them. Nothing is launched when the phone has nothing to check.
+  Future<void> checkMissedMessages(String shortcutName) => _serialize(() async {
+    final expected = namespace(), revision = _revision;
+    _check(expected, revision);
+    if (!state.enabled) throw StateError('Enable SMS Shortcuts first.');
+    if (!await _hasSmsReadingConsent()) {
+      throw StateError('Agree to SMS reading first.');
+    }
+    _check(expected, revision);
+    if (!canCheckMissedMessages) {
+      throw StateError('Finish or stop the current check first.');
+    }
+    await service.call('prepareCatchup', {'explicit': true});
+    _check(expected, revision);
+    await _load();
+    _check(expected, revision);
+    if (state.activeJob == null) return;
+    await _runActiveJob(shortcutName, expected, revision, automatic: false);
+  });
+
+  Future<void> _runActiveJob(
+    String shortcutName,
+    String expected,
+    int revision, {
+    required bool automatic,
+  }) async {
     _clearErrors();
     // A user-started session is bounded to this job and account. It does not
     // survive process death or admit unrelated app-open/daily jobs.
@@ -1043,7 +1131,7 @@ class IosSmsIntakeController extends ChangeNotifier {
       _endAutomaticSession();
       rethrow;
     }
-  });
+  }
 
   /// A history import that is not paused or stopped, with nothing running
   /// for a few seconds while PandaPay is on screen, continues by itself:

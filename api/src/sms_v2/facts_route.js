@@ -1,4 +1,5 @@
 'use strict';
+const { respondDbError } = require('../http_db_errors');
 
 // POST /sms/v2/facts:batch (WP-08).
 //
@@ -129,6 +130,9 @@ function createFactsHandler({ withUserClient, hooks, deps, categoryOnly = false 
       return res.status(200).json({ results: out.results, serverTime: new Date().toISOString() });
     } catch (err) {
       console.error('sms_v2 facts:batch failed', safeErrorCode(err));
+      // A timeout, deadlock or lost connection says nothing about this batch: the phone must retry it whole, not split
+      // it and set a record aside as refused (it reads a 500 as "something in this batch").
+      if (respondDbError(res, err)) return res;
       return fail(res, 500, 'internal_error');
     }
   };

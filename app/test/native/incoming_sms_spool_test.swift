@@ -27,7 +27,7 @@ func rawColumns(_ directory: URL) -> [(body: String?, sender: String?)] {
   guard sqlite3_open_v2(directory.appendingPathComponent("handoff.sqlite").path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { fatalError("raw open") }
   defer { sqlite3_close(db) }
   var statement: OpaquePointer?
-  guard sqlite3_prepare_v2(db, "SELECT body,sender FROM captures ORDER BY captured_at,id", -1, &statement, nil) == SQLITE_OK else { fatalError("raw prepare") }
+  guard sqlite3_prepare_v2(db, "SELECT body,sender FROM captures ORDER BY received_at,id", -1, &statement, nil) == SQLITE_OK else { fatalError("raw prepare") }
   defer { sqlite3_finalize(statement) }
   var rows: [(body: String?, sender: String?)] = []
   while sqlite3_step(statement) == SQLITE_ROW {
@@ -629,4 +629,107 @@ do {
   let financial = try store.pending(generation: g2).first { ($0["body"] as? String ?? "").contains("SHOP SIX") }!
   fails { try store.acknowledge(generation: g2, outcomes: [["id": financial["id"]!, "outcome": "excluded_security", "parserVersion": 22]]) }
   print("PASS: spool text is sealed at rest, key handshake, reset and failure modes")
+}
+
+// Live status for the app: counters and the outcome of the latest live message.
+do {
+  let dir = root.appendingPathComponent("live-status")
+  let today = IncomingSmsSpool(directory: dir, now: { time })
+  let g = try today.configure(namespace: "user:live-status", enabled: true, parserVersion: 23)["generation"] as! String
+  let earlierDay = IncomingSmsSpool(directory: dir, now: { time.addingTimeInterval(-3 * 86_400) })
+  _ = try earlierDay.capture(body: "INR 11 spent at SYNTHETIC LIVE ONE", sender: "VM-SYNTH", receivedAt: time.addingTimeInterval(-3 * 86_400), provenance: "estimated")
+  var snap = try today.snapshot()
+  require(snap["live_total"] as? Int == 1 && snap["live_today"] as? Int == 0, "a live message from an earlier day counts in the total only")
+  require(snap["last_live_intake"] as? String == "saved_for_processing", "the intake result of the latest live call is kept")
+  _ = try today.capture(body: "INR 12 spent at SYNTHETIC LIVE TWO", sender: "VM-SYNTH", receivedAt: time, provenance: "estimated")
+  snap = try today.snapshot()
+  require(snap["live_total"] as? Int == 2 && snap["live_today"] as? Int == 1, "today's live messages are counted apart")
+  require(snap["last_live_state"] as? String == "pending" && snap["last_live_processed"] == nil, "the newest live message waits for the app")
+  let waiting = try today.pending(generation: g)
+  try today.acknowledge(generation: g, outcomes: waiting.map { ["id": $0["id"]!, "sourceKey": String(repeating: "c", count: 64), "parserVersion": 23, "outcome": "captured"] })
+  snap = try today.snapshot()
+  require(snap["last_live_state"] as? String == "committed" && snap["last_live_processed"] as? String == "captured", "the processed outcome is reported once committed")
+  require(try today.capture(body: "OTP 555123 valid for 5 minutes", sender: "VM-SYNTH", receivedAt: time, provenance: "estimated") == "excluded_security", "security code")
+  snap = try today.snapshot()
+  require(snap["live_total"] as? Int == 2, "a security code is never stored or counted")
+  require(snap["last_live_intake"] as? String == "excluded_security", "but the latest live call says what happened to it")
+  // History captures never count as live.
+  _ = try today.capture(body: "INR 13 spent at SYNTHETIC HIST", sender: "VM-SYNTH", receivedAt: time.addingTimeInterval(-60), provenance: "original")
+  require(try today.snapshot()["live_total"] as? Int == 2, "original-dated captures are history, not live")
+  print("PASS: live counters and last live outcome")
+}
+
+// Catch-up: only when the daily check ran or the person asks; starts after what is already covered; runnable.
+do {
+  let dir = root.appendingPathComponent("catchup-rules")
+  let t0 = IncomingSmsSpool.date("2026-11-10T08:00:00Z")!
+  var clock = t0
+  let store = IncomingSmsSpool(directory: dir, now: { clock })
+  let g = try store.configure(namespace: "user:catchup-rules", enabled: true, parserVersion: 23)["generation"] as! String
+  let cal = Calendar.current
+  func activeJobs() throws -> [[String: Any]] {
+    (try store.snapshot()["jobs"] as! [[String: Any]]).filter { ["active", "paused", "partial"].contains($0["state"] as? String ?? "") }
+  }
+  func windows(of job: [String: Any]) throws -> [[String: Any]] {
+    (try store.snapshot()["windows"] as! [[String: Any]]).filter { $0["job_id"] as? String == job["id"] as? String }.sorted { ($0["ordinal"] as! Int) < ($1["ordinal"] as! Int) }
+  }
+
+  // Automatic call, nobody ever ran the daily check: nothing is created.
+  clock = t0.addingTimeInterval(3 * 86_400)
+  require(try store.prepareCatchup(explicit: false) == nil && (try activeJobs()).isEmpty, "no automatic catch-up without evidence that the daily check is used")
+
+  // The person asks: a job from the day before enabling, first range issued.
+  let asked = try store.prepareCatchup(explicit: true)
+  require(asked != nil, "an explicit request creates and issues the first range")
+  var job = try activeJobs()[0]
+  require(job["kind"] as? String == "catchup", "it is a catch-up")
+  let enabledDay = cal.startOfDay(for: t0)
+  let firstStart = IncomingSmsSpool.date((try windows(of: job))[0]["start"] as! String)!
+  require(firstStart == cal.date(byAdding: .day, value: -1, to: enabledDay)!, "with nothing covered it starts the day before enabling")
+
+  // An idle plan that nobody started is retired by a later automatic call, not before 15 minutes.
+  clock = clock.addingTimeInterval(10 * 60)
+  require(try store.prepareCatchup(explicit: false) == nil && (try activeJobs()).count == 1, "a fresh idle plan is left alone")
+  clock = clock.addingTimeInterval(10 * 60)
+  require(try store.prepareCatchup(explicit: false) == nil && (try activeJobs()).isEmpty, "an idle plan older than 15 minutes is retired when the daily check was never used")
+
+  // History imported later moves the start: a new explicit request replaces a stale idle plan.
+  _ = try store.prepareCatchup(explicit: true)
+  let stale = try activeJobs()[0]
+  let covered = clock.addingTimeInterval(-2 * 3_600)
+  clock = clock.addingTimeInterval(86_400)
+  try store.control(generation: g, command: "stop")
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(t0.addingTimeInterval(-86_400)), "end": iso(covered)]])
+  let historyRequest = try store.issue(generation: g)!
+  require(try store.finish(request: historyRequest, found: 0, limitOff: true, warning: false) == "complete", "history range done")
+  _ = try store.prepareCatchup(explicit: true)
+  job = try activeJobs()[0]
+  require(job["id"] as? String != stale["id"] as? String, "a new plan replaced the stale one")
+  let rangeStart = IncomingSmsSpool.date((try windows(of: job))[0]["start"] as! String)!
+  require(rangeStart >= cal.date(byAdding: .day, value: -1, to: cal.startOfDay(for: covered))!, "the plan starts after what history already covers, not at enabling")
+  require(rangeStart > firstStart, "it no longer re-reads the days the history import holds")
+  require(try store.snapshot()["reconciledThrough"] != nil, "fully covered days are checked at once")
+
+  // The looping history Shortcut can run a catch-up.
+  let ranged = try store.issueNextRange()
+  require(ranged != nil, "Next PandaPay History Range serves a catch-up job")
+  require(try store.snapshot()["loop_job"] as? String == job["id"] as? String, "and marks it as the looping run")
+
+  // Once a catch-up window really ran, the daily check counts as used: the next plan is made automatically.
+  let attempt = (try JSONSerialization.jsonObject(with: Data(ranged!.utf8)) as! [String: Any])["attempt"] as! String
+  _ = attempt
+  var remaining = ranged
+  while let request = remaining {
+    _ = try store.capture(body: "INR 21 spent at SYNTHETIC CATCHUP", sender: "VM-SYNTH", receivedAt: clock.addingTimeInterval(-60), provenance: "original", request: request, useMessageReceipt: true)
+    let found = 1
+    _ = try store.finish(request: request, found: found, limitOff: true, warning: false)
+    for row in try store.pending(generation: g) {
+      try store.acknowledge(generation: g, outcomes: [["id": row["id"]!, "sourceKey": String(repeating: "d", count: 64), "parserVersion": 23, "outcome": "ignored"]])
+    }
+    remaining = try store.issueNextRange()
+  }
+  require((try activeJobs()).isEmpty, "the catch-up completed")
+  clock = clock.addingTimeInterval(20 * 60)
+  require(try store.prepareCatchup(explicit: false) != nil && (try activeJobs()).count == 1, "after the daily check ran, plans are queued automatically again")
+  print("PASS: catch-up gating, anchor, replacement and looping run")
 }

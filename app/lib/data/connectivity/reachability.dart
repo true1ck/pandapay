@@ -16,7 +16,7 @@ import 'known_connectivity.dart';
 /// it says "online" while every request waits 15-30 s before failing, so every
 /// network-first read burns that wait before its cache fallback. This class
 /// answers the narrower question with one cheap, cached, never-throwing probe
-/// of the existing public `GET /app-status` (no auth, no user data).
+/// of the public `GET /health` (no auth, no user data).
 ///
 /// Rules:
 /// * the radio down means unreachable, with no probe;
@@ -40,7 +40,7 @@ class ServerReachability {
     DateTime Function()? now,
     this.ttl = const Duration(seconds: 20),
     this.failureTtl = const Duration(seconds: 8),
-    this.timeout = const Duration(milliseconds: 1800),
+    this.timeout = const Duration(seconds: 5),
   }) : _probe = probe, // ignore: prefer_initializing_formals
        _radioUp = radioUp ?? (() => !KnownConnectivity.knownOffline),
        _now = now ?? DateTime.now;
@@ -131,7 +131,8 @@ class ServerReachability {
   }
 }
 
-/// One `GET /app-status`, aborted (socket closed) after [timeout] so a dead
+/// One `GET /health` (no database, never queued behind real traffic; the old
+/// `/app-status` probe lost to a busy server and read as "unreachable"), aborted (socket closed) after [timeout] so a dead
 /// network cannot leave hung requests behind (H1-9).
 ///
 /// Reachable means the server answered: a 200 with a JSON object (captive
@@ -141,7 +142,7 @@ class ServerReachability {
 Future<bool> httpServerProbe(
   http.Client client,
   String baseUrl, {
-  Duration timeout = const Duration(milliseconds: 1800),
+  Duration timeout = const Duration(seconds: 5),
 }) async {
   final abort = Completer<void>();
   final timer = Timer(timeout, () {
@@ -150,7 +151,7 @@ Future<bool> httpServerProbe(
   try {
     final request = http.AbortableRequest(
       'GET',
-      Uri.parse('$baseUrl/app-status'),
+      Uri.parse('$baseUrl/health'),
       abortTrigger: abort.future,
     );
     final response = await http.Response.fromStream(await client.send(request));
@@ -171,7 +172,7 @@ Future<bool> httpServerProbe(
 final serverReachabilityProvider = Provider<ServerReachability>((ref) {
   // Connection timeout as a second guard; at most one probe in flight.
   final client = IOClient(
-    HttpClient()..connectionTimeout = const Duration(milliseconds: 1800),
+    HttpClient()..connectionTimeout = const Duration(seconds: 5),
   );
   Future<bool>? running;
   final reachability = ServerReachability(

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:pandapay/data/connectivity/api_answer_evidence.dart';
 import 'package:pandapay/data/connectivity/reachability.dart';
 
 void main() {
@@ -147,7 +148,8 @@ void main() {
   group('httpServerProbe', () {
     test('200 with a JSON object is reachable', () async {
       final client = MockClient((req) async {
-        expect(req.url.toString(), 'https://api.example.test/app-status');
+        // /health has no database and never waits in the API's admission line.
+        expect(req.url.toString(), 'https://api.example.test/health');
         expect(req.headers.containsKey('authorization'), isFalse);
         return http.Response(jsonEncode({'maintenance': false}), 200);
       });
@@ -207,6 +209,39 @@ void main() {
       );
       expect(ok, isFalse);
       expect(client.aborted, isTrue);
+    });
+  });
+
+  test('the default budget is 5 s, not the old 1.8 s that a busy server could not meet', () {
+    expect(ServerReachability(probe: () async => true).timeout, const Duration(seconds: 5));
+  });
+
+  group('ApiAnswerEvidence', () {
+    test('any answer below 500, and 429, counts; gateway and server errors do not', () {
+      var t = DateTime.utc(2026, 11, 20, 12);
+      final e = ApiAnswerEvidence(now: () => t);
+      expect(e.answeredWithin(const Duration(seconds: 30)), isFalse);
+      for (final code in [502, 503, 504, 500]) {
+        e.note(code);
+      }
+      expect(e.answeredWithin(const Duration(seconds: 30)), isFalse);
+      e.note(401);
+      expect(e.answeredWithin(const Duration(seconds: 30)), isTrue);
+      t = t.add(const Duration(seconds: 31));
+      expect(e.answeredWithin(const Duration(seconds: 30)), isFalse);
+      e.note(429);
+      expect(e.answeredWithin(const Duration(seconds: 30)), isTrue);
+    });
+
+    test('announces each answer', () async {
+      final e = ApiAnswerEvidence(now: DateTime.now);
+      var n = 0;
+      final sub = e.answers.listen((_) => n++);
+      e.note(200);
+      e.note(503);
+      e.note(304);
+      await sub.cancel();
+      expect(n, 2);
     });
   });
 }

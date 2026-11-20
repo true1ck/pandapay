@@ -9,7 +9,8 @@ with tempfile.TemporaryDirectory(prefix='pandapay-sms-intake-') as directory:
     target = Path(directory)
     (target / 'main.swift').write_bytes((root / 'test/native/incoming_sms_spool_test.swift').read_bytes())
     subprocess.run(['xcrun', 'swiftc', str(root / 'ios/Runner/SmsSecurityPolicy.swift'),
-                    str(root / 'ios/Runner/IncomingSmsSpool.swift'), str(root / 'ios/Runner/SmsShortcutLaunch.swift'), str(target / 'main.swift'),
+                    str(root / 'ios/Runner/IncomingSmsSpool.swift'), str(root / 'ios/Runner/SpoolCipher.swift'),
+                    str(root / 'ios/Runner/SmsShortcutLaunch.swift'), str(target / 'main.swift'),
                     '-o', str(target / 'test')], check=True)
     subprocess.run([str(target / 'test')], check=True)
     (target / 'main.swift').write_bytes((root / 'test/native/sms_sender_input_test.swift').read_bytes())

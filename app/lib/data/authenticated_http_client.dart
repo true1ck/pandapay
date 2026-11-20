@@ -1,3 +1,4 @@
+import 'connectivity/api_answer_evidence.dart';
 import 'connectivity/server_backoff.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -105,6 +106,7 @@ class AuthenticatedHttpClient extends http.BaseClient {
     final stopwatch = Stopwatch()..start();
     try {
       final response = await _send(request, policy, stopwatch, admission);
+      ApiAnswerEvidence.process.note(response.statusCode);
       ServerBackoff.process.noteResponse(
         response.statusCode,
         response.headers['retry-after'],

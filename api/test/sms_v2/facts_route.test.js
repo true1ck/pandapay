@@ -30,7 +30,7 @@ async function harness({ flag = true, hooks } = {}) {
   registerSmsV2(app, {
     requireAuth,
     requireAdmin: (req, res) => res.status(403).json({ error: 'Admin access required' }),
-    withUserClient: async () => { state.dbCalls += 1; throw new Error('database must not be reached'); },
+    withUserClient: async () => { state.dbCalls += 1; throw state.dbError || new Error('database must not be reached'); },
     readFlag: async () => (state.flag ? { key: 'sms_pipeline_v2_enabled', is_enabled: true, rollout_percent: 100 } : null),
     flagCacheMs: 0,
     signer: null,
@@ -178,6 +178,25 @@ test('the valid contract fixture passes validation and reaches the database laye
     const r = await h1.post(FACTS, body);
     assert.equal(r.status, 500); // the stub database refuses, so validation was passed
     assert.equal(h1.state.dbCalls, 1);
+  } finally { console.error = origError; h1.close(); }
+});
+
+test('a database timeout is a retryable 503 with Retry-After, never a bare 500 the phone reads as a bad record', async () => {
+  const h1 = await harness();
+  const origError = console.error;
+  console.error = () => {};
+  try {
+    const body = JSON.parse(fs.readFileSync(VALID, 'utf8'));
+    for (const code of ['57014', '40001', '40P01']) {
+      h1.state.dbError = Object.assign(new Error('canceling statement due to statement timeout'), { code });
+      const r = await h1.post(FACTS, body);
+      assert.equal(r.status, 503, code);
+      assert.equal(r.json.retryable, true, code);
+      assert.ok(r.headers.get('retry-after'), `${code} carries Retry-After`);
+    }
+    // Any other failure stays a 500: that one really is about the batch.
+    h1.state.dbError = Object.assign(new Error('boom'), { code: 'XX000' });
+    assert.equal((await h1.post(FACTS, body)).status, 500);
   } finally { console.error = origError; h1.close(); }
 });
 

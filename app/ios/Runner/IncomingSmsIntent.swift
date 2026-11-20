@@ -222,7 +222,7 @@ struct PreparePandaPaySmsCatchupIntent: AppIntent {
   static var description = IntentDescription("Get the next issued receive-date window for the same history Shortcut. Does not search Messages or open PandaPay.")
   static var openAppWhenRun = false
   func perform() async throws -> some IntentResult & ReturnsValue<String> {
-    do { return .result(value: try IncomingSmsSpool.shared.prepareCatchup() ?? "") }
+    do { return .result(value: try IncomingSmsSpool.shared.prepareCatchup(explicit: true) ?? "") }
     catch IncomingSmsError.inactive { return .result(value: "") }
   }
 }
@@ -309,7 +309,8 @@ enum IncomingSmsBridge {
               notifyReady()
             }
           case "snapshot": value = try spool.snapshot()
-          case "prepareCatchup": value = try spool.prepareCatchup()
+          // Dart's own refresh passes explicit: false; only the person's "Check for missed messages" says true.
+          case "prepareCatchup": value = try spool.prepareCatchup(explicit: args["explicit"] as? Bool ?? false)
           case "pending":
             guard let generation = args["generation"] as? String else { throw IncomingSmsError.invalid }
             value = try spool.pending(generation: generation)

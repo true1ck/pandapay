@@ -116,7 +116,9 @@ function isBulk(req) {
 
 function classify(req) {
   const path = req.path;
-  if (path === '/health' || path === '/ready') return null; // liveness probes never queue
+  // Liveness probes and the public app status (cached, see app_status_cache.js) never queue: a start-up burst of heavy
+  // calls must not make the server look unreachable.
+  if (path === '/health' || path === '/ready' || path === '/app-status') return null;
   if (req.method === 'POST' && path === '/sync/push') return 'push';
   if (isBulk(req)) return 'bulk';
   if (req.method === 'GET' && HEAVY_GET.has(path)) return 'heavy';

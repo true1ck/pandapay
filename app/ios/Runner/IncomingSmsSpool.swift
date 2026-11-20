@@ -121,6 +121,8 @@ final class IncomingSmsSpool {
     try execute(db, "CREATE TABLE IF NOT EXISTS owner (id INTEGER PRIMARY KEY CHECK(id=1), namespace TEXT NOT NULL, generation TEXT NOT NULL, enabled INTEGER NOT NULL)")
     try execute(db, "CREATE TABLE IF NOT EXISTS captures (id TEXT PRIMARY KEY, generation TEXT NOT NULL, occurrence TEXT UNIQUE, body TEXT, sender TEXT, received_at TEXT, captured_at TEXT NOT NULL, date_provenance TEXT, state TEXT NOT NULL, outcome TEXT, source_key TEXT, parser_version INTEGER)")
     try execute(db, "CREATE INDEX IF NOT EXISTS pending_sms ON captures(generation,state,captured_at)")
+    // Live counters in the app's status card read only the live (estimated-date) captures.
+    try execute(db, "CREATE INDEX IF NOT EXISTS live_sms ON captures(generation,date_provenance,captured_at)")
     try execute(db, "CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, generation TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, zone TEXT NOT NULL)")
     try execute(db, "CREATE TABLE IF NOT EXISTS windows (id TEXT PRIMARY KEY, job_id TEXT NOT NULL, ordinal INTEGER NOT NULL, start TEXT NOT NULL, end TEXT NOT NULL, state TEXT NOT NULL, attempt TEXT UNIQUE, found INTEGER, limit_off INTEGER, warning INTEGER NOT NULL DEFAULT 0)")
     try execute(db, "CREATE TABLE IF NOT EXISTS receipts (attempt TEXT NOT NULL, item_id TEXT NOT NULL, capture_id TEXT, outcome TEXT NOT NULL, PRIMARY KEY(attempt,item_id))")
@@ -368,6 +370,10 @@ final class IncomingSmsSpool {
           try execute(db, "UPDATE windows SET state='running' WHERE id=?", [issued["id"]])
         }
         try execute(db, "INSERT INTO settings VALUES('last_capture_outcome',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [outcome])
+        // What happened to the latest live message, for the app's Live status (history captures never write it).
+        if request == nil {
+          try execute(db, "INSERT INTO settings VALUES('last_live_intake',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [outcome])
+        }
         return outcome
       }
       if let rejection { return try receipt(rejection) }
@@ -405,7 +411,7 @@ final class IncomingSmsSpool {
     try transaction { db in
       let account = try owner(db, generation: generation)
       var result: [[String: Any]] = []
-      for row in try query(db, "SELECT id,body,sender,received_at AS receivedAt,captured_at AS capturedAt,date_provenance AS dateProvenance FROM captures WHERE generation=? AND state='pending' ORDER BY captured_at,id LIMIT ?", [generation, min(50, max(1, limit))]) {
+      for row in try query(db, "SELECT id,body,sender,received_at AS receivedAt,captured_at AS capturedAt,date_provenance AS dateProvenance FROM captures WHERE generation=? AND state='pending' ORDER BY captured_at,rowid LIMIT ?", [generation, min(50, max(1, limit))]) {
         var value = row
         do {
           let body = try SpoolCipher.openStored(row["body"] as? String ?? "")
@@ -498,6 +504,16 @@ final class IncomingSmsSpool {
       result["last_live_at"] = try query(db, "SELECT MAX(captured_at) AS at FROM captures WHERE generation=? AND date_provenance='estimated'", [account["generation"]]).first?["at"]
     }
     if let generation = account["generation"] as? String {
+      // Live alerts for the status card: how many messages the live automation handed over, how many today
+      // (local calendar day), and what became of the newest one. Security codes are never stored, so never counted.
+      let startOfToday = Calendar.current.startOfDay(for: now())
+      let live = try query(db, "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN captured_at>=? THEN 1 ELSE 0 END),0) AS today FROM captures WHERE generation=? AND date_provenance='estimated'", [stamp(startOfToday), generation]).first
+      result["live_total"] = live?["total"] as? Int ?? 0
+      result["live_today"] = live?["today"] as? Int ?? 0
+      if let last = try query(db, "SELECT state,outcome FROM captures WHERE generation=? AND date_provenance='estimated' ORDER BY captured_at DESC, rowid DESC LIMIT 1", [generation]).first {
+        result["last_live_state"] = last["state"]
+        result["last_live_processed"] = last["outcome"]
+      }
       // Everything ever imported for this account, for the month overview.
       result["coverage"] = try coveredRanges(db, generation: generation).map { ["start": stamp($0.0), "end": stamp($0.1)] }
     }
@@ -533,7 +549,8 @@ final class IncomingSmsSpool {
         try execute(db, "INSERT INTO windows(id,job_id,ordinal,start,end,state,logical_id,month_label) VALUES(?,?,?,?,?,'queued',?,?)", [logicalID, id, index, start, end, logicalID, monthFormatter.string(from: s)])
       }
       try execute(db, "INSERT INTO jobs VALUES(?, ?, ?, 'active', ?, ?, ?)", [id, generation, kind, windows.first!["start"], windows.last!["end"], zone])
-      if kind == "history" && skipImported { try skipImportedRanges(db, generation: generation, jobID: id) }
+      // A catch-up skips what history already holds too, so it never re-reads days that were imported.
+      if skipImported { try skipImportedRanges(db, generation: generation, jobID: id) }
       try reconcile(db)
     }
   }
@@ -598,11 +615,11 @@ final class IncomingSmsSpool {
   func issueNextRange() throws -> String? {
     try transaction { db in
       guard let account = try? owner(db), let generation = account["generation"] as? String else { return nil }
-      if let job = try query(db, "SELECT id FROM jobs WHERE state='active' AND kind='history' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first {
+      if let job = try query(db, "SELECT id FROM jobs WHERE state='active' AND kind IN ('history','catchup') AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first {
         // Tells PandaPay this import runs as one looping Shortcut run.
         try execute(db, "INSERT INTO settings VALUES('loop_job',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", [job["id"]])
       }
-      guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND j.kind='history' AND j.generation=? AND w.state IN ('queued','waiting','running') ORDER BY w.ordinal LIMIT 1", [generation]).first else { return nil }
+      guard let row = try query(db, "SELECT w.* FROM windows w JOIN jobs j ON j.id=w.job_id WHERE j.state='active' AND j.kind IN ('history','catchup') AND j.generation=? AND w.state IN ('queued','waiting','running') ORDER BY w.ordinal LIMIT 1", [generation]).first else { return nil }
       var token = row["attempt"] as? String
       if row["state"] as? String == "queued" {
         token = UUID().uuidString
@@ -764,21 +781,64 @@ final class IncomingSmsSpool {
     }
   }
 
-  /// Cold daily automation enters this same coordinator; it never reads Messages.
-  func prepareCatchup() throws -> String? {
+  /// What prepareCatchup needs to decide, read in one transaction.
+  private func catchupFacts(generation: String) throws -> (used: Bool, idle: (id: String, start: Date)?, coveredEnd: Date?) {
+    try transaction { db in
+      // The daily check counts as used once any catch-up range received a message or a checkpoint was written.
+      let used = try query(db, "SELECT 1 FROM settings WHERE key='reconciledThrough'").first != nil
+        || (try query(db, "SELECT 1 FROM jobs j JOIN windows w ON w.job_id=j.id JOIN receipts r ON r.attempt=w.attempt WHERE j.kind='catchup' LIMIT 1").first != nil)
+      // An idle plan: the newest active catch-up whose ranges never received a single message.
+      var idle: (id: String, start: Date)?
+      if let job = try query(db, "SELECT id FROM jobs WHERE kind='catchup' AND state='active' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first,
+         let id = job["id"] as? String,
+         try query(db, "SELECT 1 FROM windows w JOIN receipts r ON r.attempt=w.attempt WHERE w.job_id=? LIMIT 1", [id]).first == nil,
+         let first = try query(db, "SELECT start FROM windows WHERE job_id=? ORDER BY ordinal LIMIT 1", [id]).first,
+         let start = Self.date(first["start"] as? String ?? "") {
+        idle = (id, start)
+      }
+      return (used, idle, try coveredRanges(db, generation: generation).last?.1)
+    }
+  }
+
+  private func retire(job id: String) throws {
+    try transaction { db in try execute(db, "UPDATE jobs SET state='stopped' WHERE id=? AND state='active'", [id]) }
+  }
+
+  /// Plans the days between what is already checked and now, and issues the first range.
+  ///
+  /// [explicit] is true for the daily automation's own intent and for the person's "Check for missed messages";
+  /// the app's automatic call passes false. An automatic call only continues a daily check that has run before:
+  /// without one, nobody can run the plan, so it is not made (and an idle plan older than 15 minutes is retired).
+  /// The plan starts one day before the end of what history or an earlier check already covers, not at enabling.
+  func prepareCatchup(explicit: Bool = true) throws -> String? {
     let state = try snapshot()
     guard state["enabled"] as? Bool == true, let generation = state["generation"] as? String else { throw IncomingSmsError.inactive }
     let jobs = state["jobs"] as? [[String: Any]] ?? []
-    if !jobs.contains(where: { ["active", "paused", "partial"].contains($0["state"] as? String ?? "") }) {
+    var hasActive = jobs.contains(where: { ["active", "paused", "partial"].contains($0["state"] as? String ?? "") })
+    let facts = try catchupFacts(generation: generation)
+    let requested = Self.date(state["lastCatchupRequestedAt"] as? String ?? "")
+    if !explicit && !facts.used {
+      if let idle = facts.idle, now().timeIntervalSince(requested ?? .distantPast) > 900 { try retire(job: idle.id) }
+      return nil
+    }
+    let calendar = Calendar.current
+    let reconciled = Self.date(state["reconciledThrough"] as? String ?? "")
+    let anchor = [reconciled, facts.coveredEnd].compactMap { $0 }.max() ?? Self.date(state["enabledAt"] as? String ?? "") ?? now()
+    let planStart = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: anchor))!
+    var replaced = false
+    if explicit, hasActive, let idle = facts.idle, idle.start < planStart {
+      try retire(job: idle.id)
+      hasActive = false
+      replaced = true
+    }
+    if !hasActive {
       // Native ready/resume notifications may arrive in a burst. Do not create
       // an endless new overlapping job immediately after the last one finishes.
-      if let checked = Self.date(state["lastCatchupRequestedAt"] as? String ?? "") {
-        let age = now().timeIntervalSince(checked)
+      if !replaced, let requested {
+        let age = now().timeIntervalSince(requested)
         if age >= 0 && age < 300 { return nil }
       }
-      let anchor = Self.date(state["reconciledThrough"] as? String ?? state["enabledAt"] as? String ?? "") ?? now()
-      let calendar = Calendar.current
-      var start = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: anchor))!
+      var start = planStart
       let cutoff = now()
       var windows: [[String: String]] = []
       while start < cutoff {

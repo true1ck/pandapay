@@ -7,6 +7,7 @@ import 'package:pandapay/features/sms_import/ios_sms_intake_service.dart';
 
 class MemoryBridge extends IosSmsIntakeService {
   final calls = <String>[];
+  final catchupArgs = <Map<String, Object?>>[];
   final createdJobs = <Map<String, Object?>>[];
   final rows = <Map<Object?, Object?>>[];
   bool failAck = false;
@@ -62,6 +63,25 @@ class MemoryBridge extends IosSmsIntakeService {
         pending['attempt'] ??= 'attempt-${++issued}';
         pending['state'] = 'waiting';
         return jsonEncode({'attempt': pending['attempt']});
+      case 'prepareCatchup':
+        catchupArgs.add(Map<String, Object?>.from(arguments ?? {}));
+        if (arguments?['explicit'] != true) return null;
+        snapshot['jobs'] = [
+          {'id': 'cu', 'kind': 'catchup', 'state': 'active'},
+        ];
+        snapshot['windows'] = [
+          {
+            'id': 'cw0',
+            'job_id': 'cu',
+            'state': 'waiting',
+            'attempt': 'cu-attempt',
+            'ordinal': 0,
+            'enumerated': 0,
+            'start': '2026-11-19T18:30:00Z',
+            'end': '2026-11-20T18:30:00Z',
+          },
+        ];
+        return jsonEncode({'attempt': 'cu-attempt'});
       case 'createJob':
         createdJobs.add(Map<String, Object?>.from(arguments!));
         final id = arguments['id'];
@@ -1266,6 +1286,118 @@ void _loopMonitorTests() {
       controller.dispose();
     });
   });
+
+  group('catch-up and the daily check', () {
+    test('the automatic refresh never asks for a plan to be made', () async {
+      final service = MemoryBridge();
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      expect(service.catchupArgs, isNotEmpty);
+      expect(service.catchupArgs.every((a) => a['explicit'] == false), isTrue);
+    });
+
+    test(
+      'Check for missed messages makes the plan and runs the history Shortcut',
+      () async {
+        final service = MemoryBridge();
+        final controller = IosSmsIntakeController(
+          service: service,
+          namespace: () => 'user:a',
+          capture: (_, _, _) async => [],
+          requestUpload: () {},
+        );
+        addTearDown(controller.dispose);
+        await controller.refresh();
+        expect(controller.canCheckMissedMessages, isTrue);
+        await controller.checkMissedMessages('PANDAPAY SMS HISTORY');
+        expect(service.catchupArgs.last['explicit'], isTrue);
+        expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+        expect(controller.automaticallyAdvancing, isTrue);
+      },
+    );
+
+    test('an idle plan from an older build does not block the check', () async {
+      final service = MemoryBridge();
+      service.snapshot['jobs'] = [
+        {'id': 'old', 'kind': 'catchup', 'state': 'active'},
+      ];
+      service.snapshot['windows'] = [
+        {
+          'id': 'ow',
+          'job_id': 'old',
+          'state': 'waiting',
+          'enumerated': 0,
+          'ordinal': 0,
+          'attempt': 'x',
+        },
+      ];
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      expect(controller.canCheckMissedMessages, isTrue);
+      await controller.checkMissedMessages('PANDAPAY SMS HISTORY');
+      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+    });
+
+    test('it is refused while a history import is running', () async {
+      final service = MemoryBridge();
+      service.snapshot['jobs'] = [
+        {'id': 'h', 'kind': 'history', 'state': 'active'},
+      ];
+      service.snapshot['windows'] = [
+        {
+          'id': 'hw',
+          'job_id': 'h',
+          'state': 'running',
+          'enumerated': 5,
+          'ordinal': 0,
+        },
+      ];
+      final controller = IosSmsIntakeController(
+        service: service,
+        namespace: () => 'user:a',
+        capture: (_, _, _) async => [],
+        requestUpload: () {},
+      );
+      addTearDown(controller.dispose);
+      await controller.refresh();
+      expect(controller.canCheckMissedMessages, isFalse);
+      await expectLater(
+        controller.checkMissedMessages('PANDAPAY SMS HISTORY'),
+        throwsStateError,
+      );
+      expect(service.calls, isNot(contains('runShortcut')));
+    });
+
+    test(
+      'nothing is launched when the phone says there is nothing to check',
+      () async {
+        final service = MemoryBridge();
+        service.snapshot['jobs'] = <Object?>[];
+        final controller = IosSmsIntakeController(
+          service: _NothingToCheck(service),
+          namespace: () => 'user:a',
+          capture: (_, _, _) async => [],
+          requestUpload: () {},
+        );
+        addTearDown(controller.dispose);
+        await controller.refresh();
+        await controller.checkMissedMessages('PANDAPAY SMS HISTORY');
+        expect(service.calls, isNot(contains('runShortcut')));
+      },
+    );
+  });
 }
 
 class _MemorySessionStore extends IosImportSessionStore {
@@ -1277,4 +1409,18 @@ class _MemorySessionStore extends IosImportSessionStore {
   Future<({String job, String shortcut})?> load() async => value;
   @override
   Future<void> clear() async => value = null;
+}
+
+class _NothingToCheck extends MemoryBridge {
+  _NothingToCheck(MemoryBridge base) {
+    snapshot = base.snapshot;
+  }
+  @override
+  Future<Object?> call(String method, [Map<String, Object?>? arguments]) async {
+    if (method == 'prepareCatchup') {
+      catchupArgs.add(Map<String, Object?>.from(arguments ?? {}));
+      return null;
+    }
+    return super.call(method, arguments);
+  }
 }

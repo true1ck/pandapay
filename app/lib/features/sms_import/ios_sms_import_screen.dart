@@ -104,6 +104,22 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
     await ref.read(iosSmsIntakeControllerProvider).continueImport(name);
   }
 
+  Future<void> _checkMissed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = _shortcutName.text.trim();
+    if (name.isEmpty) throw StateError('Shortcut name required');
+    await prefs.setString(_shortcutNameKey, name);
+    await ref.read(iosSmsIntakeControllerProvider).checkMissedMessages(name);
+  }
+
+  static String? _checkedThrough(IosSmsIntakeState state) {
+    final raw = state.snapshot['reconciledThrough'];
+    final through = raw is String ? DateTime.tryParse(raw) : null;
+    if (through == null) return null;
+    return 'Checked through ${DateFormat('d MMM').format(through.toLocal())}. '
+        'Opens Shortcuts for a moment.';
+  }
+
   Future<void> _chooseDates() async {
     FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
@@ -147,16 +163,29 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
         ? now
         : DateTime(_custom!.end.year, _custom!.end.month, _custom!.end.day + 1);
     final end = _months == 0 && selectedEnd.isBefore(now) ? selectedEnd : now;
-    final active = state.activeJob != null;
+    // An idle catch-up plan (nobody can run it) is not an import: no card.
+    final active = state.showsImportCard;
     final live = LiveAlertStatus.of(
       enabled: state.enabled,
       lastLiveAt: state.lastLiveAt,
       now: now,
+      total: state.liveTotal,
+      today: state.liveToday,
+      waiting: state.pending,
+      since: state.enabledAt,
+      intake: state.lastLiveIntake,
+      lastState: state.lastLiveState,
+      processed: state.lastLiveProcessed,
     );
     final history = buildHistoryMonths(
       now: now,
-      coverage: state.importedRanges,
-      jobWindows: state.currentWindows,
+      // While live alerts work they cover everything since they were enabled.
+      coverage: [
+        ...state.importedRanges,
+        if (live.health == LiveAlertHealth.working && state.enabledAt != null)
+          (state.enabledAt!, now),
+      ],
+      jobWindows: state.showsImportCard ? state.currentWindows : const [],
     );
     final pastMonths = history
         .where((m) => m.status != MonthCoverage.future)
@@ -209,41 +238,88 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
             ),
             const SizedBox(height: AppSpace.xl),
             SmsSetupPanel(
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.sms_outlined, color: BambooInk.jade),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Live bank alerts',
-                          style: BambooFonts.heading(
-                            16,
-                            color: BambooInk.ink900,
+                  Row(
+                    children: [
+                      const Icon(Icons.sms_outlined, color: BambooInk.jade),
+                      const SizedBox(width: AppSpace.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Live bank alerts',
+                              style: BambooFonts.heading(
+                                16,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                            Text(
+                              live.label,
+                              key: const ValueKey('live-alert-status'),
+                              style: BambooFonts.ui(
+                                12,
+                                color: live.health == LiveAlertHealth.quiet
+                                    ? BambooInk.clayInk
+                                    : BambooInk.ink700,
+                              ),
+                            ),
+                            for (final line in [
+                              live.counts,
+                              if (live.lastResult != null)
+                                'Last message: ${live.lastResult}',
+                              live.waitingNote,
+                            ])
+                              if (line != null)
+                                Text(
+                                  line,
+                                  style: BambooFonts.ui(
+                                    12,
+                                    color: BambooInk.ink700,
+                                  ),
+                                ),
+                          ],
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: state.enabled,
+                        activeTrackColor: BambooInk.slate,
+                        onChanged: _busy
+                            ? null
+                            : (value) =>
+                                  _run(() => controller.setEnabled(value)),
+                      ),
+                    ],
+                  ),
+                  if (state.enabled && controller.canCheckMissedMessages) ...[
+                    const SizedBox(height: AppSpace.sm),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        key: const ValueKey('check-missed-messages'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: BambooInk.jade,
+                          padding: EdgeInsets.zero,
+                          textStyle: BambooFonts.ui(
+                            13,
+                            weight: FontWeight.w600,
                           ),
                         ),
-                        Text(
-                          live.label,
-                          key: const ValueKey('live-alert-status'),
-                          style: BambooFonts.ui(
-                            12,
-                            color: live.health == LiveAlertHealth.quiet
-                                ? BambooInk.clayInk
-                                : BambooInk.ink700,
-                          ),
-                        ),
-                      ],
+                        onPressed: _busy || !_sharingConfirmed
+                            ? null
+                            : () => _run(_checkMissed),
+                        child: const Text('Check for missed messages'),
+                      ),
                     ),
-                  ),
-                  Switch.adaptive(
-                    value: state.enabled,
-                    activeTrackColor: BambooInk.slate,
-                    onChanged: _busy
-                        ? null
-                        : (value) => _run(() => controller.setEnabled(value)),
-                  ),
+                    Text(
+                      _checkedThrough(state) ??
+                          'Reads Messages for the days after your last import. '
+                              'Opens Shortcuts for a moment.',
+                      style: BambooFonts.ui(12, color: BambooInk.ink700),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -677,17 +753,18 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
     final done = state.activeJob?['kind'] == 'history'
         ? state.completedMonths
         : state.completed;
+    final catchUp = state.activeJob?['kind'] == 'catchup';
     final title = state.paused
-        ? 'Import paused'
+        ? (catchUp ? 'Check paused' : 'Import paused')
         : controller.canRetryProcessing
         ? 'Processing needs attention'
         : state.partial || state.error != null
-        ? 'Import needs a check'
+        ? (catchUp ? 'Check needs a look' : 'Import needs a check')
         : state.acquisitionFinished && state.savingMessages
         ? 'Processing saved messages'
         : automatic || state.waiting
-        ? 'Importing your history'
-        : 'Ready to resume';
+        ? (catchUp ? 'Checking for missed messages' : 'Importing your history')
+        : (catchUp ? 'Ready to resume the check' : 'Ready to resume');
     return Container(
       padding: const EdgeInsets.all(AppSpace.lg),
       decoration: BoxDecoration(
@@ -701,7 +778,7 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
           const SizedBox(height: AppSpace.sm),
           Text(
             state.importedThrough == null
-                ? 'Nothing imported yet'
+                ? (catchUp ? 'Nothing checked yet' : 'Nothing imported yet')
                 : 'Imported through ${_day(state.importedThrough!.subtract(const Duration(milliseconds: 1)), year: true)}',
             style: BambooFonts.ui(14, color: BambooInk.onSlate),
           ),
@@ -722,7 +799,7 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
           ],
           const SizedBox(height: AppSpace.xs),
           Text(
-            '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'date windows'} done',
+            '$done of $total ${state.activeJob?['kind'] == 'history' ? 'months' : 'days'} ${catchUp ? 'checked' : 'done'}',
             style: BambooFonts.ui(12, color: BambooInk.onSlateSubtle),
           ),
           if (state.error ?? state.stopReason case final reason?) ...[
@@ -777,6 +854,8 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
               child: Text(
                 controller.canRetryProcessing
                     ? 'Retry processing'
+                    : catchUp
+                    ? 'Resume check'
                     : 'Resume import',
               ),
             ),

@@ -844,4 +844,112 @@ void main() {
     final window = (service.createdJobs.single['windows'] as List).first as Map;
     expect(DateTime.parse(window['start'] as String).toLocal(), lastMonth);
   });
+
+  group('live mode and the idle catch-up plan', () {
+    MemoryBridge liveService({bool idlePlan = true}) {
+      final service = MemoryBridge();
+      service.snapshot['last_live_at'] = DateTime.now()
+          .subtract(const Duration(minutes: 5))
+          .toUtc()
+          .toIso8601String();
+      service.snapshot['live_total'] = 44;
+      service.snapshot['live_today'] = 8;
+      service.snapshot['enabledAt'] = '2026-11-13T17:01:26.216Z';
+      service.snapshot['last_live_intake'] = 'saved_for_processing';
+      service.snapshot['last_live_state'] = 'committed';
+      service.snapshot['last_live_processed'] = 'captured';
+      if (idlePlan) {
+        service.snapshot['jobs'] = [
+          {'id': 'c', 'kind': 'catchup', 'state': 'active'},
+        ];
+        service.snapshot['windows'] = [
+          {
+            'id': 'cw',
+            'job_id': 'c',
+            'state': 'waiting',
+            'attempt': 'a',
+            'ordinal': 0,
+            'enumerated': 0,
+            'start': '2026-11-11T18:30:00Z',
+            'end': '2026-11-12T18:30:00Z',
+          },
+        ];
+      }
+      return service;
+    }
+
+    testWidgets('shows Live with its counts and no import card, Resume or Stop', (
+      tester,
+    ) async {
+      final service = liveService();
+      await _pumpImport(tester, service);
+      expect(find.textContaining('44 messages captured since'), findsOneWidget);
+      expect(find.textContaining('8 today'), findsOneWidget);
+      expect(find.text('Last message: Saved'), findsOneWidget);
+      expect(find.text('Importing your history'), findsNothing);
+      expect(find.text('Nothing imported yet'), findsNothing);
+      expect(find.text('Resume import'), findsNothing);
+      expect(find.text('Stop'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Check for missed messages plans the days and opens the history Shortcut', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        iosSmsSharingAcknowledgementKey: true,
+      });
+      final service = liveService(idlePlan: false);
+      await _pumpImport(tester, service);
+      final button = find.byKey(const ValueKey('check-missed-messages'));
+      await _scrollTo(tester, button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(service.catchupArgs.last['explicit'], isTrue);
+      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the button is not offered while a history import runs', (
+      tester,
+    ) async {
+      final service = liveService(idlePlan: false);
+      service.snapshot['jobs'] = [
+        {'id': 'h', 'kind': 'history', 'state': 'active'},
+      ];
+      service.snapshot['windows'] = [
+        {
+          'id': 'hw',
+          'job_id': 'h',
+          'state': 'running',
+          'ordinal': 0,
+          'enumerated': 4,
+          'start': '2026-03-01T00:00:00Z',
+          'end': '2026-04-01T00:00:00Z',
+        },
+      ];
+      await _pumpImport(tester, service);
+      expect(find.byKey(const ValueKey('check-missed-messages')), findsNothing);
+      expect(find.text('Importing your history'), findsOneWidget);
+    });
+
+    testWidgets('a started catch-up is a check, not a history import', (
+      tester,
+    ) async {
+      final service = liveService();
+      (service.snapshot['windows'] as List).cast<Map<String, Object?>>().first
+        ..['state'] = 'running'
+        ..['enumerated'] = 3;
+      await _pumpImport(tester, service);
+      expect(find.text('Checking for missed messages'), findsOneWidget);
+      expect(find.text('Importing your history'), findsNothing);
+    });
+
+    testWidgets('waiting messages are named', (tester) async {
+      final service = liveService(idlePlan: false);
+      service.snapshot['pending'] = 2;
+      await _pumpImport(tester, service);
+      expect(find.text('2 waiting to be added'), findsOneWidget);
+    });
+  });
 }

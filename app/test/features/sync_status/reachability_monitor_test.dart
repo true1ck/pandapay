@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/app/providers.dart';
+import 'package:pandapay/data/connectivity/api_answer_evidence.dart';
 import 'package:pandapay/data/connectivity/reachability.dart';
 import 'package:pandapay/features/sync_status/reachability_monitor.dart';
 
@@ -13,6 +14,9 @@ class _Harness {
   final bool online;
   int probes = 0;
   final states = <bool?>[];
+  DateTime now = DateTime.utc(2026, 11, 20, 12);
+
+  late final ApiAnswerEvidence evidence = ApiAnswerEvidence(now: () => now);
 
   late final ServerReachability reachability = ServerReachability(
     probe: () async {
@@ -24,11 +28,14 @@ class _Harness {
   );
 
   Future<void> pump(WidgetTester tester) async {
+    ReachabilityMonitor.clock = () => now;
+    addTearDown(() => ReachabilityMonitor.clock = DateTime.now);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           isOnlineProvider.overrideWith((_) => Stream.value(online)),
           serverReachabilityProvider.overrideWithValue(reachability),
+          apiAnswerEvidenceProvider.overrideWithValue(evidence),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -44,38 +51,49 @@ class _Harness {
     );
     await tester.pump();
   }
-}
 
-Future<void> _elapse(WidgetTester tester, Duration d) async {
-  await tester.pump(d);
-  await tester.pump();
+  Future<void> elapse(WidgetTester tester, Duration d) async {
+    now = now.add(d);
+    await tester.pump(d);
+    await tester.pump();
+  }
 }
 
 void main() {
-  testWidgets('one failed probe does not flash; the confirming probe does', (
+  testWidgets('failures are not reported until three in a row span the outage window', (
     tester,
   ) async {
-    final h = _Harness(results: [false, false]);
+    final h = _Harness(results: [false]);
     await h.pump(tester);
     expect(h.probes, 0, reason: 'nothing is probed at launch');
 
-    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
     expect(h.probes, 1);
-    expect(h.states, isEmpty, reason: 'a single failure is not reported');
-
-    await _elapse(tester, ReachabilityMonitor.confirmDelay);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
     expect(h.probes, 2);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    expect(h.probes, 3, reason: 'three failures, but only 8 s apart');
+    expect(h.states, isEmpty, reason: 'a short blip is never reported');
+
+    // Keep failing until the first and the latest failure are far enough apart.
+    for (var i = 0; i < 6 && h.states.isEmpty; i++) {
+      await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    }
     expect(h.states, [false]);
+    expect(
+      h.now.difference(DateTime.utc(2026, 11, 20, 12)) >=
+          ReachabilityMonitor.firstProbeDelay + ReachabilityMonitor.minOutage,
+      isTrue,
+    );
   });
 
-  testWidgets('a failure that the confirming probe contradicts is dropped', (
-    tester,
-  ) async {
-    final h = _Harness(results: [false, true]);
+  testWidgets('a failure that a later probe contradicts is dropped', (tester) async {
+    final h = _Harness(results: [false, false, true]);
     await h.pump(tester);
-    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
-    await _elapse(tester, ReachabilityMonitor.confirmDelay);
-    expect(h.probes, 2);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    expect(h.probes, 3);
     expect(h.states, [true]);
     expect(h.states, isNot(contains(false)));
   });
@@ -83,44 +101,72 @@ void main() {
   testWidgets('an unreachable server is re-probed and recovery is reported', (
     tester,
   ) async {
-    final h = _Harness(results: [false, false, false, true]);
+    final h = _Harness(results: [false, false, false, false, false, false, true]);
     await h.pump(tester);
-    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
-    await _elapse(tester, ReachabilityMonitor.confirmDelay);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    for (var i = 0; i < 10 && h.states.isEmpty; i++) {
+      await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    }
     expect(h.states, [false]);
-
-    await _elapse(tester, ReachabilityMonitor.unreachableInterval);
-    expect(h.probes, 3);
-    expect(h.states, [false]);
-    await _elapse(tester, ReachabilityMonitor.unreachableInterval);
-    expect(h.probes, 4);
+    for (var i = 0; i < 4 && h.states.length < 2; i++) {
+      await h.elapse(tester, ReachabilityMonitor.unreachableInterval);
+    }
     expect(h.states, [false, true]);
   });
 
-  testWidgets('a healthy server is only re-probed on the slow interval', (
-    tester,
-  ) async {
+  testWidgets('a healthy server is only re-probed on the slow interval', (tester) async {
     final h = _Harness(results: [true]);
     await h.pump(tester);
-    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
     expect(h.probes, 1);
-    await _elapse(tester, const Duration(seconds: 30));
+    await h.elapse(tester, const Duration(seconds: 30));
     expect(h.probes, 1);
-    await _elapse(tester, ReachabilityMonitor.healthyInterval);
+    await h.elapse(tester, ReachabilityMonitor.healthyInterval);
     expect(h.probes, 2);
+  });
+
+  testWidgets('a real answer from the API stands in for the probe', (tester) async {
+    final h = _Harness(results: [false]);
+    await h.pump(tester);
+    h.evidence.note(200);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    expect(h.probes, 0, reason: 'the app already knows the server answered');
+    expect(h.states, [true]);
+  });
+
+  testWidgets('a probe that fails while the API answered is not a failure', (tester) async {
+    final h = _Harness(results: [false]);
+    await h.pump(tester);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    expect(h.probes, 1);
+    h.evidence.note(304);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    expect(h.states, [true]);
+  });
+
+  testWidgets('an answer during a reported outage clears it at once', (tester) async {
+    final h = _Harness(results: [false]);
+    await h.pump(tester);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    for (var i = 0; i < 10 && h.states.isEmpty; i++) {
+      await h.elapse(tester, ReachabilityMonitor.confirmDelay);
+    }
+    expect(h.states, [false]);
+    h.evidence.note(200);
+    await tester.pump();
+    expect(h.states, [false, true]);
   });
 
   testWidgets('never probes while the radio is down', (tester) async {
     final h = _Harness(results: [false], online: false);
     await h.pump(tester);
-    await _elapse(tester, const Duration(minutes: 3));
+    await h.elapse(tester, const Duration(minutes: 3));
     expect(h.probes, 0);
     expect(h.states, isEmpty);
   });
 
-  testWidgets('disposing the scope cancels the pending probe timer', (
-    tester,
-  ) async {
+  testWidgets('disposing the scope cancels the pending probe timer', (tester) async {
     final h = _Harness(results: [true]);
     await h.pump(tester);
     await tester.pumpWidget(const SizedBox());
@@ -128,22 +174,24 @@ void main() {
     expect(h.probes, 0);
   });
 
-  testWidgets('polling pauses in the background and probes on resume', (
+  testWidgets('polling pauses in the background; resume waits for the start-up burst', (
     tester,
   ) async {
     final h = _Harness(results: [true]);
     await h.pump(tester);
-    await _elapse(tester, ReachabilityMonitor.firstProbeDelay);
+    await h.elapse(tester, ReachabilityMonitor.firstProbeDelay);
     expect(h.probes, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await _elapse(tester, const Duration(minutes: 5));
+    await h.elapse(tester, const Duration(minutes: 5));
     expect(h.probes, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await _elapse(tester, Duration.zero);
+    await h.elapse(tester, Duration.zero);
+    expect(h.probes, 1, reason: 'not while the app is refreshing everything');
+    await h.elapse(tester, ReachabilityMonitor.resumeProbeDelay);
     expect(h.probes, 2);
   });
 }
