@@ -956,6 +956,9 @@ class _PastBillsPreview extends ConsumerWidget {
         .take(filter.isUpcoming ? 3 : 10)
         .toList(growable: false);
     if (visible.isEmpty) return const SizedBox.shrink();
+    void openAll() => Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => PastBillReceiptsScreen(filter: filter)),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -968,11 +971,7 @@ class _PastBillsPreview extends ConsumerWidget {
               ),
             ),
             TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => PastBillReceiptsScreen(filter: filter),
-                ),
-              ),
+              onPressed: openAll,
               child: Text(
                 'View all',
                 style: BambooFonts.ui(
@@ -989,6 +988,21 @@ class _PastBillsPreview extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpace.sm),
             child: _PastBillPreviewRow(item: item),
+          ),
+        if (matching.length > visible.length)
+          Align(
+            alignment: Alignment.center,
+            child: TextButton(
+              onPressed: openAll,
+              child: Text(
+                'View all ${matching.length} →',
+                style: BambooFonts.ui(
+                  13,
+                  color: BambooInk.jade,
+                  weight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
       ],
     );
