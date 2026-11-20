@@ -1546,6 +1546,10 @@ class SharedExpensesRuntime extends ChangeNotifier {
     // Who owes whom here, from the server's balances plus what expenses saved
     // on this phone and not yet confirmed will add, so a new expense moves the
     // balances the moment it is saved.
+    final profiles = {
+      for (final raw in roster['items'] as List)
+        (raw as Map)['memberId']: raw['profileId'],
+    };
     final amounts = <String, BigInt>{};
     for (final raw in balancePage['items'] as List) {
       final row = Map<String, Object?>.from(raw as Map),
@@ -1574,6 +1578,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
           SharedContextRow(
             id: entry.key,
             title: names[entry.key] as String? ?? 'Member',
+            profileId: profiles[entry.key] as String?,
             balance: _summary(
               entry.value > BigInt.zero ? entry.value.toString() : '0',
               entry.value < BigInt.zero ? (-entry.value).toString() : '0',
@@ -1620,6 +1625,15 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedGroupPresentation(
       id: id,
       direct: direct,
+      friendProfileId: direct
+          ? [
+              for (final raw in roster['items'] as List)
+                if ((raw as Map)['memberId'] != own &&
+                    raw['state'] != 'removed' &&
+                    raw['profileId'] is String)
+                  raw['profileId'] as String,
+            ].firstOrNull
+          : null,
       title: title,
       summary: pageSummary,
       breakdown: breakdown,
@@ -1963,12 +1977,14 @@ class SharedExpensesRuntime extends ChangeNotifier {
       final shift = pairs?.pendingDirect(row.id) ?? 0;
       final direct = base.netBalance.paise + shift;
       final lines = pairs?.linesFor(row.id, direct) ?? const [];
+      final profile = pairs?.profileOf(row.id);
       if (lines.isEmpty) {
-        if (shift == 0 && held == null) return row;
+        if (shift == 0 && held == null) return row.withProfile(profile);
         return SharedContextRow(
           id: row.id,
           title: row.title,
           subtitle: row.subtitle,
+          profileId: profile,
           balance: SharedBalanceSummary(
             owedToYou: Money.fromPaise(direct > 0 ? direct : 0),
             youOwe: Money.fromPaise(direct < 0 ? -direct : 0),
@@ -1984,6 +2000,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
         id: row.id,
         title: row.title,
         subtitle: row.subtitle,
+        profileId: profile,
         balance: total,
         breakdown: lines,
         state:
@@ -2120,6 +2137,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
     return SharedContextRow(
       id: '$sharedGroupPersonPrefix${person.groups.first.$1}:${person.key}',
       title: person.name,
+      profileId: SharedPairIndex.profileOfKey(person.key),
       subtitle: person.groups.length == 1
           ? 'In ${person.groups.first.$2}'
           : 'In ${person.groups.length} groups',
@@ -2178,6 +2196,7 @@ class SharedExpensesRuntime extends ChangeNotifier {
                 state: r.state,
                 subtitle: hints[r.id],
                 breakdown: r.breakdown,
+                profileId: r.profileId,
               ),
     ];
   }
