@@ -11,8 +11,10 @@ test('review deterministically describes current locks and preserves unknown lic
   assert.deepEqual(a, b);
   assert.equal(a.network, 'none');
   // 105 since libphonenumber-js, the SMS v2 contracts (ajv, ajv-formats and their dependencies,
-  // all MIT or BSD-3-Clause) and body-parser 2.4.0; none has unknown evidence.
-  assert.equal(a.locks.find(x => x.path === 'api/package-lock.json').license_evidence.known, 105);
+  // all MIT or BSD-3-Clause) and body-parser 2.4.0; 112 since compression 1.8.2 (gzip for API answers;
+  // 1.8.1 leaked memory when a client closed early, GHSA-vc2v-76pw-4v95) with compressible, destroy,
+  // on-headers and its own debug 2.6.9, ms 2.0.0 and negotiator 0.6.4, all MIT. None has unknown evidence.
+  assert.equal(a.locks.find(x => x.path === 'api/package-lock.json').license_evidence.known, 112);
   assert.equal(a.locks.find(x => x.path === 'auth/package-lock.json').license_evidence.known, 210);
   assert.ok(a.locks.find(x => x.ecosystem === 'pod').license_evidence.unknown > 0);
   assert.equal(a.locks.find(x => x.ecosystem === 'swift').license_evidence.unknown, 1);
