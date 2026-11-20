@@ -126,7 +126,7 @@ async function createOtpInternal(identifier, type, purpose, binding = null) {
   const normalizedIdentifier = identifier.trim().toLowerCase();
   const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
   // Store-review login: a fixed code for listed identifiers only (see utils/reviewerOtp.js).
-  const reviewerCode = isTestIdentifier ? null : reviewerOtpCode(normalizedIdentifier);
+  const reviewerCode = isTestIdentifier ? null : reviewerOtpCode(normalizedIdentifier, process.env, Date.now(), { legacy: !binding });
 
   const code = isTestIdentifier
     ? (binding ? '123456' : TEST_OTP_CODE)

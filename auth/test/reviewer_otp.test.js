@@ -22,6 +22,12 @@ test('reviewer code is issued only for listed identifiers, even in production', 
   assert.equal(isReviewerOtpIdentifier('reviewer@example.com', base, NOW), true);
 });
 
+test('legacy 4-digit protocol uses the first four digits, v2 uses all six', () => {
+  assert.equal(reviewerOtpCode('reviewer@example.com', base, NOW, { legacy: true }), '4829');
+  assert.equal(reviewerOtpCode('reviewer@example.com', base, NOW, { legacy: false }), '482916');
+  assert.equal(reviewerOtpCode('someone@example.com', base, NOW, { legacy: true }), null);
+});
+
 test('bypass is off unless every setting is present and valid', () => {
   const off = (patch) => reviewerOtpCode('reviewer@example.com', { ...base, ...patch }, NOW);
   assert.equal(off({ REVIEWER_OTP_ENABLED: undefined }), null);
