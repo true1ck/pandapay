@@ -117,3 +117,58 @@ test('API validation failures are marked permanent while worker misconfiguration
     /configuration_invalid/);
   assert.equal(safeErrorCode({ code: 'HTTP 500' }), 'worker_error');
 });
+
+// Measured 21 Nov 2026: 989 cycles in a row found nothing to do, and each made 12 database round trips (three
+// transactions) plus a log line, every 5 s. The cadence stays 5 s; an idle cycle is now one transaction.
+function idleWorker({ databasePool, clock, lines }) {
+  return createRewardsWorker({
+    databasePool,
+    apiUrl: 'http://api.test',
+    internalSecret: 'w'.repeat(40),
+    workerId: 'test-worker',
+    fetchImpl: async () => { throw new Error('nothing to deliver'); },
+    now: () => clock.t,
+    logger: { info: (m, f) => lines.push([m, f]), warn() {}, error: (m, f) => lines.push([m, f]) },
+  });
+}
+
+test('an idle cycle expires, claims and records its heartbeat in one transaction', async () => {
+  const databasePool = fakePool({ events: [] });
+  const worker = idleWorker({ databasePool, clock: { t: 0 }, lines: [] });
+  assert.deepEqual(await worker.pollOnce(), { claimed: 0, completed: 0, failed: 0 });
+  const sqls = databasePool.calls.map(({ sql }) => sql);
+  assert.equal(sqls.filter((s) => s === 'BEGIN').length, 1, 'one transaction');
+  assert.equal(sqls.length, 6, 'BEGIN, role, expire, claim, heartbeat, COMMIT');
+  assert.equal(sqls[1], 'SET LOCAL ROLE rewards_worker');
+  assert.ok(sqls[2].includes('expire_referral_reservations'));
+  assert.ok(sqls[3].includes('claim_reward_outbox'));
+  assert.ok(sqls[4].includes('record_reward_worker_heartbeat'));
+  assert.deepEqual(databasePool.calls[4].params, ['test-worker', 0, 0, null]);
+  assert.equal(sqls[5], 'COMMIT');
+});
+
+test('a cycle with work still records its heartbeat after the events are finalised', async () => {
+  const databasePool = fakePool();
+  const worker = idleWorker({ databasePool, clock: { t: 0 }, lines: [] });
+  await worker.pollOnce();
+  const sqls = databasePool.calls.map(({ sql }) => sql);
+  const finalised = sqls.findIndex((s) => s.includes('finalize_reward_outbox'));
+  const beat = sqls.findIndex((s) => s.includes('record_reward_worker_heartbeat'));
+  assert.ok(finalised >= 0 && beat > finalised, 'heartbeat after finalising');
+  assert.equal(sqls.filter((s) => s.includes('record_reward_worker_heartbeat')).length, 1);
+});
+
+test('idle cycles log once a minute; cycles with work or errors always log', async () => {
+  const lines = [];
+  const clock = { t: 0 };
+  const worker = idleWorker({ databasePool: fakePool({ events: [] }), clock, lines });
+  for (let i = 0; i < 12; i++) { await worker.pollOnce(); clock.t += 5000; } // one minute of idle cycles
+  await worker.pollOnce();
+  assert.equal(lines.filter(([m]) => m === 'reward worker cycle complete').length, 2, 'first idle cycle, then one a minute later');
+  const busyLines = [];
+  const busyWorker = createRewardsWorker({ databasePool: fakePool(), apiUrl: 'http://api.test', internalSecret: 'w'.repeat(40), workerId: 'w',
+    fetchImpl: async () => ({ ok: true, async json() { return { accepted: true, inbox: 'created' }; } }), now: () => 0,
+    logger: { info: (m, f) => busyLines.push([m, f]), warn() {}, error() {} } });
+  await busyWorker.pollOnce(); await busyWorker.pollOnce();
+  assert.equal(busyLines.filter(([m]) => m === 'reward worker cycle complete').length, 2, 'every cycle with work is logged');
+});
