@@ -24,6 +24,7 @@ const {isVersionedOtpRequest}=require('./versionedOtpRoutes');
 const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 const { OtpCapacityError, BUSY_CODE, respondOtpCapacityUnavailable } = require('../services/otpWorkAdmission');
 const { isTestOtpIdentifier } = require('../utils/testOtp');
+const { isReviewerOtpIdentifier } = require('../utils/reviewerOtp');
 const {
   signAccessToken,
   issueRefreshToken,
@@ -272,7 +273,7 @@ router.post(
         // A generated code is not useful unless the SMS provider accepted it.
         // Only the explicit dev/test allowlist may bypass an external SMS
         // provider. Production OTPs still require provider acceptance.
-        const smsResult = isTestOtpIdentifier(normalizedPhone)
+        const smsResult = (isTestOtpIdentifier(normalizedPhone) || isReviewerOtpIdentifier(normalizedPhone))
           ? { success: true, testMode: true }
           : await sendOtpSms(normalizedPhone, code);
 
@@ -806,7 +807,7 @@ router.post(
 
         const purpose = recovery_only === true ? 'recovery' : 'signin';
         const { code, requestId } = await createChallenge(req, normalizedEmail, 'email', purpose);
-        const emailResult = isTestOtpIdentifier(normalizedEmail)
+        const emailResult = (isTestOtpIdentifier(normalizedEmail) || isReviewerOtpIdentifier(normalizedEmail))
           ? { success: true, testMode: true }
           : await sendOtpEmail(normalizedEmail, code);
 

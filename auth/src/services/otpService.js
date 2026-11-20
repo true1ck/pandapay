@@ -10,6 +10,7 @@ const {
   ActiveOtpError,
 } = require('../middleware/rateLimitMiddleware');
 const { TEST_OTP_CODE, isTestOtpIdentifier } = require('../utils/testOtp');
+const { reviewerOtpCode } = require('../utils/reviewerOtp');
 const { OTP_LIFETIME_SECONDS } = require('../utils/otpLifetime');
 // === SECURITY HARDENING: FIELD-LEVEL ENCRYPTION ===
 const { encryptPhoneNumber } = require('../utils/fieldEncryption');
@@ -124,8 +125,12 @@ async function createOtpInternal(identifier, type, purpose, binding = null) {
   // === SECURITY: TEST OTP BYPASS — DEV/TEST ONLY, see constants above ===
   const normalizedIdentifier = identifier.trim().toLowerCase();
   const isTestIdentifier = isTestOtpIdentifier(normalizedIdentifier);
+  // Store-review login: a fixed code for listed identifiers only (see utils/reviewerOtp.js).
+  const reviewerCode = isTestIdentifier ? null : reviewerOtpCode(normalizedIdentifier);
 
-  const code = isTestIdentifier ? (binding ? '123456' : TEST_OTP_CODE) : (binding ? randomInt(100000, 1000000).toString() : generateOtpCode());
+  const code = isTestIdentifier
+    ? (binding ? '123456' : TEST_OTP_CODE)
+    : (reviewerCode || (binding ? randomInt(100000, 1000000).toString() : generateOtpCode()));
 
   const requestId = randomUUID();
   const ttl = binding ? V2_TTL_SECONDS : OTP_TTL_SECONDS;
