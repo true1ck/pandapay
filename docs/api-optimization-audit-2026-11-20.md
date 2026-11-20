@@ -155,6 +155,15 @@ Still the owner's decision:
 - **Admin API `/admin/cards`:** builds the 14 MB reply from row objects. Having Postgres produce the JSON would save
   most of that, but dates and numbers would come out in a different format; not done (owner: no visible changes).
 
+## 4d. What actually shipped (21 Nov ~03:30 IST)
+
+The owner chose to deploy **all of dev** (`2dca6bec`, pushed to `prod` with `[deploy-tests:server]`): everything in
+4c below, plus this session's build 197 app work (app only), Sujay's server work (6 migrations: durable SMS AI draft
+jobs and lifecycle, entry-kind categories, AI excluded providers, requeue, `transactions.edited_at`; POST/PATCH
+/transactions refuse a category that does not fit the kind; `/categories` returns `entryKinds`) and the deploy test
+switch. Known visible effect, accepted by the owner: older app builds see the 33 new non-spend categories in their
+pickers and get a 400 when saving a category that does not fit the entry's kind, until the next app build ships.
+
 ## 4c. One combined production deploy (owner's plan, 21 Nov)
 
 Server-side commits waiting (all invisible to the app, the admin console and the SMS pages; no app build needed):
