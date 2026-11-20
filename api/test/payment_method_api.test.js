@@ -178,6 +178,8 @@ function loadPostHandler({ insertResult }) {
   const register = new Function(
     'app', 'requireAuth', 'withUserClient', 'importResolvers', 'insertTransactionAndUpdateState',
     'clientMutationSourceKey', 'paymentMethods', 'safeErrorCode', 'registerBillsProjectionRoutes',
+    // Required at the top of index.js (outside this slice) since 85ce1578; the category-kind rule has its own tests.
+    'categoryFitsEntryKind',
     `${indexSource.slice(start, end)}\n;`,
   );
   register(
@@ -187,7 +189,7 @@ function loadPostHandler({ insertResult }) {
       userCardMatchesInstrument: async () => true,
     },
     async (_client, _userId, args) => { inserts.push(args); return insertResult(args); },
-    () => 'key', pm, () => 'err', () => {},
+    () => 'key', pm, () => 'err', () => {}, async () => true,
   );
   return { handler: routes['/transactions'], calls, inserts };
 }
