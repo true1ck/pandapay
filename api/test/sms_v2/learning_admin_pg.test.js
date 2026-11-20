@@ -208,7 +208,7 @@ test('reporters, ask-again and the audit feed on Postgres', { skip: rigSkip }, a
     [profiles[1], 2, 1, 1],
     [profiles[2], 1, 0, 0],
   ], 'most active first; an account with nothing is not listed');
-  assert.deepEqual(first.body.reporters[0].effectiveLimits, { templates_per_user_per_day: 50, signals_per_user_per_day: 500 });
+  assert.deepEqual(first.body.reporters[0].effectiveLimits, { templates_per_user_per_day: 10000, signals_per_user_per_day: 500 });
   assert.equal(first.body.reporters[0].override, null);
   assert.ok(!JSON.stringify(first.body).match(/@|email|phone/i), 'a pseudonymous id and counts only');
   assert.equal((await admin.get('/admin/sms/v2/learning/reporters?days=0')).status, 400);

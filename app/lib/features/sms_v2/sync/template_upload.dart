@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -99,6 +100,9 @@ class TemplateUpload {
   /// whole request that would pass it, so a big batch can fail for ever once a
   /// few have been sent; small ones always fit what is left.
   static const _batchSize = 10;
+
+  /// Flat wait after a failure that is the session's or the server's, not the layout's.
+  static const _transientRetry = Duration(seconds: 60);
 
   Future<void> drain() async {
     if (!await _canShare()) return;
@@ -228,12 +232,14 @@ class TemplateUpload {
             .timeout(const Duration(seconds: 30));
         if (!await _canShare()) return;
         if (response.statusCode == 429) {
-          // Over the daily allowance or the rate limit: come back when the
-          // server says, not every few minutes.
+          // A limit the server applies (counted phones have none unless the
+          // owner sets one): try again within a couple of minutes, whatever
+          // Retry-After says. It can be a whole day, and waiting that long left
+          // a backlog of formats unsent for hours.
           final wait = Duration(
             seconds:
-                (int.tryParse(response.headers['retry-after'] ?? '') ?? 3600)
-                    .clamp(300, 21600),
+                (int.tryParse(response.headers['retry-after'] ?? '') ?? 60)
+                    .clamp(30, 120),
           );
           for (final record in records) {
             queue.retry(record, clock(), after: wait);
@@ -242,6 +248,17 @@ class TemplateUpload {
             queue.db,
             namespace: queue.namespace,
           ).put('template:wait', clock().add(wait).toUtc().toIso8601String());
+          return;
+        }
+        if (response.statusCode == 401 ||
+            response.statusCode == 408 ||
+            response.statusCode >= 500) {
+          // The session or the server is the problem, not the layout: try again
+          // soon at a flat pace. The usual doubling back-off pushed the next
+          // try out to 30 minutes after a few failed attempts.
+          for (final record in records) {
+            queue.retry(record, clock(), after: _transientRetry);
+          }
           return;
         }
         if (response.statusCode != 200 && response.statusCode != 202) {
@@ -266,9 +283,11 @@ class TemplateUpload {
           }
         }
         if (accepted.isEmpty) return;
-      } catch (_) {
+      } catch (error) {
+        // A timeout or a dropped connection says nothing about the layout either.
+        final transient = error is TimeoutException || error is http.ClientException;
         for (final record in records) {
-          queue.retry(record, clock());
+          queue.retry(record, clock(), after: transient ? _transientRetry : null);
         }
         return;
       }

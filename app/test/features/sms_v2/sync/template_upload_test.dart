@@ -146,6 +146,61 @@ void main() {
     expect(legacy.containsKey('sample'), isFalse, reason: 'no null is sent for a missing sample');
   });
 
+  test('a 401, a 5xx or a timeout is retried after a flat minute, never pushed out by doubling', () async {
+    final db = AppDatabase.forTesting(sqlite3.openInMemory());
+    addTearDown(db.db.dispose);
+    SmsV2Schema.ensure(db.db);
+    final intake = SmsIntakeRepository(db);
+    var now = DateTime.utc(2026, 11);
+    const raw = 'Alert info Rs.500.00 debited from A/c XX6789';
+    final source = smsSourceKey('a', 'HDFCBK', raw);
+    intake.remember('a', QueuedSms(sender: 'HDFCBK', body: raw, receivedAt: now));
+    db.db.execute('INSERT INTO v2_review_items VALUES(?,?,?,?,?)', [
+      'a',
+      source,
+      'template',
+      jsonEncode({'sourceKey': source, 'templateHash': 'a' * 64}),
+      'open',
+    ]);
+    var calls = 0;
+    Object? failure = 401;
+    final queue = OutboxStore(db.db, namespace: 'a');
+    final uploader = TemplateUpload(
+      intake: intake,
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => true,
+      accountIsCurrent: () => true,
+      clock: () => now,
+      client: MockClient((request) async {
+        calls++;
+        final fault = failure;
+        if (fault is int) return http.Response('{}', fault);
+        if (fault == 'timeout') throw http.ClientException('connection dropped');
+        final items = (jsonDecode(request.body) as Map)['items'] as List;
+        return http.Response(
+          jsonEncode({'accepted': [for (final item in items) item['templateHash']]}),
+          202,
+        );
+      }),
+    );
+    // Five failures of three kinds in a row: each one is due again 60 seconds later.
+    for (final kind in <Object>[401, 503, 'timeout', 401, 503]) {
+      failure = kind;
+      await uploader.drain();
+      expect(queue.due(now), isEmpty, reason: 'it waits after a failure ($kind)');
+      now = now.add(const Duration(seconds: 61));
+      expect(queue.due(now), hasLength(1), reason: 'and is due a minute later ($kind)');
+    }
+    expect(calls, 5);
+    failure = 'ok';
+    await uploader.drain();
+    expect(queue.due(now), isEmpty);
+    expect(db.db.select("SELECT * FROM v2_outbox WHERE kind='template'"), isEmpty);
+    expect(queue.hasDue(now), isFalse);
+  });
+
   test('layouts go in batches of at most ten, and a 429 is waited out', () async {
     final db = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(db.db.dispose);
@@ -204,13 +259,13 @@ void main() {
     expect(sizes, [10]);
     await uploader.drain();
     expect(sizes, [10], reason: 'nothing is sent again straight away');
-    now = now.add(const Duration(hours: 5));
+    now = now.add(const Duration(seconds: 90));
     await uploader.drain();
     expect(sizes, [
       10,
-    ], reason: 'still inside the six hours the server asked for');
+    ], reason: 'still inside the two minutes: the server asked for a day, the phone waits at most 2 minutes');
     // Once the wait is over and the server accepts, everything goes in tens.
-    now = now.add(const Duration(hours: 2));
+    now = now.add(const Duration(seconds: 40));
     status = 202;
     await uploader.drain();
     expect(sizes.skip(1), [10, 10, 5]);
