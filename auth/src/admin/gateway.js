@@ -303,10 +303,23 @@ function createAdminGatewayApp(deps) {
       const accessToken = decrypt(req.adminSession.encryptedUpstreamToken, config.sessionEncryptionKey);
       const query = String(req.originalUrl || '').split('?')[1];
       const limits = replyLimits(method, matched.path);
-      const result = await privateApi.request({ method, path: query ? `${path}?${query}` : path, body: req.body, accessToken, timeoutMs: limits.timeoutMs, maxResponseBytes: limits.maxResponseBytes, redirect: 'error' });
+      // The private API's JSON is streamed to the browser unchanged as it arrives: no parse and re-serialise, and the
+      // gateway never holds a large reply (see streamReply in server.js).
+      const onHead = (status) => {
+        if (!Number.isInteger(status) || status < 200 || status > 599) throw new Error('private API status out of range');
+        res.status(status);
+        // No content: no body and no content type, as Express sends it (the console's deletes expect a bare 204).
+        if (status !== 204 && status !== 304) res.type('application/json');
+      };
+      const result = await privateApi.request({ method, path: query ? `${path}?${query}` : path, body: req.body, accessToken, timeoutMs: limits.timeoutMs, maxResponseBytes: limits.maxResponseBytes, redirect: 'error', sink: res, onHead });
+      if (result?.streamed) return undefined;
       if (!result || !Number.isInteger(result.status) || result.status < 200 || result.status > 599 || result.body === undefined) return fail(res, 503, 'temporarily_unavailable');
       return res.status(result.status).json(result.body);
-    } catch { return fail(res, 503, 'temporarily_unavailable'); }
+    } catch {
+      // Part of the reply already went out: end the connection so the browser sees a broken reply, never a short one.
+      if (res.headersSent) { res.destroy(); return undefined; }
+      return fail(res, 503, 'temporarily_unavailable');
+    }
   });
 
   app.post('/internal/admin/session/introspect', async (req, res) => {

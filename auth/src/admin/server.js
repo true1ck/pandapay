@@ -44,9 +44,45 @@ function createSimpleWebAuthn() {
 // list asks for 40 s); nothing may exceed this.
 const MAX_PRIVATE_API_MS = 45_000;
 function boundedTimeoutMs(timeoutMs) { return Math.min(MAX_PRIVATE_API_MS, timeoutMs); }
+// Streams a private API reply to the browser response as it arrives (the proxy route). Parsing and re-serialising the
+// 14 MB card catalogue peaked near 190 MB in the gateway on a 1 GB host (21 Nov 2026), and even holding the bytes added
+// ~56 MB. The rules stay: only a reply labelled JSON is forwarded; a declared length over the limit is refused before
+// anything is sent; a reply that grows past the limit is cut off (the caller then ends the connection, so the browser
+// never sees a complete-looking partial reply); an empty reply is forwarded as `null`, as before.
+function drained(sink) {
+  return new Promise((resolve) => {
+    const done = () => { sink.off('drain', done); sink.off('close', done); resolve(); };
+    sink.on('drain', done); sink.on('close', done);
+  });
+}
+async function streamReply(response, { sink, onHead, maxResponseBytes, controller }) {
+  const status = response.status;
+  const tooBig = () => { controller.abort(); return new Error('private API response exceeded limit'); };
+  const declared = response.headers.has('content-length') ? Number(response.headers.get('content-length')) : null;
+  if (declared !== null && declared > maxResponseBytes) throw tooBig();
+  const type = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') {
+    if (response.body) for await (const chunk of response.body) if (chunk.length) { controller.abort(); throw new Error('private API reply is not JSON'); }
+    onHead(status); sink.end('null');
+    return { status, streamed: true, bytes: 0 };
+  }
+  onHead(status);
+  let total = 0;
+  if (response.body) for await (const chunk of response.body) {
+    total += chunk.length;
+    if (total > maxResponseBytes) throw tooBig();
+    if (!sink.write(chunk)) await drained(sink);
+    if (sink.destroyed) { controller.abort(); throw new Error('browser closed the connection'); }
+  }
+  if (total === 0) sink.end('null'); else sink.end();
+  return { status, streamed: true, bytes: total };
+}
 function createPrivateApiClient(baseUrl) {
   return {
-    async request({ method, path, body, accessToken, timeoutMs = 10_000, maxResponseBytes = 4 * 1024 * 1024 }) {
+    // With `sink` (a writable, the browser response) and `onHead(status)`, the reply is streamed (streamReply) and
+    // { status, streamed: true } is returned. Without them the reply is read and parsed ({ status, body }), for callers
+    // that read its fields (the sign-in membership check).
+    async request({ method, path, body, accessToken, timeoutMs = 10_000, maxResponseBytes = 4 * 1024 * 1024, sink = null, onHead = null }) {
       const routePath = path.split('?')[0];
       if (!/^\/admin\/[a-zA-Z0-9_./:-]*$/.test(routePath) || routePath.includes('..') || routePath.includes('//')) throw new Error('invalid fixed private API path');
       const controller = new AbortController();
@@ -55,6 +91,7 @@ function createPrivateApiClient(baseUrl) {
         const target = new URL(path, baseUrl);
         if (target.origin !== baseUrl.origin || !target.pathname.startsWith('/admin/')) throw new Error('private API redirect/path rejected');
         const response = await fetch(target, { method, redirect: 'error', signal: controller.signal, headers: { accept: 'application/json', 'content-type': 'application/json', authorization: `Bearer ${accessToken}` }, body: ['GET','HEAD'].includes(method) ? undefined : JSON.stringify(body ?? {}) });
+        if (sink) return await streamReply(response, { sink, onHead: onHead || (() => {}), maxResponseBytes, controller });
         const chunks=[];let total=0;
         for await (const chunk of response.body) {
           total+=chunk.length;
