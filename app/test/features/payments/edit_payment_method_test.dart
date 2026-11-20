@@ -11,6 +11,9 @@ import 'package:pandapay/data/local/sync_queue.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/edit_transaction_screen.dart';
 import 'package:pandapay/features/payments/payment_method_command.dart';
+import 'package:pandapay_domain/sms_v2.dart' as v2;
+import 'package:pandapay/features/sms_v2/storage/event_store.dart';
+import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 /// Edit transaction "Paid with": the same chips as Quick Add, and a saved
@@ -64,6 +67,8 @@ TransactionEntry _entry({
   double amount = 5000,
 }) => TransactionEntry(
   id: 't1',
+  eventId: pipelineVersion == 2 ? 'e1' : null,
+  sourceKey: pipelineVersion == 2 ? 's' * 64 : null,
   amount: Money.fromRupees(amount),
   occurredAt: DateTime(2026, 3, 1),
   merchantName: 'Landlord',
@@ -90,6 +95,21 @@ Future<void> _pump(
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   _db = openInMemoryForTesting();
+  if (repo.entry.pipelineVersion == 2) {
+    SmsV2Schema.ensure(_db.db);
+    EventStore(_db.db, namespace: 'user:test').upsert(
+      v2.Event(
+        eventId: 'e1',
+        type: v2.EventType.purchase,
+        status: v2.EventStatus.complete,
+        legs: [v2.EventLeg(factId: 'e1', role: v2.LegRole.debitLeg)],
+        confidence: 0.9,
+        occurredAt: DateTime.utc(2026, 11, 1),
+        amountMinor: 1000,
+      ),
+      fromUser: false,
+    );
+  }
   _repoUnderTest = repo;
   _onlineUnderTest = online;
   addTearDown(_db.close);

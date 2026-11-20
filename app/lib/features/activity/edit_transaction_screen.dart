@@ -156,20 +156,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _instrument = entry.instrumentKnown ? entry.instrument : null;
     _paymentMethod = entry.paymentMethod;
     _rail = entry.rail;
-    if (entry.pipelineVersion == 2 && entry.eventId != null) {
-      try {
-        final cache = ref.read(responseCacheProvider).valueOrNull;
-        if (cache != null) {
-          final stored = EventStore(
-            cache.financialStore.database.db,
-            namespace: ref.read(cacheNamespaceProvider),
-          ).get(entry.eventId!)?.type;
-          _cardBill = _originalCardBill = stored == v2.EventType.cardBillPayment;
-        }
-      } catch (_) {
-        // Without it the choice just starts on "between my accounts".
-      }
-    }
+    _checkReading(entry);
     // The bottom action is built before the body's AsyncValue builder runs.
     // Request one safe rebuild after the first frame so Save is enabled for
     // the loaded row instead of remaining disabled until another provider
@@ -179,12 +166,62 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     });
   }
 
+  static const _staleRowCopy =
+      "This entry's SMS reading is no longer on this phone, so it can't be edited here. Pull to refresh Activity, or hide it and report the message from Needs review.";
+
+  /// The row is marked as read on this phone but its stored reading is gone.
+  bool _readingMissing = false;
+  bool _readingChecked = false;
+
+  /// Looks the stored reading up once the phone's database is available (it can
+  /// still be loading when the screen first opens from a tapped row).
+  void _checkReading(TransactionEntry entry) {
+    if (_readingChecked) return;
+    if (entry.pipelineVersion != 2) {
+      _readingChecked = true;
+      return;
+    }
+    if (entry.eventId == null || entry.sourceKey == null) {
+      _readingChecked = true;
+      _readingMissing = true;
+      return;
+    }
+    final cache = ref.read(responseCacheProvider).valueOrNull;
+    if (cache == null) return;
+    _readingChecked = true;
+    try {
+      final stored = EventStore(
+        cache.financialStore.database.db,
+        namespace: ref.read(cacheNamespaceProvider),
+      ).get(entry.eventId!)?.type;
+      _cardBill = _originalCardBill = stored == v2.EventType.cardBillPayment;
+      // The row says it was read on this phone, but that reading is gone (a
+      // server copy on a new phone, or a row left after a re-read). Corrections
+      // need the reading, so the save must not try them.
+      _readingMissing = stored == null;
+    } catch (_) {
+      // Without it the choice just starts on "between my accounts".
+    }
+  }
+
+  /// Edited through the on-phone SMS corrections (needs the stored reading).
+  bool _onPhone(TransactionEntry? o) => o?.pipelineVersion == 2 && !_readingMissing;
+
+  /// A leftover 'v2:' row exists only on this phone, so the server cannot take
+  /// the edit either: nothing can honestly save it.
+  bool get _staleLocalRow =>
+      _readingMissing && (_originalEntry?.id.startsWith('v2:') ?? false);
+
+  /// "1,250.50" and "₹ 1250" are what people type; plain tryParse rejects them.
+  static double? _parseAmount(String raw) =>
+      double.tryParse(raw.replaceAll(RegExp(r'[,\s₹]'), ''));
+
   /// The method to send: only when the person set one that differs from what
   /// is saved. An SMS-ledger row is edited through the ledger, which has no
   /// method field, so nothing is sent for it.
   String? get _methodToSend {
     final original = _originalEntry;
-    if (original == null || original.pipelineVersion == 2) return null;
+    if (original == null || _onPhone(original)) return null;
     final method = _paymentMethod;
     if (method == null || method == original.paymentMethod) return null;
     return paymentMethodByWire(method) == null ? null : method;
@@ -197,7 +234,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // person made, so changing the instrument never counts as clearing it
     // (the server keeps it, exactly as before this feature existed).
     return original != null &&
-        original.pipelineVersion != 2 &&
+        !_onPhone(original) &&
         original.paymentMethod != null &&
         original.paymentMethod != 'upi' &&
         _paymentMethod == null;
@@ -211,7 +248,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.read(serverReachabilityProvider).serverReachable == false;
 
   Future<void> _save() async {
-    final amount = double.tryParse(_amountController.text.trim());
+    if (_staleLocalRow) {
+      setState(() => _error = _staleRowCopy);
+      return;
+    }
+    final amount = _parseAmount(_amountController.text);
     if (amount == null || !amount.isFinite || amount <= 0) {
       setState(() => _submitted = true);
       setState(() => _error = 'Enter a valid amount greater than zero.');
@@ -297,7 +338,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // a short time limit, and are skipped when the phone is offline or the
       // server cannot be reached.
       final runOffers =
-          categoryChanged && original.pipelineVersion != 2 && !_offlineNow();
+          categoryChanged && !_onPhone(original) && !_offlineNow();
       final offerContext = Navigator.of(context, rootNavigator: true).context;
       final offerContainer = ProviderScope.containerOf(context, listen: false);
       final offerCategoryId = _categoryId;
@@ -332,7 +373,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // was saved.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
       if (offline &&
-          original?.pipelineVersion != 2 &&
+          !_onPhone(original) &&
           _selfTransfer == null &&
           _clearedSelfTransfer == null &&
           !_methodChanged) {
@@ -405,7 +446,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   void _confirmSaved(TransactionEntry? original) {
     if (!mounted) return;
     final offline = ref.read(isOnlineProvider).valueOrNull == false;
-    final onPhone = original?.pipelineVersion == 2;
+    final onPhone = _onPhone(original);
     final text = onPhone
         ? (offline
               ? savedOfflineCopy
@@ -420,7 +461,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   Future<void> _submitEdit(double amount) async {
     final original = _originalEntry;
-    if (original?.pipelineVersion == 2) {
+    if (_onPhone(original)) {
       final namespace = ref.read(cacheNamespaceProvider);
       final controller = await smsReviewController(ref);
       final instruments = await ref.read(instrumentsProvider.future);
@@ -1062,6 +1103,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         initialEntry: widget.initialEntry,
       )),
     );
+    ref.watch(responseCacheProvider);
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
@@ -1129,7 +1171,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             ),
             // Never offer Save while the transaction itself failed to load;
             // the screenshot's blank form was allowing exactly that state.
-            onPressed: _saving || !_initialized ? null : _save,
+            onPressed: _saving || !_initialized || _staleLocalRow ? null : _save,
             child: _saving
                 ? const SizedBox(
                     width: 18,
@@ -1149,6 +1191,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
           data: (entry) {
             _initFrom(entry);
+            _checkReading(entry);
             return SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpace.lg),
@@ -1234,8 +1277,24 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: AppSpace.lg),
+                    if (_staleLocalRow) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        decoration: BoxDecoration(
+                          color: BambooInk.glassFillOnPaper,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: BambooInk.hairlineOnPaper),
+                        ),
+                        child: Text(
+                          _staleRowCopy,
+                          style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                    ],
                     if (_entryKind == TxnEntryKind.transfer &&
-                        entry.pipelineVersion == 2) ...[
+                        _onPhone(entry)) ...[
                       DropdownButtonFormField<bool>(
                         key: ValueKey('transfer-type:$_cardBill'),
                         initialValue: _cardBill,
@@ -1321,7 +1380,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         cardSelected: _userCardId != null,
                         // An SMS-ledger row is edited through the ledger,
                         // which cannot store a method.
-                        methodsEnabled: entry.pipelineVersion != 2,
+                        methodsEnabled: !_onPhone(entry),
                         unknownHint: 'Unknown — choose a method',
                         onChanged: (next) => setState(() {
                           final instrumentChanged =

@@ -19,6 +19,9 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/features/activity/edit_transaction_screen.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/sms_v2.dart' as v2;
+import 'package:pandapay/features/sms_v2/storage/event_store.dart';
+import 'package:pandapay/features/sms_v2/storage/schema.dart';
 
 class _FakeUserCardsRepository implements UserCardsRepository {
   final TransactionEntry entry;
@@ -167,6 +170,34 @@ Future<void> _pump(
   );
   await tester.pumpAndSettle();
 }
+
+void _seedEvent(dynamic database, String namespace, String id) {
+  SmsV2Schema.ensure(database.db);
+  EventStore(database.db, namespace: namespace).upsert(
+    v2.Event(
+      eventId: id,
+      type: v2.EventType.purchase,
+      status: v2.EventStatus.complete,
+      legs: [v2.EventLeg(factId: id, role: v2.LegRole.debitLeg)],
+      confidence: 0.9,
+      occurredAt: DateTime.utc(2026, 11, 1),
+      amountMinor: 1000,
+    ),
+    fromUser: false,
+  );
+}
+
+TransactionEntry _v2Row(String id) => TransactionEntry(
+  id: id,
+  eventId: 'e1',
+  sourceKey: 's' * 64,
+  pipelineVersion: 2,
+  amount: Money.fromRupees(10),
+  occurredAt: DateTime.utc(2026, 11, 7),
+  merchantName: 'Softdrink',
+  source: 'sms',
+  status: 'active',
+);
 
 void main() {
   testWidgets('reopening a self-transfer retains its destination for undo', (tester) async {
@@ -504,12 +535,92 @@ void main() {
       instrument: TxnInstrument.upiBank,
       entryKind: TxnEntryKind.transfer,
     );
-    await _pump(tester, repo: _FakeUserCardsRepository(entry), initialEntry: entry);
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    _seedEvent(database, 'user:test', 'e1');
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(entry),
+      initialEntry: entry,
+      overrides: [
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(database)),
+      ],
+    );
     expect(find.text('Transfer type'), findsOneWidget);
     expect(find.text('Between my accounts'), findsOneWidget);
     await tester.tap(find.text('Between my accounts'));
     await tester.pumpAndSettle();
     expect(find.text('Credit card bill'), findsWidgets);
+  });
+
+  testWidgets('a leftover on-phone row with no reading cannot be saved, and says why', (tester) async {
+    final entry = _v2Row('v2:e1');
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    SmsV2Schema.ensure(database.db);
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(entry),
+      initialEntry: entry,
+      overrides: [
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(database)),
+      ],
+    );
+    expect(find.textContaining('no longer on this phone'), findsOneWidget);
+    final save = tester.widget<FilledButton>(find.byType(FilledButton).last);
+    expect(save.onPressed, isNull);
+  });
+
+  testWidgets('a server copy whose reading is not on this phone saves like a normal row', (tester) async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final entry = _v2Row('t1');
+    SmsV2Schema.ensure(database.db);
+    final repo = _FakeUserCardsRepository(entry);
+    await _pump(
+      tester,
+      repo: repo,
+      initialEntry: entry,
+      withRouter: true,
+      overrides: [
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(database)),
+        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+      ],
+    );
+    expect(find.textContaining('no longer on this phone'), findsNothing);
+    await tester.enterText(find.byType(TextField).at(0), '12');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no reading yet'), findsNothing);
+    expect(find.byType(EditTransactionScreen), findsNothing);
+    expect(_queued(database, 'user:test')?['amount_inr'], 12.0);
+  });
+
+  testWidgets('an amount typed with a comma or rupee sign is accepted', (tester) async {
+    final database = openInMemoryForTesting();
+    addTearDown(database.close);
+    final entry = TransactionEntry(
+      id: 't1',
+      amount: Money.fromRupees(10),
+      occurredAt: DateTime.utc(2026, 11, 7),
+      merchantName: 'Softdrink',
+      source: 'sms',
+      status: 'active',
+    );
+    await _pump(
+      tester,
+      repo: _FakeUserCardsRepository(entry),
+      initialEntry: entry,
+      withRouter: true,
+      overrides: [
+        responseCacheProvider.overrideWith((ref) async => ResponseCache(database)),
+        isOnlineProvider.overrideWith((ref) => Stream.value(false)),
+      ],
+    );
+    await tester.enterText(find.byType(TextField).at(0), '₹1,250.50');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(_queued(database, 'user:test')?['amount_inr'], 1250.5);
   });
 
   testWidgets('a transfer on a manual entry has no card-bill choice', (tester) async {
