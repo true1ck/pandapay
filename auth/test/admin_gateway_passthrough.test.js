@@ -207,3 +207,104 @@ test('replies reach the browser exactly as before: a 204 stays an empty 204 with
     assert.equal(json.headers['cache-control'], 'no-store');
   } finally { await new Promise((resolve) => server.close(resolve)); await api.close(); }
 });
+
+// Compression back to the browser: the 14 MB catalogue crossed the internet (inside the SSH tunnel) uncompressed.
+// Browsers ask for gzip and undo it themselves, so the console code sees the same text.
+async function gatewayWithUpstream(handler, { acceptEncoding } = {}) {
+  const zlib = require('node:zlib');
+  const api = await upstream(handler);
+  const sessionCookie = 'session-cookie-value';
+  const state = {
+    id: 'session-1', user_id: 'actor-1', verified_at: new Date().toISOString(),
+    absolute_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    access_token_expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+    csrf_digest: digest('csrf-token', config.tokenLookupKey),
+    encrypted_upstream_token: encrypt('u'.repeat(43), config.sessionEncryptionKey),
+  };
+  const repository = new Proxy({
+    loadSession: async (value) => (value === digest(sessionCookie, config.tokenLookupKey) ? state : null),
+    touchAdminSession: async () => ({ ok: true }),
+    rateLimit: async () => ({ allowed: true }),
+  }, { get: (target, name) => (name in target ? target[name] : async () => null) });
+  const app = createAdminGatewayApp({
+    repository, emailClient: { sendAdminOtp: async () => {} }, membershipClient: { getAdminMembership: async () => null },
+    privateApi: createPrivateApiClient(api.baseUrl), routeManifest: [{ method: 'GET', path: '/admin/cards/:id' }],
+    webauthn: { registrationOptions: async () => ({}), verifyRegistration: async () => ({ verified: false }), authenticationOptions: async () => ({}), verifyAuthentication: async () => ({ verified: false }) },
+    config,
+  });
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const get = (path) => new Promise((resolve) => {
+    const headers = { host: 'localhost:8443', cookie: `${COOKIE}=${sessionCookie}`, 'x-admin-protocol': '1', 'x-console-request': '1' };
+    if (acceptEncoding) headers['accept-encoding'] = acceptEncoding;
+    const req = http.request({ host: '127.0.0.1', port: server.address().port, method: 'GET', path, headers }, (res) => {
+      const chunks = []; res.on('data', (c) => chunks.push(c));
+      res.on('end', () => {
+        const raw = Buffer.concat(chunks);
+        let text = null;
+        try { text = res.headers['content-encoding'] === 'gzip' ? zlib.gunzipSync(raw).toString('utf8') : raw.toString('utf8'); } catch { text = null; }
+        resolve({ status: res.statusCode, headers: res.headers, raw, text, complete: res.complete });
+      });
+      res.on('error', () => resolve({ status: res.statusCode, complete: false }));
+    });
+    req.on('error', () => resolve({ status: 0, complete: false })); req.end();
+  });
+  return { get, close: async () => { await new Promise((r) => server.close(r)); await api.close(); } };
+}
+
+test('a large reply is gzip-compressed for a browser that accepts it, and decompresses to the same text', async () => {
+  const big = JSON.stringify({ cards: Array.from({ length: 400 }, (_, i) => ({ id: `card-${i}`, name: `Card ${i}`, rules: 'x'.repeat(200) })) });
+  const gw = await gatewayWithUpstream((req, res) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }); res.end(big); }, { acceptEncoding: 'gzip, deflate, br' });
+  try {
+    const r = await gw.get('/browser/api/admin/cards/all');
+    assert.equal(r.status, 200);
+    assert.equal(r.headers['content-encoding'], 'gzip');
+    assert.match(r.headers.vary || '', /Accept-Encoding/i);
+    assert.equal(r.headers['content-type'], 'application/json; charset=utf-8');
+    assert.equal(r.headers['cache-control'], 'no-store');
+    assert.equal(r.text, big);
+    assert.ok(r.raw.length < big.length / 5, `sent ${r.raw.length} bytes for ${big.length}`);
+  } finally { await gw.close(); }
+});
+
+test('no gzip without Accept-Encoding, for small replies, or for a 204', async () => {
+  const small = '{"ok":true}';
+  const handler = (req, res) => {
+    if (req.url.startsWith('/admin/cards/gone')) { res.writeHead(204); return res.end(); }
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': Buffer.byteLength(small) }); return res.end(small);
+  };
+  const plain = await gatewayWithUpstream(handler);
+  const gzipped = await gatewayWithUpstream(handler, { acceptEncoding: 'gzip' });
+  try {
+    for (const r of [await plain.get('/browser/api/admin/cards/one'), await gzipped.get('/browser/api/admin/cards/one')]) {
+      assert.equal(r.headers['content-encoding'], undefined);
+      assert.equal(r.text, small);
+    }
+    const gone = await gzipped.get('/browser/api/admin/cards/gone');
+    assert.equal(gone.status, 204);
+    assert.equal(gone.headers['content-encoding'], undefined);
+    assert.equal(gone.raw.length, 0);
+  } finally { await plain.close(); await gzipped.close(); }
+});
+
+test('with gzip, a failure before anything was sent is still a clean, uncompressed 503', async () => {
+  const gw = await gatewayWithUpstream((req, res) => { res.writeHead(200, { 'content-type': 'text/html' }); res.end('<b>not json</b>'); }, { acceptEncoding: 'gzip' });
+  try {
+    const r = await gw.get('/browser/api/admin/cards/x');
+    assert.equal(r.status, 503);
+    assert.equal(r.headers['content-encoding'], undefined);
+    assert.match(r.text, /temporarily_unavailable/);
+  } finally { await gw.close(); }
+});
+
+test('with gzip, a reply cut off part-way never reaches the browser as complete', async () => {
+  const gw = await gatewayWithUpstream(async (req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.write('{"cards":[' + '1,'.repeat(20000)); await new Promise((r) => setTimeout(r, 20));
+    res.destroy();
+  }, { acceptEncoding: 'gzip' });
+  try {
+    const r = await gw.get('/browser/api/admin/cards/x');
+    assert.ok(r.complete === false || r.text === null, 'broken, not a short complete list');
+  } finally { await gw.close(); }
+});

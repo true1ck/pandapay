@@ -55,26 +55,28 @@ function drained(sink) {
     sink.on('drain', done); sink.on('close', done);
   });
 }
+function writableOr(candidate, fallback) { return candidate && typeof candidate.write === 'function' ? candidate : fallback; }
 async function streamReply(response, { sink, onHead, maxResponseBytes, controller }) {
   const status = response.status;
   const tooBig = () => { controller.abort(); return new Error('private API response exceeded limit'); };
   const declared = response.headers.has('content-length') ? Number(response.headers.get('content-length')) : null;
   if (declared !== null && declared > maxResponseBytes) throw tooBig();
   const type = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  // onHead may hand back another writable to send through (the gateway's gzip stream); otherwise `sink` is used.
   if (type !== 'application/json') {
     if (response.body) for await (const chunk of response.body) if (chunk.length) { controller.abort(); throw new Error('private API reply is not JSON'); }
-    onHead(status); sink.end('null');
+    writableOr(onHead(status, { length: 0 }), sink).end('null');
     return { status, streamed: true, bytes: 0 };
   }
-  onHead(status);
+  const out = writableOr(onHead(status, { length: declared }), sink);
   let total = 0;
   if (response.body) for await (const chunk of response.body) {
     total += chunk.length;
     if (total > maxResponseBytes) throw tooBig();
-    if (!sink.write(chunk)) await drained(sink);
-    if (sink.destroyed) { controller.abort(); throw new Error('browser closed the connection'); }
+    if (!out.write(chunk)) await drained(out);
+    if (out.destroyed || sink.destroyed) { controller.abort(); throw new Error('browser closed the connection'); }
   }
-  if (total === 0) sink.end('null'); else sink.end();
+  if (total === 0) out.end('null'); else out.end();
   return { status, streamed: true, bytes: total };
 }
 function createPrivateApiClient(baseUrl) {

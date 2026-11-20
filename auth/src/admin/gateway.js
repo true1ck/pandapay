@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const express = require('express');
+const zlib = require('node:zlib');
 
 const COOKIE = '__Host-pandapay_console';
 const PREAUTH = '__Host-pandapay_admin_pre';
@@ -9,6 +10,8 @@ const LIMITS = Object.freeze({ accessMs: 300_000, preauthMs: 120_000, idleMs: 90
 // Size and time allowed for one proxied admin reply. Most replies are small. The card catalogue list is the whole
 // catalogue in a single reply (about 14 MB for 376 cards) and takes several seconds to read, so only that read gets
 // more room; writes and every other route keep the small limits.
+// Replies at or under this size go to the browser uncompressed (not worth it).
+const GZIP_MIN_BYTES = 1024;
 const DEFAULT_REPLY = Object.freeze({ maxResponseBytes: 4 * 1024 * 1024, timeoutMs: 10_000 });
 const LARGE_REPLIES = new Map([['GET /admin/cards', Object.freeze({ maxResponseBytes: 32 * 1024 * 1024, timeoutMs: 40_000 })]]);
 function replyLimits(method, routePath) { return LARGE_REPLIES.get(`${method} ${routePath}`) || DEFAULT_REPLY; }
@@ -293,6 +296,8 @@ function createAdminGatewayApp(deps) {
   app.all('/browser/api/admin/*path', session, async (req, res) => {
     if (!privateApi || typeof privateApi.request !== 'function') return fail(res, 503, 'temporarily_unavailable');
     const suffix = Array.isArray(req.params.path) ? req.params.path.join('/') : String(req.params.path || '');
+    const acceptsGzip = /\bgzip\b/i.test(String(req.get('accept-encoding') || ''));
+    let gzip = null;
     const path = `/admin/${suffix}`;
     const method = req.method.toUpperCase();
     const matched = Array.isArray(routeManifest) && routeManifest.find(entry => entry.method === method && entry.path.split('/').length === path.split('/').length && entry.path.split('/').every((p, i) => p.startsWith(':') || p === path.split('/')[i]));
@@ -305,19 +310,33 @@ function createAdminGatewayApp(deps) {
       const limits = replyLimits(method, matched.path);
       // The private API's JSON is streamed to the browser unchanged as it arrives: no parse and re-serialise, and the
       // gateway never holds a large reply (see streamReply in server.js).
-      const onHead = (status) => {
+      const onHead = (status, meta = {}) => {
         if (!Number.isInteger(status) || status < 200 || status > 599) throw new Error('private API status out of range');
         res.status(status);
         // No content: no body and no content type, as Express sends it (the console's deletes expect a bare 204).
-        if (status !== 204 && status !== 304) res.type('application/json');
+        if (status === 204 || status === 304) return undefined;
+        res.type('application/json');
+        // Compress on the way to the browser when it asks for gzip (browsers always do, and undo it themselves, so the
+        // console reads the same text). The 14 MB catalogue crossed the internet uncompressed. Tiny replies stay plain.
+        if (!acceptsGzip || (Number.isFinite(meta.length) && meta.length <= GZIP_MIN_BYTES)) return undefined;
+        res.set('Content-Encoding', 'gzip');
+        res.vary('Accept-Encoding');
+        gzip = zlib.createGzip({ level: 6 });
+        gzip.on('error', () => res.destroy());
+        gzip.pipe(res);
+        return gzip;
       };
+      // The browser went away mid-reply: stop compressing, so the copy loop ends instead of waiting on a full buffer.
+      res.on('close', () => { if (gzip && !res.writableFinished) gzip.destroy(); });
       const result = await privateApi.request({ method, path: query ? `${path}?${query}` : path, body: req.body, accessToken, timeoutMs: limits.timeoutMs, maxResponseBytes: limits.maxResponseBytes, redirect: 'error', sink: res, onHead });
       if (result?.streamed) return undefined;
       if (!result || !Number.isInteger(result.status) || result.status < 200 || result.status > 599 || result.body === undefined) return fail(res, 503, 'temporarily_unavailable');
       return res.status(result.status).json(result.body);
     } catch {
       // Part of the reply already went out: end the connection so the browser sees a broken reply, never a short one.
-      if (res.headersSent) { res.destroy(); return undefined; }
+      if (res.headersSent) { if (gzip) gzip.destroy(); res.destroy(); return undefined; }
+      // Nothing sent yet: drop the compression set-up so the error goes out plain.
+      if (gzip) { gzip.unpipe(res); gzip.destroy(); res.removeHeader('Content-Encoding'); }
       return fail(res, 503, 'temporarily_unavailable');
     }
   });
