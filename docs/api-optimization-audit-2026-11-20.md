@@ -157,15 +157,35 @@ Still the owner's decision:
 
 ## 4c. One combined production deploy (owner's plan, 21 Nov)
 
-1. `prod` branch: `18d5bddd` (sync limit, wallet coalescer, warm pool) and `d0cb1241` (store-review login, legacy
-   4-digit; `REVIEWER_OTP_*` already in the host `.env`) are pushed but not deployed. Cherry-pick dev `96530804`
-   (admin gateway streaming) on top, then push `prod` once; the workflow deploys API, auth and workers.
-2. Admin gateway uses the prod auth image: after the deploy, on the host
-   `cd /home/ubuntu/pandapay-secrets/admin-setup && docker compose -p pandapay-admin -f compose.admin.yml --env-file ../admin.env --profile admin up -d --force-recreate --no-deps admin-gateway`
-   (add `admin-api` to bring the admin API up to date too; it has run 10-day-old code).
-3. Check: iPhone sync gives no 429; `/user-cards` timings; console card list opens; deleting a rule-family row says
-   success; `docker stats` for the gateway after opening the card list.
-4. No app build is needed: no request or reply format changed.
+Server-side commits waiting (all invisible to the app, the admin console and the SMS pages; no app build needed):
+
+| Commit | What | Where it runs |
+|---|---|---|
+| prod `18d5bddd` | sync limit 480/h, wallet reads coalesced, 4 warm DB connections | API |
+| prod `d0cb1241` | store-review login, legacy 4-digit (other session; `REVIEWER_OTP_*` already in host `.env`) | auth |
+| dev `96530804` | admin gateway streams replies (14 MB catalogue peak 161 -> ~103 MB); fixes 503 on rule-family deletes | admin gateway (prod auth image) |
+| dev `4b1cf6a0` | admin gateway gzips replies over 1 KB when the browser asks | admin gateway |
+| dev `b13c04e5` | admin card list read 25 rows at a time through a cursor (peak about halved, same bytes) | admin API (prod API image) |
+| dev `fe58992c` | admin health checks use wget, not a Node start every 30 s (~2% CPU each, all day) | admin compose |
+| dev `6305cad2` | rewards worker: idle cycle is one transaction (12 -> 6 round trips every 5 s), idle log once a minute | rewards worker |
+
+Steps:
+1. Cherry-pick the five dev commits onto `prod` (on top of `d0cb1241`), run the API and auth suites, push `prod` once.
+   The workflow deploys API, auth and workers.
+2. Admin (images are the prod ones, so after step 1): on the host
+   `cd /home/ubuntu/pandapay-secrets/admin-setup && ./admin_setup.sh gen-compose` (health checks changed), then
+   `docker compose -p pandapay-admin -f compose.admin.yml --env-file ../admin.env --profile admin up -d --force-recreate --no-deps admin-api admin-gateway`.
+   The admin containers have run 10-14-day-old code, so this brings every admin change since then, not only these.
+3. Check: iPhone sync gives no 429; `/user-cards` timings; console card list opens and matches; deleting a rule-family
+   row says success; `docker stats` for the admin containers at rest (~0% CPU) and after opening the card list.
+
+### App-side items (need an app build; proposed, not done)
+
+| Call | Today | Change | Gain |
+|---|---|---|---|
+| `GET /user-cards/:id/points-ledger` | one call per card (~10 at once) on every app open (`providers.dart` 4239) | one batched call for all cards (new route; old route kept for old builds) | 10 requests -> 1; frees the pool at app open |
+| `GET /transactions?from=` / `from&to` | whole date range in one reply, up to 2 MB raw (~250 KB gzip) | ask with `pageSize` and follow the cursor (server already supports it) | smaller replies and server memory per call |
+| `GET /catalogue` | whole 10.5 MB catalogue (1.3 MB gzip) when its version changes | split: card list + details only for the user's cards | ~1.3 MB -> tens of KB per change; bigger change, needs design |
 
 ## 5. Not done here
 - Deploying: all the server changes above need a production deploy (owner's go-ahead); the nginx changes are a separate, manual config change on the host.
