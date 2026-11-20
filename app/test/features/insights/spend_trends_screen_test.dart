@@ -351,6 +351,60 @@ void main() {
     expect(find.textContaining('250'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('the filter sheet can change the date range and keeps filters', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          transactionTagsProvider.overrideWith((ref) => null),
+          selectedSpendQueryProvider.overrideWith(
+            (ref) => const SpendReportQuery.preset(SpendPeriod.month),
+          ),
+          spendReportProvider.overrideWith(
+            (ref, query) async => _report(spend: 1750),
+          ),
+          spendPeriodTransactionsProvider.overrideWith(
+            (ref, query) async => [
+              _detailEntry(
+                id: 'one',
+                merchant: 'Shop',
+                amount: 250,
+                categoryId: 'online',
+                categoryName: 'Shopping',
+                occurredAt: DateTime(2026, 8, 12),
+              ),
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: SpendTrendsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(SpendTrendsScreen)),
+    );
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    // The field is tappable and opens the same range sheet as the top bar.
+    await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose date range'), findsOneWidget);
+    await tester.tap(find.text('Last 3 months'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Apply range'));
+    await tester.pumpAndSettle();
+    // Still a draft until "Show results".
+    expect(
+      container.read(selectedSpendQueryProvider),
+      const SpendReportQuery.preset(SpendPeriod.month),
+    );
+    expect(find.text('Totals update once you show results'), findsOneWidget);
+    await tester.tap(find.text('Show results'));
+    await tester.pumpAndSettle();
+    expect(container.read(selectedSpendQueryProvider).isCustom, isTrue);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'shows the period total and comparison in the spending mix card',
     (tester) async {
@@ -1155,12 +1209,17 @@ void main() {
         .join('\n');
     expect(preview(), contains('1 matching transaction'));
     expect(preview(), contains('₹100'));
-    await tester.ensureVisible(find.text('UPI'));
-    await tester.tap(find.text('UPI'));
-    await tester.pumpAndSettle();
+    Future<void> pickPayment(String current, String next) async {
+      await tester.ensureVisible(find.text(current));
+      await tester.tap(find.text(current));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(next));
+      await tester.pumpAndSettle();
+    }
+
+    await pickPayment('All payment methods', 'UPI');
     expect(preview(), contains('0 matching transactions'));
-    await tester.tap(find.text('Credit card'));
-    await tester.pumpAndSettle();
+    await pickPayment('UPI', 'Credit card');
     expect(preview(), contains('1 matching transaction'));
     expect(preview(), contains('₹100'));
     await tester.tap(find.text('Show results'));
@@ -1176,9 +1235,7 @@ void main() {
     await tester.tap(find.text('Bank account ••9080').last);
     await tester.pumpAndSettle();
     expect(preview(), contains('0 matching transactions'));
-    await tester.ensureVisible(find.text('UPI'));
-    await tester.tap(find.text('UPI'));
-    await tester.pumpAndSettle();
+    await pickPayment('Credit card', 'UPI');
     expect(preview(), contains('1 matching transaction'));
     expect(preview(), contains('₹200'));
     await tester.tap(find.text('Show results'));
