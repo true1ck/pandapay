@@ -18,15 +18,6 @@ import '../providers/data_providers.dart' show instrumentsProvider;
 
 enum SmsLedgerScreen { investments, ipos, moneyIn }
 
-const _moneyInSections = [
-  ('salary', 'Salary'),
-  ('dividend', 'Dividends'),
-  ('refund', 'Refunds'),
-  ('cashback', 'Cashback'),
-  ('person', 'From people'),
-  ('other', 'Other money in'),
-];
-
 String _ipoStatus(String status) => switch (status) {
   'blocked' => 'Applied, amount blocked',
   'allotted' => 'Allotted',
@@ -131,8 +122,9 @@ class _LedgerReportListState extends State<LedgerReportList> {
   SmsLedgerScreen get screen => widget.screen;
   LedgerReadModel get model => widget.model;
 
-  /// Money-in sections the person has folded away. Expanded by default.
-  final Set<String> _collapsed = <String>{};
+  /// Money-in sections the person has opened. All start closed, showing only
+  /// the kind and its total.
+  final Set<String> _expanded = <String>{};
 
   Widget _amount(String text) =>
       Text(text, style: BambooFonts.money(14.5, weight: FontWeight.w700));
@@ -286,10 +278,10 @@ class _LedgerReportListState extends State<LedgerReportList> {
           final income = items.where((i) => i.kind != 'refund');
           children.add(_MoneyInSummary(total: smsMoney(sum(income))));
         }
-        for (final (kind, title) in _moneyInSections) {
+        for (final (kind, title) in moneyInKindLabels) {
           final rows = items.where((i) => i.kind == kind).toList();
           if (rows.isEmpty) continue;
-          final open = !_collapsed.contains(kind);
+          final open = _expanded.contains(kind);
           children.add(
             Semantics(
               button: true,
@@ -297,7 +289,7 @@ class _LedgerReportListState extends State<LedgerReportList> {
               label: '$title, ${open ? 'collapse' : 'expand'} list',
               child: InkWell(
                 onTap: () => setState(() {
-                  open ? _collapsed.add(kind) : _collapsed.remove(kind);
+                  open ? _expanded.remove(kind) : _expanded.add(kind);
                 }),
                 child: Row(
                   children: [
