@@ -81,6 +81,9 @@ Object? _stable(Object? value) {
       for (final entry in value.entries)
         entry.key: template && entry.key == 'observedAt'
             ? '<shifted>'
+            // When the person decided is the run's clock, different every time.
+            : entry.key == 'decidedAt' && entry.value is String
+            ? '<decided>'
             : _stable(entry.value),
     };
   }

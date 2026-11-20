@@ -7,6 +7,7 @@ import 'package:sqlite3/sqlite3.dart';
 
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
+import '../../../data/server_clock.dart';
 import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
 import '../storage/event_store.dart';
@@ -43,7 +44,7 @@ class ReceiptReviews {
     required this.bundle,
     DateTime Function()? clock,
     this.categoryIdBySlug = const {},
-  }) : clock = clock ?? DateTime.now;
+  }) : clock = clock ?? ServerClock.instance.now;
 
   final FinancialStore financial;
   final String namespace;
@@ -297,6 +298,8 @@ class ReceiptReviews {
             confidence: 1,
             occurredAt: receipt.effectiveAt,
             amountMinor: posted,
+            // The person's answer, dated so it outranks an older one.
+            decidedAt: clock().toUtc(),
           ),
           fromUser: true,
         );

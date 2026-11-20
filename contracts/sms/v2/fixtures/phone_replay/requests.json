@@ -15,7 +15,7 @@
        "_template": {
         "senderBrand": "IPAYTM",
         "hash": "c76f55d5a748376ceff4d61c61284843eb144037ec3bb500f265356f9a74f409",
-        "observedAt": "2027-01-01T07:00:00.000Z"
+        "observedAt": "2026-12-20T07:00:00.000Z"
        }
       },
       "trace": {
@@ -45,7 +45,7 @@
        "_template": {
         "senderBrand": "CDSLTX",
         "hash": "f544ea5df5ecd7006cad6756bf658fa3d317e8833333e9aff439cfb2b5449772",
-        "observedAt": "2026-12-29T07:00:00.000Z"
+        "observedAt": "2026-11-30T07:00:00.000Z"
        }
       },
       "trace": {
@@ -75,7 +75,7 @@
        "_template": {
         "senderBrand": "NSEIND",
         "hash": "59990ae74ea165282701f7aee35599dec14707e97cad5842a6f00c6bd6363c05",
-        "observedAt": "2026-12-26T07:00:00.000Z"
+        "observedAt": "2026-12-11T07:00:00.000Z"
        }
       },
       "trace": {
@@ -172,7 +172,7 @@
        "_template": {
         "senderBrand": "EXAMPL",
         "hash": "90bf82f2298df97f83fa87f934e607a13a21f74586fe5a8a2fe1c8f8ce346342",
-        "observedAt": "2026-12-21T07:00:00.000Z"
+        "observedAt": "2026-12-14T07:00:00.000Z"
        }
       },
       "trace": {
@@ -255,7 +255,7 @@
       ],
       "instruments": [
        {
-        "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4",
+        "instrumentId": "8b2e7aa4-fe2f-4e20-afe5-8df02e85e5d0",
         "kind": "credit_card",
         "issuerSlug": "hdfc",
         "maskDigits": "1234",
@@ -303,7 +303,7 @@
         "entryId": "64c9738a3a4d9ca2c42dbb4fa818be8bdd277cacc1d0b8edc4136c2b2b6841d5",
         "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
         "from": {
-         "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4"
+         "instrumentId": "8b2e7aa4-fe2f-4e20-afe5-8df02e85e5d0"
         },
         "to": {
          "external": "SAMPLE CAFE"
@@ -330,15 +330,15 @@
       "deviceId": "replay-device",
       "items": [
        {
-        "sourceKey": "correction:dea283c3-89db-4908-9192-6e52b2c0079b",
+        "sourceKey": "correction:0e428e43-ad14-4233-8a94-b0609241dcbe",
         "senderBrand": "HDFCBK",
         "observedAt": "2026-11-10T07:00:00.000Z",
-        "bodyHash": "0141b2799a22fdda266aa5cda225abcf724f2d71faaea37fdd791196aa9333bb",
+        "bodyHash": "4b28e9b947e8bd6617f28c62caf41e115b4962ac987c2693c1766b4929a1b199",
         "facts": [
          {
           "contractVersion": "2.0",
-          "factId": "3db7fc5a3f7c27d080f36f75d50d5c3c8f02185426755f75f3de2cc5107d4af6",
-          "sourceKey": "correction:dea283c3-89db-4908-9192-6e52b2c0079b",
+          "factId": "ed36988781f8ad7bd2e67150293b6d046be367ae3ad9d7e5e650a984324670a3",
+          "sourceKey": "correction:0e428e43-ad14-4233-8a94-b0609241dcbe",
           "factType": "movement",
           "observedAt": "2026-11-10T07:00:00Z",
           "occurredAt": "2025-05-11T07:37:50Z",
@@ -395,14 +395,15 @@
           "role": "original"
          },
          {
-          "factId": "3db7fc5a3f7c27d080f36f75d50d5c3c8f02185426755f75f3de2cc5107d4af6",
+          "factId": "ed36988781f8ad7bd2e67150293b6d046be367ae3ad9d7e5e650a984324670a3",
           "role": "debit_leg"
          }
         ],
         "linkRuleId": null,
         "confidence": 0.97,
         "occurredAt": "2025-05-11T07:37:50Z",
-        "amountMinor": 29300
+        "amountMinor": 29300,
+        "decidedAt": "2026-11-20T21:46:29.36583Z"
        }
       ],
       "ledger": [
@@ -410,7 +411,7 @@
         "entryId": "64c9738a3a4d9ca2c42dbb4fa818be8bdd277cacc1d0b8edc4136c2b2b6841d5",
         "eventId": "a0362f971013f0601cd5f6508865861494416e5d8af12cc52ede3cdd77ab1f55",
         "from": {
-         "instrumentId": "46d75d15-3e2d-4fb1-8689-95d2f8f229e4"
+         "instrumentId": "8b2e7aa4-fe2f-4e20-afe5-8df02e85e5d0"
         },
         "to": {
          "external": "CORNER SHOP"
@@ -442,7 +443,7 @@
        "_template": {
         "senderBrand": "HDFCBK",
         "hash": "8ad065add64760eb930de02141e4192b6346b58d0c14728e1533293876568a9a",
-        "observedAt": "2026-11-20T07:00:00.000Z"
+        "observedAt": "2027-01-07T07:00:00.000Z"
        }
       },
       "trace": {
@@ -472,7 +473,7 @@
        "_template": {
         "senderBrand": "HDFCBK",
         "hash": "8ad065add64760eb930de02141e4192b6346b58d0c14728e1533293876568a9a",
-        "observedAt": "2027-01-06T07:00:00.000Z"
+        "observedAt": "2026-12-24T07:00:00.000Z"
        }
       },
       "trace": {

@@ -243,6 +243,8 @@ void main() {
       final event = EventStore(db.db, namespace: _ns).get(entry.eventId)!;
       expect(event.type, EventType.cardBillPayment);
       expect(event.status, EventStatus.userConfirmed);
+      // The answer is dated, so it outranks an older one from another phone.
+      expect(event.decidedAt, DateTime.utc(2026, 11, 12));
       expect(openItems().single['status'], 'resolved');
       // Answering twice changes nothing.
       expect(

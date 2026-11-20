@@ -17,11 +17,16 @@ Facts only; file:line as of this date. Each fix below is its own reviewed change
 Already following it: `budgets.client_edited_at`, `user_local_state.client_edited_at` (+ `server_seq`),
 `transactions.edited_at` (PATCH only), and now `sms_v2_instruments.decided_at`.
 
+## Done: events (`decidedAt`)
+Same pattern as instruments, for events a person decided on (a correction, a confirmed receipt): optional `decidedAt` on the event contract, `sms_v2_events.decided_at` (migration `20261126000100`), `mergeEvent` (the later dated confirmation wins; a stale device loses; an undated one still replaces and keeps the stored time), the phone stamps corrections and receipt answers, and a pulled confirmation replaces an unsent local one only when it is later. One header token, `X-Sms-Contract-Features: decided-at`, now covers instruments and events.
+
+Still open: a user-chosen category on a ledger entry (`categorySource: user`) is resolved by source, not time; two user-sourced writes are last-writer-wins.
+
 ## Done: instruments (`decidedAt`)
 Contract `instrument.schema.json` (optional `decidedAt`), migration
 `20261126000000_sms_v2_instrument_decided_at.sql`, `mergeInstrument` in `api/src/sms_v2/storage.js`
 (later dated decision wins; undated writes keep the old "detection never undoes a decision" rule),
-sync response strips `decidedAt` unless the phone sends `X-Sms-Contract-Features: instrument-decided-at`
+sync response strips `decidedAt` unless the phone sends `X-Sms-Contract-Features: decided-at`
 (`api/src/sms_v2/sync_route.js`), phone stamps confirm / reject / archive / restore / attachCard
 (`instrument_actions.dart`) and `sync_pull.dart` no longer lets an incoming "rejected" overwrite a
 newer unsent local decision. Open: the seeder's wallet-card `confirmed` is not stamped.

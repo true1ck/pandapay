@@ -35,7 +35,8 @@ const INSTRUMENT_DOC = `jsonb_build_object(
 
 const EVENT_DOC = `jsonb_build_object(
   'eventId', event_id, 'type', type, 'status', status, 'legs', legs, 'linkRuleId', link_rule_id,
-  'confidence', confidence, 'occurredAt', ${ts('occurred_at')}, 'amountMinor', amount_minor)`;
+  'confidence', confidence, 'occurredAt', ${ts('occurred_at')}, 'amountMinor', amount_minor,
+  'decidedAt', ${ts('decided_at')})`;
 
 const FACT_DOC = `(payload - 'senderBrand' - 'bodyHash') || jsonb_build_object(
   'contractVersion', contract_version, 'factId', fact_id, 'sourceKey', source_key,
@@ -141,13 +142,25 @@ const STATUS_NEXT = Object.freeze({
  * the stored legs followed by any new ones. Returns {ok, merged, changed} or
  * {ok:false, code}.
  */
+// The stored document always says "decidedAt": null; an event nobody decided on is merged without the key
+// so it stays identical to what was uploaded. Compared with the key normalised.
+const withDecidedAt = (doc, at) => { const { decidedAt, ...rest } = doc; return at ? { ...rest, decidedAt: at } : rest; };
+const sameEvent = (a, b) => sameDoc({ ...a, decidedAt: a.decidedAt ?? null }, { ...b, decidedAt: b.decidedAt ?? null });
+
 function mergeEvent(ex, inc) {
-  if (!ex) return { ok: true, merged: inc, changed: true };
+  if (!ex) return { ok: true, merged: withDecidedAt(inc, inc.status === 'user_confirmed' ? clampDecidedAt(inc.decidedAt) : null), changed: true };
   if (!STATUS_NEXT[ex.status].has(inc.status)) {
     return { ok: false, code: ex.status === 'user_confirmed' ? 'event_status_locked' : 'event_status_transition_invalid' };
   }
   if (inc.status === 'user_confirmed') {
-    return { ok: true, merged: inc, changed: !sameDoc(inc, ex) };
+    // Two confirmations of the same event: the later dated decision wins, a stale
+    // device's older one does not replace it. Without a date on either side the
+    // newest upload wins, as before decidedAt existed.
+    const incAt = clampDecidedAt(inc.decidedAt);
+    const exAt = ex.status === 'user_confirmed' ? ex.decidedAt ?? null : null;
+    if (incAt && exAt && !later(incAt, exAt)) return { ok: true, merged: ex, changed: false };
+    const merged = withDecidedAt(inc, incAt ?? exAt);
+    return { ok: true, merged, changed: !sameEvent(merged, ex) };
   }
   const roleById = new Map(ex.legs.map((l) => [l.factId, l.role]));
   const legs = ex.legs.map((l) => ({ factId: l.factId, role: l.role }));
@@ -159,8 +172,8 @@ function mergeEvent(ex, inc) {
       return { ok: false, code: 'event_leg_role_conflict' };
     }
   }
-  const merged = { ...inc, legs };
-  return { ok: true, merged, changed: !sameDoc(merged, ex) };
+  const merged = withDecidedAt({ ...inc, legs }, null);
+  return { ok: true, merged, changed: !sameEvent(merged, ex) };
 }
 
 /** The amount an own -> own ledger entry must equal, or null when unconstrained. */
@@ -191,10 +204,10 @@ const INSTRUMENT_COLS = `instrument_id uuid, kind text, issuer_slug text, mask_d
 
 const eventRow = (e) => ({
   event_id: e.eventId, type: e.type, status: e.status, legs: e.legs, link_rule_id: e.linkRuleId, confidence: e.confidence,
-  occurred_at: e.occurredAt, amount_minor: e.amountMinor,
+  occurred_at: e.occurredAt, amount_minor: e.amountMinor, decided_at: e.decidedAt ?? null,
 });
 const EVENT_COLS = `event_id text, type text, status text, legs jsonb, link_rule_id text, confidence float8,
-  occurred_at timestamptz, amount_minor bigint`;
+  occurred_at timestamptz, amount_minor bigint, decided_at timestamptz`;
 
 const endpointCols = (side, e) => ({
   [`${side}_instrument_id`]: e.instrumentId ?? null,
@@ -433,8 +446,8 @@ async function upsertEvents(client, profileId, events, results) {
   if (toInsert.length) {
     const inserted = await insertNew(
       client,
-      `INSERT INTO sms_v2_events (event_id, profile_id, type, status, legs, link_rule_id, confidence, occurred_at, amount_minor, updated_at)
-       SELECT r.event_id, $1, r.type, r.status, r.legs, r.link_rule_id, r.confidence, r.occurred_at, r.amount_minor, clock_timestamp()
+      `INSERT INTO sms_v2_events (event_id, profile_id, type, status, legs, link_rule_id, confidence, occurred_at, amount_minor, decided_at, updated_at)
+       SELECT r.event_id, $1, r.type, r.status, r.legs, r.link_rule_id, r.confidence, r.occurred_at, r.amount_minor, r.decided_at, clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${EVENT_COLS})
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id AS id`,
@@ -449,7 +462,7 @@ async function upsertEvents(client, profileId, events, results) {
     await client.query(
       `UPDATE sms_v2_events e
           SET type = r.type, status = r.status, legs = r.legs, link_rule_id = r.link_rule_id, confidence = r.confidence,
-              occurred_at = r.occurred_at, amount_minor = r.amount_minor, updated_at = clock_timestamp()
+              occurred_at = r.occurred_at, amount_minor = r.amount_minor, decided_at = r.decided_at, updated_at = clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${EVENT_COLS})
         WHERE e.event_id = r.event_id AND e.profile_id = $1`,
       [profileId, J(toUpdate.map(eventRow))],
