@@ -62,7 +62,7 @@ function extractIndexFunctions() {
   const source = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8');
   const stateStart = source.indexOf('async function loadUserCardForState(client');
   const stateEnd = source.indexOf('/** Mirrors the txn_instrument / txn_entry_kind enums', stateStart);
-  const reconcileStart = source.indexOf('async function reconcileCurrentCapStates(client, userId)');
+  const reconcileStart = source.indexOf('async function reconcileCurrentCapStates(client, userId');
   const reconcileEnd = source.lastIndexOf('/**', source.indexOf('async function detectDuplicates(client'));
   assert.ok(stateStart >= 0 && stateEnd > stateStart && reconcileStart >= 0 && reconcileEnd > reconcileStart);
   const context = { rewardMath, periodBounds, cardStateV2, replayCurrentCapConsumption };

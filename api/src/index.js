@@ -82,6 +82,9 @@ const paymentMethods = require('./payment_methods');
 // in applyTransactionState, reconcileCurrentCapStates and GET /user-cards.
 const cardStateV2 = require('./card_state_v2');
 const { creditRewardFacts, ISSUER_CREDIT_REASON, estimatedPointsTotal } = require('./reward_credits');
+// Lets the wallet read skip a cap rebuild whose result would be identical (see card_state_read_gate.js).
+const cardStateGate = require('./card_state_read_gate');
+const userCardsReadGate = cardStateGate.createReadGate();
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -162,6 +165,9 @@ app.use((req, res, next) => {
 // IDs and route templates without persistent account identifiers.
 app.use(optionalAuth);
 app.use(requestLogger);
+// Gzip every JSON answer for clients that ask (all phone builds do, through dart:io). See response_compression.js.
+const { compressResponses } = require('./response_compression');
+app.use(compressResponses);
 // Bounded first-come-first-served line in front of the database: a burst waits its turn and, when the line or
 // the wait is too long, is refused fast with 503 + Retry-After (never a 500). See admission.js.
 if (process.env.ADMISSION_ENABLED !== 'false') {
@@ -1881,6 +1887,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
   // an archived card, so the filter defaults to active-only exactly as
   // before — ?includeArchived=true is opt-in, used only by C1's own toggle.
   const includeArchived = req.query.includeArchived === 'true';
+  let gateMarks = null;
   try {
     const result = await withUserClient(req.userId, async (client) => {
       // statement_day/opened_on added for Task 11 (E7 Billing Cycle Float —
@@ -1920,12 +1927,48 @@ app.get('/user-cards', requireAuth, async (req, res) => {
 
       await client.query('SAVEPOINT user_cards_enrichment');
       try {
-        // Rebuild derived current-period cap state from the canonical ledger.
-        // The SMS attribution repair remains an explicit reconciliation task.
-        await reconcileCurrentCapStates(client, req.userId);
-        // Points the bank credited by SMS may have arrived before the card was linked:
-        // one sweep for the whole wallet (idempotent), not one scan per card.
-        await creditRewardFacts(client, req.userId);
+        // Rebuild derived current-period cap state from the canonical ledger, and sweep the bank's points
+        // credits that arrived before a card was linked. Both are skipped for exactly the cards (and the sweep)
+        // whose inputs and stored results are unchanged since this server last did them: the answer is the
+        // same as rebuilding every time, without 4-6 s of identical work and without waiting on the upload
+        // lock when nothing changed (card_state_read_gate.js).
+        const fingerprints = await cardStateGate.cardFingerprints(client, req.userId);
+        const stale = userCardsReadGate.staleCards(req.userId, fingerprints);
+        if (stale.length) await reconcileCurrentCapStates(client, req.userId, { onlyCardIds: stale });
+        const creditsBefore = await cardStateGate.creditFingerprint(client, req.userId, ISSUER_CREDIT_REASON);
+        const creditsStale = userCardsReadGate.creditsStale(req.userId, creditsBefore);
+        if (creditsStale) await creditRewardFacts(client, req.userId);
+        // Remembered only after the transaction commits (below), taken after the work so they describe it.
+        gateMarks = {
+          cards: stale.length ? await cardStateGate.cardFingerprints(client, req.userId) : fingerprints,
+          credits: creditsStale ? await cardStateGate.creditFingerprint(client, req.userId, ISSUER_CREDIT_REASON) : creditsBefore,
+        };
+
+        // One query for every card's points totals and one for every card's current fee waivers (they were
+        // two queries per card); same rows, same values.
+        const cardIds = cards.rows.map((card) => card.id);
+        const pointsByCard = new Map((await client.query(
+          `SELECT user_card_id,
+                  COALESCE(SUM(delta_points) FILTER (WHERE reason IS DISTINCT FROM $2), 0) AS total_points,
+                  COALESCE(SUM(delta_points) FILTER (WHERE reason = $2), 0) AS credited_points
+             FROM points_ledger WHERE user_card_id = ANY($1::uuid[])
+            GROUP BY user_card_id`,
+          [cardIds, ISSUER_CREDIT_REASON]
+        )).rows.map((row) => [String(row.user_card_id), row]));
+        const feeWaiversByCard = new Map();
+        for (const row of (await client.query(
+          `SELECT fw.user_card_id, fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
+                  r.threshold_spend_inr, r.waives_fee_inr
+             FROM fee_waiver_states fw
+             JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
+            WHERE fw.user_card_id = ANY($1::uuid[]) AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
+          [cardIds]
+        )).rows) {
+          const { user_card_id: owner, ...waiver } = row;
+          const key = String(owner);
+          if (!feeWaiversByCard.has(key)) feeWaiversByCard.set(key, []);
+          feeWaiversByCard.get(key).push(waiver);
+        }
 
         for (const card of cards.rows) {
           // card-rewards v2 (WP8, C8 D22c): `consumed` keeps its v1 meaning
@@ -1940,27 +1983,14 @@ app.get('/user-cards', requireAuth, async (req, res) => {
           // Bank-credited rows are kept out of the estimated total: a statement credit
           // usually pays out points the spends already estimated, so adding both would
           // count them twice. They are returned separately.
-          const pointsTotal = await client.query(
-            `SELECT COALESCE(SUM(delta_points) FILTER (WHERE reason IS DISTINCT FROM $2), 0) AS total_points,
-                    COALESCE(SUM(delta_points) FILTER (WHERE reason = $2), 0) AS credited_points
-               FROM points_ledger WHERE user_card_id = $1`,
-            [card.id, ISSUER_CREDIT_REASON]
-          );
-          card.total_points_earned = Number(pointsTotal.rows[0].total_points) + Number(card.points_balance || 0);
-          card.credited_points = Number(pointsTotal.rows[0].credited_points);
-
-          const feeWaiverStates = await client.query(
-            `SELECT fw.fee_waiver_rule_id, fw.qualified_spend, fw.waived_at, fw.period_end,
-                    r.threshold_spend_inr, r.waives_fee_inr
-               FROM fee_waiver_states fw
-               JOIN fee_waiver_rules r ON r.id = fw.fee_waiver_rule_id
-              WHERE fw.user_card_id = $1 AND fw.period_start <= CURRENT_DATE AND fw.period_end >= CURRENT_DATE`,
-            [card.id]
-          );
-          card.fee_waiver_states = feeWaiverStates.rows;
+          const points = pointsByCard.get(String(card.id));
+          card.total_points_earned = Number(points ? points.total_points : 0) + Number(card.points_balance || 0);
+          card.credited_points = Number(points ? points.credited_points : 0);
+          card.fee_waiver_states = feeWaiversByCard.get(String(card.id)) || [];
         }
         await client.query('RELEASE SAVEPOINT user_cards_enrichment');
       } catch (enrichmentError) {
+        gateMarks = null;
         await client.query('ROLLBACK TO SAVEPOINT user_cards_enrichment');
         await client.query('RELEASE SAVEPOINT user_cards_enrichment');
         console.warn('GET /user-cards enrichment unavailable', safeErrorCode(enrichmentError));
@@ -1968,6 +1998,7 @@ app.get('/user-cards', requireAuth, async (req, res) => {
 
       return cards.rows;
     });
+    if (gateMarks) userCardsReadGate.commit(req.userId, gateMarks);
     res.json({ userCards: result });
   } catch (err) {
     console.error('GET /user-cards error', safeErrorCode(err));
@@ -3952,7 +3983,7 @@ async function repairSmsHistory(client, userId, { reviewCrossSource = false, rev
  * canonical ledger through reward_math keeps both surfaces aligned and also
  * repairs rows created before the current state machine was shipped.
  */
-async function reconcileCurrentCapStates(client, userId) {
+async function reconcileCurrentCapStates(client, userId, { onlyCardIds = null } = {}) {
   // Serialize this repair with transaction ingestion/edit/reversal. The
   // repair is idempotent, but it deletes and rebuilds current-period rows, so
   // it must not interleave with a live cap update.
@@ -3960,14 +3991,16 @@ async function reconcileCurrentCapStates(client, userId) {
     `transaction-ingest:${userId}`,
   ]);
 
+  // onlyCardIds: the wallet read rebuilds just the cards whose inputs changed (card_state_read_gate.js).
   const cards = await client.query(
     `SELECT uc.id, uc.card_product_id, uc.statement_day,
             cp.point_value_inr, cp.base_reward_unit, cp.base_reward_rate,
             cp.excluded_categories
        FROM user_cards uc
        JOIN card_products cp ON cp.id = uc.card_product_id
-      WHERE uc.profile_id = $1 AND uc.is_archived = false`,
-    [userId],
+      WHERE uc.profile_id = $1 AND uc.is_archived = false
+        AND ($2::uuid[] IS NULL OR uc.id = ANY($2::uuid[]))`,
+    [userId, onlyCardIds],
   );
   const today = await client.query(`SELECT CURRENT_DATE::text AS today`);
   const asOf = new Date(`${today.rows[0].today}T12:00:00.000Z`);

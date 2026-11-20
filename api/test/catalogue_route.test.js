@@ -326,3 +326,88 @@ test('a failure while compressing or sending gives a 500 with no ETag or Cache-C
   assert.equal(res.headers.ETag, undefined);
   assert.equal(res.headers['Cache-Control'], undefined);
 });
+
+// The catalogue body is ~10 MB of JSON (1.3 MB gzipped) built from heavy views: about 2-3 s of database time and
+// 0.4 s of gzip per download on production. A version is now built once per server and reused for every phone
+// that asks for that same version. The version check (fingerprint) still runs on every request, so a changed
+// catalogue is served at once: nothing older is ever sent.
+test('a gzipped catalogue version is built once; a new version is built again; failures are not kept', async () => {
+  const rows = { [V1_SQL]: [{ id: 'c1', name: 'Card one' }], [V2_CARDS_SQL]: [{ id: 'c1' }], [V2_MERCHANTS_SQL]: [], [V2_PLATFORMS_SQL]: [] };
+  const { handler, calls, state } = harness(rows);
+  const zlib = require('node:zlib');
+  const get = async (query) => {
+    const res = responseDouble();
+    res.send = function send(value) { this.body = value; return this; };
+    await handler({ query, ip: 'cache', headers: { 'accept-encoding': 'gzip' } }, res);
+    return res;
+  };
+  const heavy = () => calls.filter((sql) => HEAVY.includes(sql)).length;
+  const first = await get({});
+  assert.equal(first.statusCode, 200);
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(first.body)), { cards: rows[V1_SQL] });
+  const built = heavy();
+  for (let i = 0; i < 3; i++) {
+    const again = await get({});
+    assert.deepEqual(again.body, first.body, 'the same bytes');
+    assert.equal(again.headers.ETag, first.headers.ETag);
+  }
+  assert.equal(heavy(), built, 'no heavy query for a version already built');
+  assert.equal(calls.filter((sql) => sql === FINGERPRINT_SQL).length, 4, 'the version is checked on every request');
+
+  await get({ schema: '2' });
+  const afterV2 = heavy();
+  assert.ok(afterV2 > built, 'the other feed is its own version');
+
+  // The catalogue changes: the next request builds and serves the new one.
+  state.fingerprint = { ...FINGERPRINT, cards_version_sum: '99' };
+  rows[V1_SQL] = [{ id: 'c1', name: 'Card one, new rates' }];
+  const changed = await get({});
+  assert.notEqual(changed.headers.ETag, first.headers.ETag);
+  assert.deepEqual(JSON.parse(zlib.gunzipSync(changed.body)), { cards: rows[V1_SQL] }, 'never the older body');
+  assert.ok(heavy() > afterV2);
+});
+
+test('concurrent requests for a version not built yet share one build', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  let heavyRuns = 0;
+  const handler = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({
+      query: async (sql) => {
+        if (sql === FINGERPRINT_SQL) return { rows: [{ ...FINGERPRINT, card_count: '77' }] };
+        heavyRuns += 1;
+        await gate;
+        return { rows: [{ id: 'x' }] };
+      },
+    }),
+    logger: { error() {} },
+  });
+  const res = () => { const r = responseDouble(); r.send = function send(v) { this.body = v; return this; }; return r; };
+  const all = [0, 1, 2, 3].map(() => { const r = res(); return handler({ query: {}, ip: `p`, headers: { 'accept-encoding': 'gzip' } }, r).then(() => r); });
+  await new Promise((r) => setImmediate(r));
+  release();
+  const done = await Promise.all(all);
+  assert.equal(heavyRuns, 1);
+  assert.ok(done.every((r) => r.statusCode === 200 && Buffer.isBuffer(r.body)));
+});
+
+test('a build that fails is not kept: the next request builds again', async () => {
+  let fail = true;
+  const handler = createCatalogueHandler({
+    withUserClient: async (_u, cb) => cb({
+      query: async (sql) => {
+        if (sql === FINGERPRINT_SQL) return { rows: [{ ...FINGERPRINT, card_count: '55' }] };
+        if (fail) { fail = false; throw Object.assign(new Error('boom'), { code: '57014' }); }
+        return { rows: [{ id: 'y' }] };
+      },
+    }),
+    logger: { error() {} },
+  });
+  const res = () => { const r = responseDouble(); r.send = function send(v) { this.body = v; return this; }; r.removeHeader = () => {}; return r; };
+  const a = res();
+  await handler({ query: {}, ip: 'f', headers: { 'accept-encoding': 'gzip' } }, a);
+  assert.equal(a.statusCode, 500);
+  const b = res();
+  await handler({ query: {}, ip: 'f', headers: { 'accept-encoding': 'gzip' } }, b);
+  assert.equal(b.statusCode, 200);
+});

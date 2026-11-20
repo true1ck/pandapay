@@ -339,12 +339,16 @@ async function insertFacts(client, profileId, items, results) {
   if (!rows.length) return;
   const inserted = await insertNew(
     client,
+    // created_at is the facts' sync cursor. It is taken here, after the profile lock (clock_timestamp), not from the
+    // column default now(), which is the time the transaction STARTED: an upload that started before another one
+    // but got the lock after it would write facts dated before rows a phone has already read, and that phone's
+    // cursor would skip them for good.
     `INSERT INTO sms_v2_facts (fact_id, profile_id, source_key, fact_type, contract_version, observed_at, occurred_at,
-       instrument_id, payload, provenance)
+       instrument_id, payload, provenance, created_at)
      SELECT r.fact_id, $1, r.source_key, r.fact_type, r.contract_version, r.observed_at, r.occurred_at,
             (SELECT i.instrument_id FROM sms_v2_instruments i
               WHERE i.profile_id = $1 AND i.kind = r.i_kind AND i.issuer_slug = r.i_issuer AND i.mask_digits = r.i_mask),
-            r.payload, r.provenance
+            r.payload, r.provenance, clock_timestamp()
        FROM jsonb_to_recordset($2::jsonb) AS r(fact_id text, source_key text, fact_type text, contract_version text,
          observed_at timestamptz, occurred_at timestamptz, i_kind text, i_issuer text, i_mask text, payload jsonb, provenance jsonb)
      ON CONFLICT (fact_id) DO NOTHING
@@ -1200,7 +1204,20 @@ async function projectStaleInstrumentRows(client, profileId, { exclude, deps }) 
 
 // ---------- sync ----------
 
+// Rows per entity in one sync page. A page holds up to this many of EACH of facts, events, ledger rows and accounts
+// (four independent cursors), so a first sync of 1,000 used to be ~3,000 rows and 1.7 MB on one request, which a slow
+// link or a busy server could not finish (the phone then asked for the same page again for ever). 250 keeps a page
+// near 450 KB before compression (~90 KB gzipped). Paging is by cursor, so a smaller page never skips or repeats a
+// row; the phone keeps asking while X-Sms-Sync-Has-More is 1. A phone may ask for 1 to SYNC_LIMIT with ?limit=.
 const SYNC_LIMIT = 1000;
+const SYNC_PAGE_DEFAULT = 250;
+
+/** The page size to use for a requested one: an integer 1..SYNC_LIMIT, anything else the default. */
+function syncPageSize(requested) {
+  const n = typeof requested === 'string' && /^\d+$/.test(requested.trim()) ? Number(requested) : requested;
+  if (!Number.isInteger(n) || n < 1) return SYNC_PAGE_DEFAULT;
+  return Math.min(n, SYNC_LIMIT);
+}
 
 function encodeCursor(c) { return Buffer.from(JSON.stringify(c), 'utf8').toString('base64url'); }
 
@@ -1222,8 +1239,8 @@ function decodeCursor(raw) {
   }
 }
 
-async function readEntity(client, profileId, { table, idCol, doc, cur, timeCol = 'updated_at' }) {
-  const args = [profileId, SYNC_LIMIT + 1];
+async function readEntity(client, profileId, { table, idCol, doc, cur, timeCol = 'updated_at', limit = SYNC_PAGE_DEFAULT }) {
+  const args = [profileId, limit + 1];
   let where = 'profile_id = $1';
   if (cur) {
     args.push(cur[0], cur[1]);
@@ -1234,18 +1251,19 @@ async function readEntity(client, profileId, { table, idCol, doc, cur, timeCol =
        FROM ${table} WHERE ${where} ORDER BY ${timeCol}, ${idCol} LIMIT $2`,
     args,
   );
-  const more = r.rows.length > SYNC_LIMIT;
-  const rows = more ? r.rows.slice(0, SYNC_LIMIT) : r.rows;
+  const more = r.rows.length > limit;
+  const rows = more ? r.rows.slice(0, limit) : r.rows;
   const last = rows.length ? [rows[rows.length - 1].cur, rows[rows.length - 1].id] : cur || null;
   return { docs: rows.map((x) => x.doc), updatedAt: Object.fromEntries(rows.map((x) => [x.id, x.cur])), more, last };
 }
 
 /** Changes after `cursor` (already decoded). Returns {instruments, events, ledger, cursor, hasMore}. */
-async function readChanges(client, profileId, cursor, hookCursors = {}) {
-  const inst = await readEntity(client, profileId, { table: 'sms_v2_instruments', idCol: 'instrument_id', doc: INSTRUMENT_DOC, cur: cursor.i });
-  const ev = await readEntity(client, profileId, { table: 'sms_v2_events', idCol: 'event_id', doc: EVENT_DOC, cur: cursor.e });
-  const led = await readEntity(client, profileId, { table: 'sms_v2_ledger_entries', idCol: 'entry_id', doc: LEDGER_DOC, cur: cursor.l });
-  const facts = await readEntity(client, profileId, { table: 'sms_v2_facts', idCol: 'fact_id', doc: FACT_DOC, cur: cursor.f, timeCol: 'created_at' });
+async function readChanges(client, profileId, cursor, hookCursors = {}, { limit } = {}) {
+  const size = syncPageSize(limit);
+  const inst = await readEntity(client, profileId, { table: 'sms_v2_instruments', idCol: 'instrument_id', doc: INSTRUMENT_DOC, cur: cursor.i, limit: size });
+  const ev = await readEntity(client, profileId, { table: 'sms_v2_events', idCol: 'event_id', doc: EVENT_DOC, cur: cursor.e, limit: size });
+  const led = await readEntity(client, profileId, { table: 'sms_v2_ledger_entries', idCol: 'entry_id', doc: LEDGER_DOC, cur: cursor.l, limit: size });
+  const facts = await readEntity(client, profileId, { table: 'sms_v2_facts', idCol: 'fact_id', doc: FACT_DOC, cur: cursor.f, timeCol: 'created_at', limit: size });
   const next = {};
   if (facts.last) next.f = facts.last;
   if (inst.last) next.i = inst.last;
@@ -1261,7 +1279,7 @@ async function readChanges(client, profileId, cursor, hookCursors = {}) {
 }
 
 module.exports = {
-  ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT,
+  ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT, SYNC_PAGE_DEFAULT, syncPageSize,
   mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
   resolveUnknownInstruments, projectStaleInstrumentRows, followPrintedCards, printedCardRulesOut,
   projectRowsOfLinkedInstruments,
