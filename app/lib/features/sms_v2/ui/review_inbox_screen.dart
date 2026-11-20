@@ -6,11 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../app/assistant_action.dart';
+import '../../activity/edit_transaction_screen.dart' show AddedTransaction;
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
+import '../pipeline/review_answers.dart';
 import '../pipeline/trace.dart';
 import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
@@ -18,17 +19,13 @@ import 'correction_form.dart';
 import 'dismissed_reviews_view.dart';
 import 'review_clustering.dart';
 import 'review_controller.dart';
+import 'review_draft.dart';
 import 'review_history_views.dart';
 import 'screen_parts.dart';
 import 'sharing_offer_card.dart';
 
-/// The receipt question (Lane X): a bill-payment receipt with no matching debit.
-bool isReceiptQuestion(LocalReviewItem item) =>
-    item.payload['reason'] == kReceiptWithoutPaymentReason;
-
-/// The kind that decides which section and buttons an item gets.
-String reviewKindOf(LocalReviewItem item) =>
-    isReceiptQuestion(item) ? 'receipt' : item.kind;
+// Defined with the bundling they feed; the screen's other files import them from here.
+export 'review_clustering.dart' show isReceiptQuestion, reviewKindOf;
 
 /// The question, from the stored facts of the receipt and the wording set.
 String receiptQuestion(LocalReviewItem item, [String locale = 'en']) {
@@ -89,9 +86,11 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     return cards;
   }
 
-  /// Edit the whole transaction a question is about, or, where no transaction
-  /// exists yet (a receipt, a message the app cannot read), add one with what
-  /// the question already knows.
+  /// Edit the whole transaction a question is about. Where no transaction
+  /// exists yet (a receipt, a message the app cannot read) the same Edit screen
+  /// opens on a draft filled in with what the question already knows. Saving it
+  /// adds the transaction and answers the question (it moves to History);
+  /// backing out adds nothing and leaves the question as it was.
   Future<void> _edit(LocalReviewItem item, String namespace) async {
     final eventId = item.payload['eventId'];
     if (eventId is String) {
@@ -101,47 +100,26 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
       ref.invalidate(reviewItemsProvider);
       return;
     }
-    final minor = reviewItemAmountMinor(item);
-    final merchant = (item.payload['app'] ?? item.payload['biller']) as String?;
-    await context.push<Object?>(
-      '/assistant/add-spend',
-      extra: AssistantRequest(
-        action: AssistantAction.addSpend,
-        amount: minor == null ? null : minor / 100,
-        merchant: merchant,
-      ),
+    final draft = reviewDraftEntry(item);
+    final added = await context.push<Object?>(
+      '/activity/${draft.id}/edit',
+      extra: draft,
     );
-    if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
-    if (isReceiptQuestion(item)) {
-      // The add screen does not say whether the person saved, so ask once.
-      final added = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Did you add the payment?'),
-          content: const Text(
-            'If you added it, this question is answered and goes away.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Not yet'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Yes, I added it'),
-            ),
-          ],
-        ),
-      );
-      if (added == true && mounted) {
-        final reviews = await smsReceiptReviews(ref);
-        if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) {
-          return;
-        }
-        reviews.dismiss(reviewId: item.id);
-      }
+    if (added is! AddedTransaction ||
+        !mounted ||
+        namespace != ref.read(app.cacheNamespaceProvider)) {
+      return;
     }
+    final cache = await ref.read(app.responseCacheProvider.future);
+    if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+    markAnsweredByAdding(
+      cache.financialStore,
+      namespace: namespace,
+      reviewId: item.id,
+      added: added.toJson(),
+    );
     ref.invalidate(reviewItemsProvider);
+    ref.invalidate(settledListsProvider);
   }
 
   Future<void> _act(List<LocalReviewItem> group, String action) async {

@@ -733,3 +733,39 @@ do {
   require(try store.prepareCatchup(explicit: false) != nil && (try activeJobs()).count == 1, "after the daily check ran, plans are queued automatically again")
   print("PASS: catch-up gating, anchor, replacement and looping run")
 }
+
+// A catch-up that history already covers completes at once. That alone is no evidence that anyone runs the daily check,
+// so the app must not keep queueing plans (the permanent "Checking for missed messages" strip on the owner's phone).
+do {
+  let dir = root.appendingPathComponent("catchup-covered")
+  let t0 = IncomingSmsSpool.date("2026-11-10T08:00:00Z")!
+  var clock = t0
+  let store = IncomingSmsSpool(directory: dir, now: { clock })
+  let g = try store.configure(namespace: "user:catchup-covered", enabled: true, parserVersion: 23)["generation"] as! String
+  func activeJobs() throws -> [[String: Any]] {
+    (try store.snapshot()["jobs"] as! [[String: Any]]).filter { ["active", "paused", "partial"].contains($0["state"] as? String ?? "") }
+  }
+  // History holds every day up to now.
+  clock = t0.addingTimeInterval(3 * 86_400)
+  try store.createJob(generation: g, id: UUID().uuidString, kind: "history", zone: "UTC", windows: [["start": iso(t0.addingTimeInterval(-86_400)), "end": iso(clock)]])
+  let historyRequest = try store.issue(generation: g)!
+  require(try store.finish(request: historyRequest, found: 0, limitOff: true, warning: false) == "complete", "history range done")
+
+  // The person asks: every day is already covered, so the check is finished at once.
+  require(try store.prepareCatchup(explicit: true) == nil, "nothing is left to issue when history covers everything")
+  require((try activeJobs()).isEmpty, "a fully covered check completes at once")
+  require(try store.snapshot()["reconciledThrough"] != nil, "and the checked-through point moves up")
+
+  // Skipping covered days is not a daily check that ran: automatic calls make no plan nobody can run.
+  clock = clock.addingTimeInterval(20 * 60)
+  require(try store.prepareCatchup(explicit: false) == nil, "no automatic plan after a check that only skipped covered days")
+  require((try activeJobs()).isEmpty, "so no idle catch-up job is left waiting")
+
+  // A plan the person asked for later, which nobody runs, is retired by the next automatic call once it is 15 minutes old.
+  _ = try store.prepareCatchup(explicit: true)
+  require((try activeJobs()).count == 1, "the new tail is planned when asked")
+  clock = clock.addingTimeInterval(20 * 60)
+  require(try store.prepareCatchup(explicit: false) == nil, "an automatic call does not hand the idle plan out again")
+  require((try activeJobs()).isEmpty, "the idle plan is retired, not kept for ever")
+  print("PASS: a covered catch-up is not evidence that the daily check runs")
+}

@@ -245,6 +245,36 @@ class SmsIntakeRepository {
     );
   }
 
+  /// The captured messages for [ids], keyed by id, in a few statements
+  /// instead of one per id. Ids with no captured message are missing from the
+  /// result.
+  Map<String, SmsIntakeEntry> capturedByIds(
+    String namespace,
+    Iterable<String> ids,
+  ) {
+    final wanted = ids.toSet().toList();
+    final found = <String, SmsIntakeEntry>{};
+    for (var start = 0; start < wanted.length; start += 400) {
+      final chunk = wanted.sublist(start, (start + 400).clamp(0, wanted.length));
+      for (final row in database.db.select(
+        'SELECT id, sender, body, received_at FROM sms_captured_messages WHERE namespace=? AND id IN (${List.filled(chunk.length, '?').join(',')})',
+        [namespace, ...chunk],
+      )) {
+        found[row['id'] as String] = SmsIntakeEntry(
+          row['id'] as String,
+          QueuedSms(
+            sender: row['sender'] as String,
+            body: row['body'] as String,
+            receivedAt: DateTime.fromMillisecondsSinceEpoch(
+              row['received_at'] as int,
+            ),
+          ),
+        );
+      }
+    }
+    return found;
+  }
+
   bool wasProcessed(String namespace, String id, {int? parserVersion}) {
     if (parserVersion != null) {
       final rows = database.db.select(

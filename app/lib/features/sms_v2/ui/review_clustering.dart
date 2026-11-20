@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import 'package:pandapay_domain/sms_v2.dart' show kReceiptWithoutPaymentReason;
 import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../providers/data_providers.dart';
@@ -266,6 +267,23 @@ ReviewContent reviewContentOf(LocalReviewItem item) =>
 /// Kinds whose items are each a question about one specific payment.
 const _neverMerged = {'receipt', 'link'};
 
+/// The bill-payment receipt question (Lane X): a receipt with no matching debit.
+bool isReceiptQuestion(LocalReviewItem item) =>
+    item.payload['reason'] == kReceiptWithoutPaymentReason;
+
+/// The kind that decides which section and buttons an item gets.
+String reviewKindOf(LocalReviewItem item) =>
+    isReceiptQuestion(item) ? 'receipt' : item.kind;
+
+/// Which question an item belongs to. Items with the same key are answered
+/// together, so the number of distinct keys is the number of questions.
+String _bundleKey(LocalReviewItem item, String kind, String provider) =>
+    _neverMerged.contains(kind)
+    ? '$kind:${item.id}'
+    : provider.isNotEmpty
+    ? '$kind:paylater:$provider'
+    : '$kind:${_formatOf(item)}';
+
 /// Provider detection runs a dozen regexes, and the list is regrouped on every
 /// chip tap, so it is worked out once per item (and kind, which never changes
 /// for an item).
@@ -356,11 +374,7 @@ List<ReviewBundle> bundleReviewItems(
   for (final item in items) {
     final kind = kindOf(item);
     final provider = _providerOf(item, kind);
-    final key = _neverMerged.contains(kind)
-        ? '$kind:${item.id}'
-        : provider.isNotEmpty
-        ? '$kind:paylater:$provider'
-        : '$kind:${_formatOf(item)}';
+    final key = _bundleKey(item, kind, provider);
     (byKey[key] ??= []).add(item);
     kinds[key] = kind;
     providers[key] = provider.isEmpty ? null : provider;
@@ -413,7 +427,16 @@ List<ReviewBundle> bundleReviewItems(
 int reviewQuestionCount(
   List<LocalReviewItem> items,
   String Function(LocalReviewItem) kindOf,
-) => items.isEmpty ? 0 : bundleReviewItems(items, kindOf).length;
+) {
+  // The keys only: the count is read on every frame the tab is shown and by
+  // the outside badge, so it does not classify, sum or sort the bundles.
+  final keys = <String>{};
+  for (final item in items) {
+    final kind = kindOf(item);
+    keys.add(_bundleKey(item, kind, _providerOf(item, kind)));
+  }
+  return keys.length;
+}
 
 /// "Oct 2026", "Aug – Oct 2026" or "Dec 2025 – Feb 2026".
 String formatBundleSpan(DateTime earliest, DateTime latest) {

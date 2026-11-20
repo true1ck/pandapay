@@ -878,37 +878,61 @@ void main() {
       return service;
     }
 
-    testWidgets('shows Live with its counts and no import card, Resume or Stop', (
-      tester,
-    ) async {
-      final service = liveService();
-      await _pumpImport(tester, service);
-      expect(find.textContaining('44 messages captured since'), findsOneWidget);
-      expect(find.textContaining('8 today'), findsOneWidget);
-      expect(find.text('Last message: Saved'), findsOneWidget);
-      expect(find.text('Importing your history'), findsNothing);
-      expect(find.text('Nothing imported yet'), findsNothing);
-      expect(find.text('Resume import'), findsNothing);
-      expect(find.text('Stop'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'shows Live with its counts and no import card, Resume or Stop',
+      (tester) async {
+        final service = liveService();
+        await _pumpImport(tester, service);
+        expect(
+          find.textContaining('44 messages captured since'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('8 today'), findsOneWidget);
+        expect(find.text('Last message: Saved'), findsOneWidget);
+        expect(find.text('Importing your history'), findsNothing);
+        expect(find.text('Nothing imported yet'), findsNothing);
+        expect(find.text('Resume import'), findsNothing);
+        expect(find.text('Stop'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('Check for missed messages plans the days and opens the history Shortcut', (
-      tester,
-    ) async {
-      SharedPreferences.setMockInitialValues({
-        iosSmsSharingAcknowledgementKey: true,
-      });
-      final service = liveService(idlePlan: false);
-      await _pumpImport(tester, service);
-      final button = find.byKey(const ValueKey('check-missed-messages'));
-      await _scrollTo(tester, button);
-      await tester.tap(button);
-      await tester.pumpAndSettle();
-      expect(service.catchupArgs.last['explicit'], isTrue);
-      expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'Check for missed messages plans the days and opens the history Shortcut',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          iosSmsSharingAcknowledgementKey: true,
+        });
+        final service = liveService(idlePlan: false);
+        await _pumpImport(tester, service);
+        final button = find.byKey(const ValueKey('check-missed-messages'));
+        await _scrollTo(tester, button);
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(service.catchupArgs.last['explicit'], isTrue);
+        expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Check for missed messages says so when every day is already covered',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          iosSmsSharingAcknowledgementKey: true,
+        });
+        final service = _NothingToCheckBridge();
+        await _pumpImport(tester, service);
+        final button = find.byKey(const ValueKey('check-missed-messages'));
+        await _scrollTo(tester, button);
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(service.catchupArgs.last['explicit'], isTrue);
+        expect(service.calls.where((c) => c == 'runShortcut'), isEmpty);
+        expect(find.textContaining('already covered'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('the button is not offered while a history import runs', (
       tester,
@@ -952,4 +976,17 @@ void main() {
       expect(find.text('2 waiting to be added'), findsOneWidget);
     });
   });
+}
+
+/// The phone answers "nothing to check" to the person's request: history and
+/// earlier checks already hold every day up to now.
+class _NothingToCheckBridge extends MemoryBridge {
+  @override
+  Future<Object?> call(String method, [Map<String, Object?>? arguments]) async {
+    if (method == 'prepareCatchup') {
+      catchupArgs.add(Map<String, Object?>.from(arguments ?? {}));
+      return null;
+    }
+    return super.call(method, arguments);
+  }
 }

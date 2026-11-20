@@ -24,12 +24,15 @@ Map<String, Object?> _window(
   String state, {
   int received = 0,
   String job = 'c',
+  String? attempt,
+  int ordinal = 0,
 }) => {
-  'id': 'w-$state',
+  'id': 'w-$state-$ordinal',
   'job_id': job,
   'state': state,
+  'attempt': attempt,
   'enumerated': received,
-  'ordinal': 0,
+  'ordinal': ordinal,
   'start': '2026-11-19T18:30:00Z',
   'end': '2026-11-20T18:30:00Z',
 };
@@ -44,6 +47,41 @@ void main() {
         expect(s.showsImportCard, isFalse);
         expect(s.visible, isFalse);
         expect(s.label, 'Recent messages checked');
+      },
+    );
+
+    test(
+      'days that history already holds are skipped, not checked: the plan is still idle',
+      () {
+        // The shape on the owner's phone: yesterday finished at once with no attempt (history holds it),
+        // today's range waits for a Shortcut nobody runs.
+        final s = _state(
+          jobs: [_plan],
+          windows: [
+            _window('complete'),
+            _window('waiting', attempt: 'a1', ordinal: 1),
+          ],
+        );
+        expect(s.catchUpIdle, isTrue);
+        expect(s.showsImportCard, isFalse);
+        expect(s.visible, isFalse);
+        expect(s.label, 'Recent messages checked');
+      },
+    );
+
+    test(
+      'a range that really ran and found nothing is a check that started',
+      () {
+        final s = _state(
+          jobs: [_plan],
+          windows: [
+            _window('complete', attempt: 'a0'),
+            _window('waiting', attempt: 'a1', ordinal: 1),
+          ],
+        );
+        expect(s.catchUpIdle, isFalse);
+        expect(s.showsImportCard, isTrue);
+        expect(s.label, startsWith('Checking for missed messages'));
       },
     );
 

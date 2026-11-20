@@ -195,6 +195,32 @@ void main() {
       expect(d.withActiveAiRules(3).lastErasedAt, '2026-11-19T10:00:00Z');
     });
 
+    test('the last sync problem is reported with when it happened', () {
+      expect(AiStatusReader(state).diagnostics().lastPullProblem, isNull);
+      state.put(
+        'pull:error',
+        jsonEncode({
+          'at': '2026-11-20T16:01:00Z',
+          'type': 'FormatException',
+          'message': 'Unexpected end of input',
+        }),
+      );
+      final d = AiStatusReader(state).diagnostics();
+      expect(d.lastPullProblem, 'FormatException: Unexpected end of input');
+      expect(d.lastPullProblemAt, '2026-11-20T16:01:00Z');
+      expect(
+        d.withActiveAiRules(2).lastPullProblem,
+        'FormatException: Unexpected end of input',
+      );
+    });
+
+    test('a problem record that cannot be read is ignored', () {
+      state.put('pull:error', 'not json');
+      final d = AiStatusReader(state).diagnostics();
+      expect(d.lastPullProblem, isNull);
+      expect(d.answersReady, 0);
+    });
+
     test('an empty phone reports zeros', () {
       final d = AiStatusReader(state).diagnostics();
       expect(

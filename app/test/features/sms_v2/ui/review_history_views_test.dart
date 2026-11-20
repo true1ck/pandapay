@@ -657,6 +657,8 @@ void main() {
                 activeAiRules: 46,
                 lastErasedAt: '2026-11-19T10:00:00Z',
                 restoresTried: 1,
+                lastPullProblem: 'SqliteException: refused here',
+                lastPullProblemAt: '2026-11-20T16:01:00Z',
               ),
             ),
             app.smsSharedLearningConsentProvider.overrideWith(
@@ -685,6 +687,10 @@ void main() {
       expect(find.textContaining('AI rules in use now: 46'), findsOneWidget);
       expect(find.textContaining('read by an AI rule: 7'), findsOneWidget);
       expect(find.textContaining('Unknown messages: 123, text still here: 120'), findsOneWidget);
+      expect(
+        find.textContaining('Last sync problem: SqliteException: refused here'),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
       await tester.pump();
       expect(find.byKey(const Key('gemini-phone-details')), findsNothing);

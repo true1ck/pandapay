@@ -508,7 +508,8 @@ class NotificationTriggerRunner {
     return !reader.hasChecking();
   }
 
-  /// One "N transactions need review" notification per finished import.
+  /// One "N reviews are waiting" notification per finished import (N is the
+  /// number of questions on Needs review, not the number of messages).
   ///
   /// It is held back while the app is open (the badge already shows the
   /// number there) and while the pipeline — scan, upload, Gemini drafting —
@@ -545,8 +546,8 @@ class NotificationTriggerRunner {
     final fired = await ref.read(notificationGateProvider).fire(
       category: 'needs_review',
       title: finalCount == 1
-          ? '1 transaction needs review'
-          : '$finalCount transactions need review',
+          ? '1 review is waiting'
+          : '$finalCount reviews are waiting',
       body:
           'A message didn\'t match automatically — check Needs Review to fill it in.',
       dedupeKey:

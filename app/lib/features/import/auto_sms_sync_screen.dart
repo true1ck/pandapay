@@ -16,6 +16,7 @@ import '../consent/sms_reading_consent.dart';
 import '../onboarding/entry_brand.dart';
 import '../onboarding/permission_art.dart';
 import '../sms_import/sms_inbox_scanner.dart';
+import '../sms_v2/providers/review_question_count.dart' show reviewsLeftText;
 
 enum _AutoSmsStage {
   prompt,
@@ -527,9 +528,7 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
                     const SizedBox(width: AppSpace.sm),
                     Expanded(
                       child: Text(
-                        needsReviewCount == 1
-                            ? '1 message needs review'
-                            : '$needsReviewCount messages need review',
+                        reviewsLeftText(needsReviewCount),
                         style: BambooFonts.heading(15, color: BambooInk.ink900),
                       ),
                     ),
@@ -615,7 +614,7 @@ class _AutoSmsSyncScreenState extends ConsumerState<AutoSmsSyncScreen>
               children: [
                 if (needsReviewCount > 0) ...[
                   EntryButton(
-                    label: 'Review $needsReviewCount alert${needsReviewCount == 1 ? '' : 's'}',
+                    label: 'Answer $needsReviewCount review${needsReviewCount == 1 ? '' : 's'}',
                     onPressed: () => context.push(AppRoute.needsReview),
                   ),
                   const SizedBox(height: 8),

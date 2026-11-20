@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2.dart';
+import 'package:sqlite3/sqlite3.dart' show Database;
 
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
@@ -73,8 +75,70 @@ class SettledItem {
   final double? confidence;
 }
 
+/// The transactions the person added themselves to answer a review question
+/// (see `markAnsweredByAdding`), as History entries, newest first. [syncedId]
+/// gives the real transaction id once the phone's queue has delivered it; until
+/// then the entry carries the queued id, which the edit screen understands.
+List<SettledItem> addedFromReview(
+  Database db, {
+  required String namespace,
+  required DateTime now,
+  String? Function(String clientMutationId)? syncedId,
+}) {
+  final cutoff = now.subtract(settledWindow);
+  final items = <SettledItem>[];
+  for (final row in db.select(
+    "SELECT payload FROM v2_review_items WHERE namespace=? AND status='resolved' "
+    "AND json_extract(payload,'\$.answer')='added'",
+    [namespace],
+  )) {
+    try {
+      final added = ((jsonDecode(row['payload'] as String) as Map)['added'] as Map)
+          .cast<String, Object?>();
+      final occurredAt = DateTime.parse(added['occurredAt'] as String);
+      if (occurredAt.isBefore(cutoff)) continue;
+      final mutationId = added['clientMutationId'] as String;
+      final merchant = added['merchantName'] as String?;
+      items.add(
+        SettledItem(
+          entry: TransactionEntry(
+            id: syncedId?.call(mutationId) ?? 'local-outbox:$mutationId',
+            amount: Money.fromPaise((added['amountMinor'] as num).toInt()),
+            occurredAt: occurredAt.toLocal(),
+            merchantName: merchant == null || merchant.isEmpty ? null : merchant,
+            instrumentKnown: false,
+            entryKind: added['entryKind'] == 'income'
+                ? TxnEntryKind.income
+                : TxnEntryKind.spend,
+            source: 'manual',
+            status: 'active',
+          ),
+          byUser: true,
+          source: SettledSource.onDevice,
+          how: 'You added this from a message',
+        ),
+      );
+    } catch (_) {
+      continue; // a record this build cannot read is not listed
+    }
+  }
+  items.sort((a, b) => b.entry.occurredAt.compareTo(a.entry.occurredAt));
+  return items;
+}
+
 class SettledLists {
   const SettledLists({this.auto = const [], this.history = const []});
+
+  /// These lists with [added] in History, newest first, within the row limit.
+  SettledLists withAdded(List<SettledItem> added) {
+    if (added.isEmpty) return this;
+    final merged = [...history, ...added]
+      ..sort((a, b) => b.entry.occurredAt.compareTo(a.entry.occurredAt));
+    return SettledLists(
+      auto: auto,
+      history: merged.take(settledMaxRows).toList(growable: false),
+    );
+  }
 
   /// Filed by a Gemini-drafted rule without asking, newest first.
   final List<SettledItem> auto;
@@ -151,10 +215,24 @@ SettledLists settledLists(
 
 final settledListsProvider = FutureProvider<SettledLists>((ref) async {
   final model = await ref.watch(smsV2LedgerReadModelProvider.future);
+  // A question answered by adding the transaction changes no ledger revision,
+  // only the review table; follow it.
+  ref.watch(app.financialStoreRevisionProvider('needs_review'));
+  final namespace = ref.watch(app.cacheNamespaceProvider);
+  final cache = await ref.watch(app.responseCacheProvider.future);
+  final outbox = await ref.watch(app.outboxRepositoryProvider.future);
+  final now = DateTime.now();
   return settledLists(
     model.transactions,
     model.factsBySource,
-    now: DateTime.now(),
+    now: now,
+  ).withAdded(
+    addedFromReview(
+      cache.financialStore.database.db,
+      namespace: namespace,
+      now: now,
+      syncedId: outbox.syncedTransactionId,
+    ),
   );
 });
 
@@ -722,7 +800,8 @@ class _PhoneDetails extends ConsumerWidget {
           'AI rules in use now: ${d.activeAiRules}\n'
           'Messages read by an AI rule: ${d.readByAiRule}\n'
           'Unknown messages: ${d.unknownMessages}, text still here: ${d.unknownWithText}\n'
-          'Answers last erased: ${d.lastErasedAt ?? 'never'}; restores tried: ${d.restoresTried}',
+          'Answers last erased: ${d.lastErasedAt ?? 'never'}; restores tried: ${d.restoresTried}\n'
+          'Last sync problem: ${d.lastPullProblem == null ? 'none' : '${d.lastPullProblem} (${d.lastPullProblemAt ?? 'time unknown'})'}',
           style: style,
         ),
       ),

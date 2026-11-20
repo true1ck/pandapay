@@ -1,7 +1,8 @@
 import 'async_first_load.dart';
 import '../data/connectivity/server_backoff.dart';
 import '../data/connectivity/write_fence.dart';
-import '../features/sms_v2/providers/data_providers.dart' as sms_v2_data;
+import '../features/sms_v2/providers/review_question_count.dart'
+    as sms_v2_count;
 import '../features/sms_v2/instruments/bank_summary_adapter.dart';
 import '../features/sms_v2/providers/runtime_provider.dart';
 import '../features/import/statement_import_continuation_provider.dart' show statementImportAutoResumeProvider;
@@ -1426,13 +1427,15 @@ final foreignPaymentsProvider = FutureProvider<List<ForeignPayment>>((ref) async
 final foreignPaymentsSummaryProvider = Provider<ForeignPaymentsSummary>((ref) =>
   ForeignPaymentsSummary.fromPayments(ref.watch(foreignPaymentsProvider).valueOrNull ?? const []));
 
-/// D1's badge (ui-spec §1: "Activity... with badge for D4 count") and
-/// Insights Hub's tile both read this rather than the full list, so
-/// neither has to unwrap an AsyncValue just to show a number.
+/// How many reviews are left: the questions the Needs review tab shows, not
+/// the messages behind them. D1's badge (ui-spec §1: "Activity... with badge
+/// for D4 count"), Insights Hub's tile and the notification all read this
+/// rather than the full list, so none has to unwrap an AsyncValue just to show
+/// a number.
 final needsReviewCountProvider = FutureProvider<int>((ref) async {
   // The count has its own cheap path (rulebook R6): it does not build, nor
   // resolve against SQLite, the whole review list.
-  return ref.watch(sms_v2_data.reviewItemCountProvider.future);
+  return ref.watch(sms_v2_count.reviewQuestionCountProvider.future);
 });
 
 final commitmentsRepositoryProvider = Provider<CommitmentsRepository>((ref) {
@@ -7374,9 +7377,6 @@ final rankedRecommendationsProvider =
       );
     });
 
-/// Context passed by Quick Add as the user fills in a transaction. Keeping
-/// the rank request tied to the actual form values makes its card verdict use
-/// the same engine, wallet state, caps, overrides, and reward rules as Home.
 /// The cards the home-screen widgets rotate through, each with what it is best
 /// FOR. Home's own pick is one fixed selection (default chip "Online", ₹1,000),
 /// which for most wallets is the same card every time. This ranks the wallet
@@ -7485,6 +7485,9 @@ final widgetCardPicksProvider = Provider<List<WidgetCardPick>>((ref) {
   return picks;
 });
 
+/// Context passed by Quick Add as the user fills in a transaction. Keeping
+/// the rank request tied to the actual form values makes its card verdict use
+/// the same engine, wallet state, caps, overrides, and reward rules as Home.
 typedef QuickAddRecommendationQuery = ({
   Money amount,
   String? categoryId,

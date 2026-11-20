@@ -44,6 +44,8 @@ class AiPhoneDiagnostics {
     this.activeAiRules = 0,
     this.lastErasedAt,
     this.restoresTried = 0,
+    this.lastPullProblem,
+    this.lastPullProblemAt,
   });
 
   /// Answers the server sent that carry a usable rule.
@@ -77,6 +79,11 @@ class AiPhoneDiagnostics {
   /// How many times the phone asked the server to send its answers again.
   final int restoresTried;
 
+  /// What stopped the last sync pull, as "Type: message", and when. Null when
+  /// the last pull did not fail. Local only: it can name a row or a merchant.
+  final String? lastPullProblem;
+  final String? lastPullProblemAt;
+
   AiPhoneDiagnostics withActiveAiRules(int count) => AiPhoneDiagnostics(
     answersReady: answersReady,
     answersFailed: answersFailed,
@@ -88,6 +95,8 @@ class AiPhoneDiagnostics {
     activeAiRules: count,
     lastErasedAt: lastErasedAt,
     restoresTried: restoresTried,
+    lastPullProblem: lastPullProblem,
+    lastPullProblemAt: lastPullProblemAt,
   );
 }
 
@@ -166,6 +175,17 @@ class AiStatusReader {
         continue;
       }
     }
+    String? problem, problemAt;
+    try {
+      final raw = state.get('pull:error');
+      if (raw != null) {
+        final record = jsonDecode(raw) as Map;
+        problem = '${record['type']}: ${record['message']}';
+        problemAt = record['at'] as String?;
+      }
+    } catch (_) {
+      // An unreadable record is as good as none.
+    }
     return AiPhoneDiagnostics(
       answersReady: ready,
       answersFailed: failed,
@@ -176,6 +196,8 @@ class AiStatusReader {
       readByAiRule: readByAi,
       lastErasedAt: state.get('wipe:ai:at'),
       restoresTried: int.tryParse(state.get('restore:ai:count') ?? '') ?? 0,
+      lastPullProblem: problem,
+      lastPullProblemAt: problemAt,
     );
   }
 
@@ -255,15 +277,40 @@ class AiStatusReader {
     required Set<String> sharedRuleIds,
   }) {
     final raw = state.get('trace:$sourceKey');
-    if (raw == null) return null;
+    final id = raw == null ? null : _aiRuleId(raw);
+    if (id == null) return null;
+    final shared = id.replaceFirst(_localSuffix, '');
+    return AiResolution(
+      ruleId: shared,
+      verified: sharedRuleIds.contains(shared) || !_localSuffix.hasMatch(id),
+    );
+  }
+
+  /// Of [sourceKeys], the messages an AI rule read: the same test as
+  /// [resolution], answered in a few statements instead of one per message.
+  /// For counts that must not walk the review list.
+  Set<String> aiReadSources(Iterable<String> sourceKeys) {
+    final keys = sourceKeys.toSet().toList();
+    final read = <String>{};
+    for (var start = 0; start < keys.length; start += 400) {
+      final chunk = keys.sublist(start, (start + 400).clamp(0, keys.length));
+      for (final row in state.db.select(
+        'SELECT key,value FROM v2_sync_state WHERE namespace=? AND key IN (${List.filled(chunk.length, '?').join(',')})',
+        [state.namespace, for (final key in chunk) 'trace:$key'],
+      )) {
+        if (_aiRuleId(row['value'] as String) != null) {
+          read.add((row['key'] as String).substring('trace:'.length));
+        }
+      }
+    }
+    return read;
+  }
+
+  /// The rule id in a `trace:` entry when it is an AI rule, else null.
+  static String? _aiRuleId(String raw) {
     try {
       final id = (jsonDecode(raw) as Map)['ruleId'];
-      if (id is! String || !id.startsWith('AI-')) return null;
-      final shared = id.replaceFirst(_localSuffix, '');
-      return AiResolution(
-        ruleId: shared,
-        verified: sharedRuleIds.contains(shared) || !_localSuffix.hasMatch(id),
-      );
+      return id is String && id.startsWith('AI-') ? id : null;
     } catch (_) {
       return null;
     }

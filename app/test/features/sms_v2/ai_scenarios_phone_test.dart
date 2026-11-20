@@ -35,6 +35,7 @@ void main() {
   var consent = true;
   var clockNow = DateTime.utc(2026, 11, 20, 12);
   var aiStatus = 'none'; // none | pending | ready | rejected | failed
+  var brokenPage = false; // the sync page carries a row this phone cannot read
   String? servedBundle;
   final uploaded = <String>[]; // remote template hashes the phone sent
   final fixture =
@@ -129,7 +130,9 @@ void main() {
               'instruments': [],
               'events': [],
               'ledger': [],
-              'facts': [],
+              'facts': [
+                if (brokenPage) <String, Object?>{'bogus': true},
+              ],
               'aiResults': [
                 if (aiStatus != 'none')
                   for (final hash in uploaded.toSet())
@@ -191,6 +194,7 @@ void main() {
     consent = true;
     clockNow = DateTime.utc(2026, 11, 20, 12);
     aiStatus = 'none';
+    brokenPage = false;
     servedBundle = null;
     uploaded.clear();
     database = AppDatabase.forTesting(sqlite3.openInMemory());
@@ -216,6 +220,70 @@ void main() {
     financial.dispose();
     database.db.dispose();
   });
+
+  test(
+    'S9 a sync page this phone cannot save still delivers the AI answer, and says why',
+    () async {
+      await runtime.capture([
+        _msg('RAHUL KUMAR', 450, 1),
+        _msg('SWIGGY', 1200, 2),
+      ]);
+      await sync();
+      aiStatus = 'ready';
+      brokenPage = true;
+      // The page itself fails (the first error is raised at the end of the
+      // sync), but the answer it carried was kept and applied.
+      await expectLater(sync(), throwsA(anything));
+      expect(
+        spendMinor(),
+        45000 + 120000,
+        reason: 'the AI-read spends count although the page failed',
+      );
+      expect(resolutionOfFirst(), isNotNull);
+      final problem = jsonDecode(state.get('pull:error')!) as Map;
+      expect(problem['type'], 'ContractException');
+      // Once the page is readable again the record goes.
+      brokenPage = false;
+      await sync();
+      expect(state.get('pull:error'), isNull);
+    },
+  );
+
+  test(
+    'S10 a question answered by adding the transaction stays answered when the message is read again',
+    () async {
+      await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+      final id =
+          database.db
+                  .select(
+                    "SELECT review_id FROM v2_review_items WHERE namespace=? AND kind='template'",
+                    [_namespace],
+                  )
+                  .single['review_id']
+              as String;
+      database.db.execute(
+        "UPDATE v2_review_items SET status='resolved', payload=json_set(payload,'\$.answer','added') WHERE namespace=? AND review_id=?",
+        [_namespace, id],
+      );
+      // Every unknown message is read again when the rules change: the saved
+      // decision is out of date, so the message goes through the reader again.
+      database.db.execute(
+        'DELETE FROM sms_source_decisions WHERE namespace=?',
+        [_namespace],
+      );
+      database.db.execute(
+        'UPDATE sms_captured_messages SET processed=0 WHERE namespace=?',
+        [_namespace],
+      );
+      await runtime.capture([_msg('RAHUL KUMAR', 450, 1)], backfill: true);
+      final row = database.db.select(
+        'SELECT status FROM v2_review_items WHERE namespace=? AND review_id=?',
+        [_namespace, id],
+      );
+      expect(row.single['status'], 'resolved');
+      expect(openTemplateReviews(), isEmpty);
+    },
+  );
 
   test(
     'S1 unreadable layout: reviewed, uploaded, shown as checking, no spend yet',

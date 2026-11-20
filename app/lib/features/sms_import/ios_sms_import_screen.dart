@@ -109,7 +109,19 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
     final name = _shortcutName.text.trim();
     if (name.isEmpty) throw StateError('Shortcut name required');
     await prefs.setString(_shortcutNameKey, name);
-    await ref.read(iosSmsIntakeControllerProvider).checkMissedMessages(name);
+    final started = await ref
+        .read(iosSmsIntakeControllerProvider)
+        .checkMissedMessages(name);
+    if (!started && mounted) {
+      // The phone already holds every day up to now: say so, do not open Shortcuts for nothing.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nothing to check: every day up to now is already covered.',
+          ),
+        ),
+      );
+    }
   }
 
   static String? _checkedThrough(IosSmsIntakeState state) {

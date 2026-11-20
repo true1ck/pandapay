@@ -111,19 +111,28 @@ class IosSmsIntakeState {
   String? get lastLiveState => snapshot['last_live_state'] as String?;
   String? get lastLiveProcessed => snapshot['last_live_processed'] as String?;
 
-  /// A catch-up plan nobody has started: its ranges are queued or waiting, no
-  /// message ever arrived for any of them. The daily check is optional, so
-  /// for most people this plan just sits there; it is not an import.
+  /// A catch-up plan nobody has started: no range ever ran or received a
+  /// message. Its ranges wait for a Shortcut, or were finished at once because
+  /// history already holds their days (no attempt was ever issued for those).
+  /// The daily check is optional, so for most people this plan just sits
+  /// there; it is not an import.
   bool get catchUpIdle {
     final job = activeJob;
     if (job == null || job['kind'] != 'catchup' || job['state'] != 'active') {
       return false;
     }
-    return currentWindows.every(
-      (w) =>
-          const ['queued', 'waiting'].contains(w['state']) &&
-          (w['enumerated'] as int? ?? 0) == 0,
-    );
+    return currentWindows.every(_neverRan);
+  }
+
+  static bool _neverRan(Map<String, Object?> window) {
+    if ((window['enumerated'] as int? ?? 0) > 0) return false;
+    return switch (window['state']) {
+      'queued' || 'waiting' => true,
+      // Finished with no attempt: skipped because earlier imports cover it.
+      // A range that really ran has an attempt, even when it found nothing.
+      'complete' => window['attempt'] == null,
+      _ => false,
+    };
   }
 
   /// Whether the SMS page shows the import card (and the strip counts it).
@@ -742,7 +751,7 @@ class IosSmsIntakeController extends ChangeNotifier {
     }
   }
 
-  Future<void> _serialize(Future<void> Function() work) {
+  Future<T> _serialize<T>(Future<T> Function() work) {
     final next = _tail.then((_) => work());
     _tail = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
@@ -1077,8 +1086,10 @@ class IosSmsIntakeController extends ChangeNotifier {
   /// The person asked to look for messages the live alerts may have missed
   /// (the phone was off, an update, the automation paused). The phone plans
   /// the days after what is already covered, and the history Shortcut reads
-  /// them. Nothing is launched when the phone has nothing to check.
-  Future<void> checkMissedMessages(String shortcutName) => _serialize(() async {
+  /// them. Nothing is launched when the phone has nothing to check: that
+  /// returns false, so the person is told rather than left looking at a
+  /// button that did nothing. True means a check was started.
+  Future<bool> checkMissedMessages(String shortcutName) => _serialize(() async {
     final expected = namespace(), revision = _revision;
     _check(expected, revision);
     if (!state.enabled) throw StateError('Enable SMS Shortcuts first.');
@@ -1093,8 +1104,9 @@ class IosSmsIntakeController extends ChangeNotifier {
     _check(expected, revision);
     await _load();
     _check(expected, revision);
-    if (state.activeJob == null) return;
+    if (state.activeJob == null) return false;
     await _runActiveJob(shortcutName, expected, revision, automatic: false);
+    return true;
   });
 
   Future<void> _runActiveJob(

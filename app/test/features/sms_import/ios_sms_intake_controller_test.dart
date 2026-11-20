@@ -1315,7 +1315,10 @@ void _loopMonitorTests() {
         addTearDown(controller.dispose);
         await controller.refresh();
         expect(controller.canCheckMissedMessages, isTrue);
-        await controller.checkMissedMessages('PANDAPAY SMS HISTORY');
+        final started = await controller.checkMissedMessages(
+          'PANDAPAY SMS HISTORY',
+        );
+        expect(started, isTrue, reason: 'a check was started');
         expect(service.catchupArgs.last['explicit'], isTrue);
         expect(service.calls.where((c) => c == 'runShortcut'), hasLength(1));
         expect(controller.automaticallyAdvancing, isTrue);
@@ -1393,7 +1396,14 @@ void _loopMonitorTests() {
         );
         addTearDown(controller.dispose);
         await controller.refresh();
-        await controller.checkMissedMessages('PANDAPAY SMS HISTORY');
+        final started = await controller.checkMissedMessages(
+          'PANDAPAY SMS HISTORY',
+        );
+        expect(
+          started,
+          isFalse,
+          reason: 'the person is told nothing needed checking',
+        );
         expect(service.calls, isNot(contains('runShortcut')));
       },
     );

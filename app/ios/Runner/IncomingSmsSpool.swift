@@ -784,9 +784,10 @@ final class IncomingSmsSpool {
   /// What prepareCatchup needs to decide, read in one transaction.
   private func catchupFacts(generation: String) throws -> (used: Bool, idle: (id: String, start: Date)?, coveredEnd: Date?) {
     try transaction { db in
-      // The daily check counts as used once any catch-up range received a message or a checkpoint was written.
-      let used = try query(db, "SELECT 1 FROM settings WHERE key='reconciledThrough'").first != nil
-        || (try query(db, "SELECT 1 FROM jobs j JOIN windows w ON w.job_id=j.id JOIN receipts r ON r.attempt=w.attempt WHERE j.kind='catchup' LIMIT 1").first != nil)
+      // The daily check counts as used only once a catch-up range really ran and received a message. A checkpoint
+      // (reconciledThrough) is not evidence: a plan whose days history already holds is finished at once, with no run
+      // at all, and counting that made every later automatic call queue a plan that nobody could run.
+      let used = try query(db, "SELECT 1 FROM jobs j JOIN windows w ON w.job_id=j.id JOIN receipts r ON r.attempt=w.attempt WHERE j.kind='catchup' LIMIT 1").first != nil
       // An idle plan: the newest active catch-up whose ranges never received a single message.
       var idle: (id: String, start: Date)?
       if let job = try query(db, "SELECT id FROM jobs WHERE kind='catchup' AND state='active' AND generation=? ORDER BY rowid DESC LIMIT 1", [generation]).first,

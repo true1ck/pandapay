@@ -165,42 +165,40 @@ ReviewCandidates reviewCandidates(
   ]);
 }
 
+/// Where a stored review row's message came from, and whether the ledger
+/// already holds a reading of it. Shared by the review list and by the counts
+/// that must not build it, so the two always agree.
+({String? source, bool hasReading, MovementFact? movement}) reviewRowReading(
+  Map<String, Object?> payload, {
+  required Fact? Function(String id) factFor,
+  required Event? Function(String id) eventFor,
+  required List<Fact> Function(String source) factsOfSource,
+}) {
+  final fact = payload['factId'] is String
+      ? factFor(payload['factId'] as String)
+      : null;
+  final event = payload['eventId'] is String
+      ? eventFor(payload['eventId'] as String)
+      : null;
+  final source =
+      payload['sourceKey'] as String? ??
+      fact?.sourceKey ??
+      (event == null ? null : factFor(event.legs.first.factId)?.sourceKey);
+  final facts = source == null ? const <Fact>[] : factsOfSource(source);
+  final movement = facts.whereType<MovementFact>().firstOrNull;
+  return (
+    source: source,
+    hasReading: movement != null || event != null,
+    movement: movement,
+  );
+}
+
 /// Bumped after every (re)build of [reviewItemsProvider]. Screens invalidate
 /// the list after resolving or dismissing an item (a `v2_review_items` update
 /// notifies no revision), and the badge used to follow because it was derived
-/// from the list; [reviewItemCountProvider] follows this instead, so it is
+/// from the list; `reviewQuestionCountProvider` follows this instead, so it is
 /// still refreshed by those invalidations without building the list itself.
-final _reviewListBuildsProvider = StateProvider<int>((ref) => 0);
-
-/// How many items [reviewItemsProvider] lists, without building them.
-///
-/// The list resolves every item against SQLite (the event, the captured
-/// message, the facts of its source) just to be displayed; a badge only needs
-/// the number. Each open `v2_review_items` row is exactly one list item, and
-/// the ledger-derived items come from the same [reviewCandidates] the list
-/// uses, so the count equals `reviewItemsProvider`'s length.
-final reviewItemCountProvider = FutureProvider<int>((ref) async {
-  ref.watch(_reviewListBuildsProvider);
-  ref.watch(app.financialStoreRevisionProvider('needs_review'));
-  ref.watch(app.financialStoreRevisionProvider('observations'));
-  final namespace = ref.watch(app.cacheNamespaceProvider);
-  final cache = await ref.watch(app.responseCacheProvider.future);
-  final db = cache.financialStore.database.db;
-  SmsV2Schema.ensure(db);
-  final model = await ref.watch(smsV2LedgerReadModelProvider.future);
-  final candidates = reviewCandidates(
-    model,
-    minimumOccurrences: ref.watch(merchantPromptMinimumOccurrencesProvider),
-    largeAmount: ref.watch(merchantPromptLargeAmountProvider),
-  );
-  final open =
-      db.select(
-            "SELECT COUNT(*) AS n FROM v2_review_items WHERE namespace=? AND status='open'",
-            [namespace],
-          ).single['n']
-          as int;
-  return candidates.billTargets.length + open + candidates.categoryPrompts.length;
-});
+final reviewListBuildsProvider = StateProvider<int>((ref) => 0);
 
 final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   ref.watch(app.financialStoreRevisionProvider('needs_review'));
@@ -219,26 +217,17 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   final factsBySource = model.factsBySource;
   Fact? factFor(String id) => factsById[id] ?? factsStore.get(id);
   Map<String, Object?> enrich(Map<String, Object?> payload) {
-    final fact = payload['factId'] is String
-        ? factFor(payload['factId'] as String)
-        : null;
-    final event = payload['eventId'] is String
-        ? eventsStore.get(payload['eventId'] as String)
-        : null;
-    final source =
-        payload['sourceKey'] as String? ??
-        fact?.sourceKey ??
-        (event == null
-            ? null
-            : factFor(event.legs.first.factId)?.sourceKey);
-    final facts = source == null
-        ? const <Fact>[]
-        : (factsBySource[source] ?? factsStore.forSource(source));
-    final movement = facts.whereType<MovementFact>().firstOrNull;
+    final (:source, :hasReading, :movement) = reviewRowReading(
+      payload,
+      factFor: factFor,
+      eventFor: eventsStore.get,
+      factsOfSource: (source) =>
+          factsBySource[source] ?? factsStore.forSource(source),
+    );
     return {
       ...payload,
       'sourceKey': ?source,
-      'hasReading': movement != null || event != null,
+      'hasReading': hasReading,
       if (payload['candidates'] is List)
         'candidates': [
           for (final raw in payload['candidates'] as List)
@@ -269,7 +258,7 @@ final reviewItemsProvider = FutureProvider<List<LocalReviewItem>>((ref) async {
   var disposed = false;
   ref.onDispose(() => disposed = true);
   scheduleMicrotask(() {
-    if (!disposed) ref.read(_reviewListBuildsProvider.notifier).state++;
+    if (!disposed) ref.read(reviewListBuildsProvider.notifier).state++;
   });
   return [
     for (final target in candidates.billTargets)

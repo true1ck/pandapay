@@ -14,6 +14,7 @@ import 'package:pandapay/features/sms_v2/ledger/json_fingerprint.dart';
 import 'package:pandapay/features/sms_v2/ledger/providers.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
+import 'package:pandapay/features/sms_v2/ui/review_clustering.dart';
 import 'package:pandapay/features/sms_v2/storage/row_decode_cache.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
@@ -206,7 +207,7 @@ void main() {
   });
 
   group('review count', () {
-    test('equals the length of the full review list', () async {
+    test('is the number of questions in the full review list', () async {
       // Ten purchases filed under Other at one merchant (already sorted into
       // Spending, so they are never asked about), two confirmed cards with an
       // unresolved card-bill payment, and open review rows of two kinds.
@@ -277,16 +278,16 @@ void main() {
       );
       addTearDown(container.dispose);
       final items = await container.read(reviewItemsProvider.future);
-      final count = await container.read(reviewItemCountProvider.future);
       expect(items.map((i) => i.kind).toSet(), {
         'bill_target',
         'template',
         'link',
       });
       expect(items.any((i) => i.kind == 'category'), isFalse);
-      expect(count, items.length);
+      // Three different questions: the bill payment, the format, the link.
+      final count = await container.read(needsReviewCountProvider.future);
+      expect(count, reviewQuestionCount(items, reviewKindOf));
       expect(count, 1 + 2);
-      expect(await container.read(needsReviewCountProvider.future), items.length);
 
       // Resolving an item notifies no revision; screens invalidate the list,
       // and the badge must follow without the badge building the list itself.
@@ -296,13 +297,9 @@ void main() {
       container.invalidate(reviewItemsProvider);
       final after = await container.read(reviewItemsProvider.future);
       await Future<void>.delayed(Duration.zero);
-      final countAfter = await container.read(reviewItemCountProvider.future);
-      expect(countAfter, after.length);
+      final countAfter = await container.read(needsReviewCountProvider.future);
+      expect(countAfter, reviewQuestionCount(after, reviewKindOf));
       expect(countAfter, count - 1);
-      expect(
-        await container.read(needsReviewCountProvider.future),
-        after.length,
-      );
     });
   });
 

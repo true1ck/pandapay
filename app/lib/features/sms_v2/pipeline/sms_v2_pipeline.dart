@@ -318,7 +318,11 @@ class SmsV2Pipeline {
           _db.execute(
             'INSERT INTO v2_review_items '
             '(namespace, review_id, kind, payload, status) VALUES (?, ?, ?, ?, ?) '
-            'ON CONFLICT(namespace,review_id) DO UPDATE SET kind=excluded.kind,payload=excluded.payload,status=excluded.status',
+            'ON CONFLICT(namespace,review_id) DO UPDATE SET kind=excluded.kind,payload=excluded.payload,status=excluded.status '
+            // A question the person answered by adding the transaction
+            // themselves stays answered: reading the message again (every
+            // unknown message is, when the rules change) must not ask again.
+            "WHERE json_extract(v2_review_items.payload,'\$.answer') IS NOT 'added'",
             [
               namespace,
               '$source:$index',

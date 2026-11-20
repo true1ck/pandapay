@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:uuid/uuid.dart';
 import '../../app/design/saved_offline.dart';
 import '../../app/design/refresh_views.dart';
 import '../sms_v2/similar/similar_changes.dart';
@@ -61,6 +62,40 @@ DateTime withPickedDate(DateTime? current, DateTime picked) {
   );
 }
 
+/// The id prefix of a draft: a transaction that does not exist yet. A review
+/// question about a payment with no transaction (a bill receipt with no debit,
+/// a message the app cannot read) opens this screen on a draft filled in with
+/// what the question knows; saving adds the transaction.
+const kDraftTransactionPrefix = 'draft:';
+
+/// What saving a draft leaves behind, handed back to the screen that opened it
+/// (the review question reads it as "answered", and keeps it for History).
+class AddedTransaction {
+  const AddedTransaction({
+    required this.clientMutationId,
+    required this.amount,
+    required this.occurredAt,
+    required this.entryKind,
+    this.merchantName,
+  });
+
+  /// The id the phone's queue holds it under; its row shows as
+  /// `local-outbox:<id>` until it is delivered.
+  final String clientMutationId;
+  final Money amount;
+  final DateTime occurredAt;
+  final TxnEntryKind entryKind;
+  final String? merchantName;
+
+  Map<String, Object?> toJson() => {
+    'clientMutationId': clientMutationId,
+    'amountMinor': amount.paise,
+    'occurredAt': occurredAt.toUtc().toIso8601String(),
+    'entryKind': entryKind.wireValue,
+    'merchantName': ?merchantName,
+  };
+}
+
 /// D3 Edit Transaction (ui-spec Group D). All fields editable, explicit
 /// save/cancel; recomputes caps/milestones on save — that recompute is
 /// entirely server-side (Task C-0c's PATCH /transactions/:id, verified
@@ -108,6 +143,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   TxnRail _rail = TxnRail.unknown;
   bool _initialized = false;
   bool _saving = false;
+
+  /// True for a draft (see [kDraftTransactionPrefix]): save adds, not patches.
+  bool get _isDraft => widget.transactionId.startsWith(kDraftTransactionPrefix);
+
+  /// The id a draft is queued under. Kept for the life of the screen, so a save
+  /// retried after a failure queues one transaction, not two.
+  String? _draftMutationId;
   bool _submitted = false;
   // After a saved SMS edit: the others that look the same, offered once the edit is committed.
   SimilarChanges? _similar;
@@ -212,6 +254,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     if (amount == null || !amount.isFinite || amount <= 0) {
       setState(() => _submitted = true);
       setState(() => _error = 'Enter a valid amount greater than zero.');
+      return;
+    }
+    if (_isDraft) {
+      await _saveDraft(amount);
       return;
     }
     // A self-transfer decision runs several server checks and rules (it can
@@ -383,6 +429,79 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             ? 'The phone is busy reading your messages. Wait a moment and save again.'
             : userFacingErrorMessage(e),
       );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  /// Adds the transaction a review question described, the way Quick add does:
+  /// queued on the phone first (Activity shows it at once), delivered in the
+  /// background. Closes with an [AddedTransaction], which the question reads as
+  /// "answered".
+  Future<void> _saveDraft(double amount) async {
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      final outbox = await ref.read(outboxRepositoryProvider.future);
+      final mutationId = _draftMutationId ??= const Uuid().v4();
+      final merchant = _merchantController.text.trim();
+      // A draft that does not know how it was paid claims no card: "other"
+      // moves no card state.
+      final instrument = _instrument ?? TxnInstrument.other;
+      await outbox.enqueue(
+        userCardId:
+            instrument == TxnInstrument.creditCard ||
+                instrument == TxnInstrument.debitCard
+            ? _userCardId
+            : null,
+        amount: Money.fromRupees(amount),
+        categoryId: _categoryId,
+        merchantName: merchant.isEmpty ? null : merchant,
+        occurredAt: _occurredAt,
+        note: _originalEntry?.note,
+        instrument: instrument,
+        entryKind: _entryKind,
+        clientMutationId: mutationId,
+        paymentMethod: _paymentMethod,
+      );
+      if (_tagIds.isNotEmpty) {
+        try {
+          await ref.read(transactionTagsProvider)?.assign([
+            'local-outbox:$mutationId',
+          ], _tagIds.toList());
+        } catch (_) {
+          // The transaction is queued; tags can be added from it afterwards.
+        }
+      }
+      ref.invalidate(pendingOutboxCountProvider);
+      ref.read(outboxFlushRequestProvider.notifier).state++;
+      await refreshViews(ref);
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      final offline = ref.read(isOnlineProvider).valueOrNull == false;
+      context.pop(
+        AddedTransaction(
+          clientMutationId: mutationId,
+          amount: Money.fromRupees(amount),
+          occurredAt: _occurredAt ?? DateTime.now(),
+          entryKind: _entryKind,
+          merchantName: merchant.isEmpty ? null : merchant,
+        ),
+      );
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            offline
+                ? savedOfflineCopy
+                : 'Added ${Money.fromRupees(amount).format()}',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Add from review failed: $e');
+      if (mounted) setState(() => _error = userFacingErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1469,6 +1588,12 @@ final _editTransactionProvider =
       ({String id, TransactionEntry? initialEntry})
     >((ref, request) async {
       final id = request.id;
+      if (id.startsWith(kDraftTransactionPrefix)) {
+        // Nothing to fetch: the draft only exists on this phone.
+        final draft = request.initialEntry;
+        if (draft == null) throw StateError('A draft needs its entry');
+        return draft;
+      }
       final repo = ref.watch(userCardsRepositoryProvider);
       // Activity already has the row the user tapped. Prefer that row, then
       // the in-memory list/cache, so an expired token cannot turn a usable

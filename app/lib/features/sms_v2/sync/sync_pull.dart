@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
+import '../../../data/cached_regexp.dart';
 import '../../../data/local/financial_store.dart';
 import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
@@ -56,10 +57,106 @@ class SyncPull {
     final running = _running;
     if (running != null) return running;
     late final Future<int> operation;
-    operation = _pull().whenComplete(() {
+    operation = _recordOutcome(_pull()).whenComplete(() {
       if (identical(_running, operation)) _running = null;
     });
     return _running = operation;
+  }
+
+  /// Where the last failed pull is kept for the phone details (not uploaded).
+  /// A phone that cannot save a page asks for the same page again on every
+  /// sync; without a record the only trace was a count of failures.
+  static const problemKey = 'pull:error';
+
+  Future<int> _recordOutcome(Future<int> run) async {
+    try {
+      final pages = await run;
+      if (pages > 0) _forgetProblem();
+      return pages;
+    } catch (error) {
+      _rememberProblem(error);
+      rethrow;
+    }
+  }
+
+  void _rememberProblem(Object error) {
+    try {
+      final text = '$error'.replaceAll(cachedRegExp(r'\s+'), ' ').trim();
+      _state.put(
+        problemKey,
+        jsonEncode({
+          'at': DateTime.now().toUtc().toIso8601String(),
+          'type': error.runtimeType.toString(),
+          'message': text.length > 240 ? '${text.substring(0, 240)}…' : text,
+        }),
+      );
+    } catch (_) {
+      // The record is a convenience; never hide the real failure behind it.
+    }
+  }
+
+  void _forgetProblem() {
+    try {
+      if (_state.get(problemKey) == null) return;
+      _db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+        namespace,
+        problemKey,
+      ]);
+    } catch (_) {
+      // Left for the next successful pull to clear.
+    }
+  }
+
+  /// The answers in [results] that pass the contract's own check, applied to
+  /// the answers alone: what is kept ahead of the page is exactly what the page
+  /// itself would have kept. One bad answer does not cost the good ones.
+  List<Map> _validAnswers(List results) {
+    bool valid(List items) => validateSyncResponseJson({
+      'cursor': 'answers',
+      'instruments': <Object?>[],
+      'events': <Object?>[],
+      'ledger': <Object?>[],
+      'aiResults': items,
+      'corrections': <Object?>[],
+      'latestBundleVersion': 0,
+    }).ok;
+    if (valid(results)) return [for (final result in results) result as Map];
+    return [
+      for (final result in results)
+        if (valid([result])) result as Map,
+    ];
+  }
+
+  /// Keeps the AI answers a response carries, on their own, before the page is
+  /// checked or saved. The page is all-or-nothing, so a page that fails on this
+  /// phone (a row it cannot save, a shape it does not know) used to take the
+  /// answers down with it and be asked for again, for ever, while the same
+  /// answers worked on another phone. An answer says nothing about entities:
+  /// keeping it again when the page is asked for again changes nothing.
+  void _keepAiAnswers(Object? decoded) {
+    final results = decoded is Map ? decoded['aiResults'] : null;
+    if (results is! List || results.isEmpty) return;
+    final answers = _validAnswers(results);
+    if (answers.isEmpty) return;
+    financial.batch(() {
+      // One transaction for all of them: a commit per answer is a disk sync each.
+      _db.execute('SAVEPOINT sms_v2_ai');
+      try {
+        for (final result in answers) {
+          _state.put('ai:${result['templateHash']}', jsonEncode(result));
+          // A replacement draft (new id) is checked afresh on this phone.
+          DraftVerdictStore(_state).clearIfReplaced(
+            '${result['templateHash']}',
+            DraftVerdictStore.draftIdOf(result),
+          );
+        }
+        _db.execute('RELEASE SAVEPOINT sms_v2_ai');
+      } catch (_) {
+        _db.execute('ROLLBACK TO SAVEPOINT sms_v2_ai');
+        _db.execute('RELEASE SAVEPOINT sms_v2_ai');
+        rethrow;
+      }
+    });
   }
 
   Future<int> _pull() async {
@@ -84,6 +181,7 @@ class SyncPull {
           .timeout(const Duration(seconds: 30));
       if (!accountIsCurrent() || response.statusCode != 200) return pages;
       final decoded = jsonDecode(response.body);
+      _keepAiAnswers(decoded);
       final check = validateSyncResponseJson(decoded);
       if (!check.ok) throw ContractException(check.errors);
       final body = (decoded as Map).cast<String, Object?>();
@@ -411,14 +509,8 @@ class SyncPull {
           );
           record('ledger', incoming.entryId);
         }
-        for (final result in body['aiResults'] as List) {
-          _state.put('ai:${result['templateHash']}', jsonEncode(result));
-          // A replacement draft (new id) is checked afresh on this phone.
-          DraftVerdictStore(_state).clearIfReplaced(
-            '${result['templateHash']}',
-            DraftVerdictStore.draftIdOf(result as Map),
-          );
-        }
+        // The AI answers in body['aiResults'] were kept before this page was
+        // checked ([_keepAiAnswers]), so a failure below does not lose them.
         for (final result in body['corrections'] as List) {
           _state.put('correction:${result['caseId']}', jsonEncode(result));
         }

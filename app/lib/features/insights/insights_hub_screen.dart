@@ -17,6 +17,7 @@ import 'insights_overview.dart';
 import 'rewards/rewards_report.dart' show rewardCardName;
 import 'rewards/rewards_filter.dart' show rewardsLocation;
 import 'subscription_view.dart' show subscriptionTileHeadline;
+import '../sms_v2/providers/review_question_count.dart' show reviewsLeftText;
 import '../shared_expenses/runtime/shared_providers.dart';
 import '../cards/card_visual.dart';
 
@@ -314,7 +315,7 @@ class InsightsHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpace.xxl),
           if (needsReviewCount > 0 || duplicateCount > 0) ...[
-            _ReviewRow(
+            HubReviewRow(
               needsReview: needsReviewCount,
               duplicates: duplicateCount,
             ),
@@ -415,11 +416,16 @@ class _ActivityLink extends StatelessWidget {
 /// present, rarely relevant. Now they surface only when they have work in
 /// them, and above the grid rather than buried in it, because an item
 /// waiting on the user outranks anything they might browse to.
-class _ReviewRow extends StatelessWidget {
+class HubReviewRow extends StatelessWidget {
+  /// Reviews left: the questions on the Needs review screen, not messages.
   final int needsReview;
   final int duplicates;
 
-  const _ReviewRow({required this.needsReview, required this.duplicates});
+  const HubReviewRow({
+    super.key,
+    required this.needsReview,
+    required this.duplicates,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -428,10 +434,8 @@ class _ReviewRow extends StatelessWidget {
         if (needsReview > 0)
           _ReviewTile(
             icon: Icons.mark_email_unread_outlined,
-            label: needsReview == 1
-                ? '1 message needs review'
-                : '$needsReview messages need review',
-            detail: 'We couldn\'t tell which card these belong to.',
+            label: reviewsLeftText(needsReview),
+            detail: 'Quick questions about messages we couldn\'t read on our own.',
             onTap: () => context.push(AppRoute.needsReview),
           ),
         if (needsReview > 0 && duplicates > 0)
