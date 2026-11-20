@@ -140,6 +140,33 @@ Still the owner's decision:
    swapped, the largest remaining software-side saving).
 3. `auth.pandapath.in` now answers 502 from nginx; a `return 404` server block would be tidier.
 
+### Admin gateway and SMS template worker (21 Nov, measured under Linux in `node:22-alpine`)
+
+- **Template worker:** not big in itself. It starts at 75 MB, of which 49 MB is the Node program file (shared between
+  processes from the same image) and ~16 MB is compiling the SMS contract schemas every SMS v2 service needs. Its log
+  shows 47–58 MB at rest and a 110 MB peak during AI jobs; Node keeps garbage until its heap limit pushes it, which is
+  why it once showed 140 MB in swap. Not loading the admin server it imports would save ~2 MB (its own modules already
+  pull in the same libraries), so that was not changed. Nothing to fix without risking jobs.
+- **Admin gateway:** parsed every admin API reply and serialised it again to forward it; the 14 MB catalogue peaked
+  at 161 MB against 72 MB for a small request. It now streams the bytes (`auth/src/admin/server.js` `streamReply`):
+  ~103 MB peak, no JSON heap growth, same bytes/status/content type/no-store to the console. Fixed on the way: deleting a
+  rule-family row returned 503 through the gateway (an empty 204 crashed the old read loop) although the delete worked.
+  Dev `96530804`.
+- **Admin API `/admin/cards`:** builds the 14 MB reply from row objects. Having Postgres produce the JSON would save
+  most of that, but dates and numbers would come out in a different format; not done (owner: no visible changes).
+
+## 4c. One combined production deploy (owner's plan, 21 Nov)
+
+1. `prod` branch: `18d5bddd` (sync limit, wallet coalescer, warm pool) and `d0cb1241` (store-review login, legacy
+   4-digit; `REVIEWER_OTP_*` already in the host `.env`) are pushed but not deployed. Cherry-pick dev `96530804`
+   (admin gateway streaming) on top, then push `prod` once; the workflow deploys API, auth and workers.
+2. Admin gateway uses the prod auth image: after the deploy, on the host
+   `cd /home/ubuntu/pandapay-secrets/admin-setup && docker compose -p pandapay-admin -f compose.admin.yml --env-file ../admin.env --profile admin up -d --force-recreate --no-deps admin-gateway`
+   (add `admin-api` to bring the admin API up to date too; it has run 10-day-old code).
+3. Check: iPhone sync gives no 429; `/user-cards` timings; console card list opens; deleting a rule-family row says
+   success; `docker stats` for the gateway after opening the card list.
+4. No app build is needed: no request or reply format changed.
+
 ## 5. Not done here
 - Deploying: all the server changes above need a production deploy (owner's go-ahead); the nginx changes are a separate, manual config change on the host.
 - One app-open call (`GET /bootstrap`) instead of ~50: needs an app change and a server route; the biggest remaining win for app-open speed.
