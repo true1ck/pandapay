@@ -3292,15 +3292,23 @@ Map<String, CommandHandler> commandHandlersFor(
     () => repo.ignoreTransaction(
       p['id'] as String,
       reason: p['reason'] as String,
+      editedAt: _editedAt(p['editedAt']),
+      onStale: () => onStaleTransactionEdit?.call(p['id'] as String),
     ),
     reason: p['reason'] as String,
   ),
   OutboxCommand.restoreTransaction: (p) => restoreAlreadyDoneIsDone(
-    () => repo.restoreTransaction(p['id'] as String),
+    () => repo.restoreTransaction(
+      p['id'] as String,
+      editedAt: _editedAt(p['editedAt']),
+      onStale: () => onStaleTransactionEdit?.call(p['id'] as String),
+    ),
   ),
   OutboxCommand.setSpendExclusion: (p) => repo.setSpendExclusion(
     p['id'] as String,
     excluded: p['excluded'] as bool,
+    editedAt: _editedAt(p['editedAt']),
+    onStale: () => onStaleTransactionEdit?.call(p['id'] as String),
   ),
   // Both carry a client mutation id the server uses to ignore a repeat, so a
   // lost reply cannot count a visit or a correction twice.

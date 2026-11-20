@@ -4,6 +4,7 @@ import '../api_exception.dart';
 import '../connectivity/server_backoff.dart';
 import '../local/app_database.dart';
 import '../local/queue_retry_policy.dart';
+import '../server_clock.dart';
 
 /// One queued command, as seen by a screen that overlays it.
 class PendingCommand {
@@ -65,8 +66,13 @@ Future<void> undoIfRefused(
 ///   server id (`v2:...`, `projection:...`): the server cannot succeed for it,
 ///   and retrying every 30 minutes would keep the pending badge up for ever.
 class CommandOutbox {
-  CommandOutbox(this._appDb, {required this.namespace, DateTime Function()? now})
-    : _now = now ?? DateTime.now {
+  CommandOutbox(
+    this._appDb, {
+    required this.namespace,
+    DateTime Function()? now,
+    DateTime Function()? editClock,
+  }) : _now = now ?? DateTime.now,
+       _editClock = editClock ?? ServerClock.instance.now {
     _appDb.db.execute('''
       CREATE TABLE IF NOT EXISTS command_outbox (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,6 +96,10 @@ class CommandOutbox {
   final String namespace;
   final DateTime Function() _now;
 
+  /// The time of the person's action, stamped on the commands in
+  /// [editTimedKinds] (the server-adjusted phone clock).
+  final DateTime Function() _editClock;
+
   /// True when the last [flush] stopped because the server could not be
   /// reached (H3-3): a second pass right after it would only cost another
   /// timeout.
@@ -99,6 +109,19 @@ class CommandOutbox {
   /// field patch): a new command of the kind is merged into the queued one
   /// instead of replacing it.
   static const mergedKinds = {'transaction_typed_fields', 'card_fields_patch'};
+
+  /// Kinds whose server route keeps the newest of the person's choices on the
+  /// same transaction (delete / restore, leave out of spending). The time the
+  /// person acted is stamped into the payload as `editedAt` when it is queued,
+  /// not when it is finally sent, so a delivery that arrives late from an
+  /// offline phone cannot undo a newer choice made on another device. These are
+  /// the values of `OutboxCommand.ignoreTransaction`, `restoreTransaction` and
+  /// `setSpendExclusion`.
+  static const editTimedKinds = {
+    'ignore_transaction',
+    'restore_transaction',
+    'set_spend_exclusion',
+  };
 
   /// Queues [kind] for [target]. A queued command of the same kind and target
   /// is replaced, since only the latest intent matters (see [mergedKinds]). Any queued command in
@@ -145,6 +168,12 @@ class CommandOutbox {
             if (!(changesCategory && categoryKeys.contains(e.key)))
               e.key as String: e.value,
         ...payload,
+      };
+    }
+    if (editTimedKinds.contains(kind) && payload['editedAt'] == null) {
+      payload = {
+        ...payload,
+        'editedAt': _editClock().toUtc().toIso8601String(),
       };
     }
     _appDb.db.execute(

@@ -276,6 +276,79 @@ void main() {
     },
   );
 
+  group('delete, restore, note and leave-out carry when the person acted', () {
+    final at = DateTime.utc(2026, 11, 20, 9, 30);
+    UserCardsRepository repo(
+      Future<http.Response> Function(http.Request) answer,
+      List<http.Request> seen,
+    ) => UserCardsRepository(
+      apiBaseUrl: 'https://api.test',
+      accessToken: 'token',
+      client: MockClient((request) {
+        seen.add(request);
+        return answer(request);
+      }),
+    );
+    final ok = http.Response(jsonEncode({'transaction': {'id': 't'}}), 200);
+    final stale = http.Response(
+      jsonEncode({'transaction': {'id': 't'}, 'stale': true}),
+      200,
+    );
+
+    test('the time is sent when given, and omitted when not (an older queue)',
+        () async {
+      final seen = <http.Request>[];
+      final r = repo((_) async => ok, seen);
+      await r.ignoreTransaction('t', reason: 'refund', editedAt: at);
+      await r.restoreTransaction('t', editedAt: at);
+      await r.setSpendExclusion('t', excluded: true, editedAt: at);
+      await r.updateTransactionNote('t', 'n', editedAt: at);
+      for (final request in seen) {
+        expect(jsonDecode(request.body)['editedAt'], '2026-11-20T09:30:00.000Z');
+      }
+      expect(jsonDecode(seen[0].body)['reason'], 'refund');
+      expect(jsonDecode(seen[2].body)['excluded'], true);
+
+      seen.clear();
+      await r.ignoreTransaction('t', reason: 'refund');
+      await r.restoreTransaction('t');
+      await r.setSpendExclusion('t', excluded: false);
+      await r.updateTransactionNote('t', null);
+      for (final request in seen) {
+        expect(jsonDecode(request.body).containsKey('editedAt'), isFalse);
+      }
+    });
+
+    test('a stale answer is reported once per call, a normal one is not',
+        () async {
+      var stales = 0;
+      final r = repo((_) async => stale, []);
+      await r.ignoreTransaction('t', reason: 'refund', onStale: () => stales++);
+      await r.restoreTransaction('t', onStale: () => stales++);
+      await r.setSpendExclusion('t', excluded: true, onStale: () => stales++);
+      await r.updateTransactionNote('t', 'n', onStale: () => stales++);
+      expect(stales, 4);
+
+      final normal = repo((_) async => ok, []);
+      await normal.ignoreTransaction('t', reason: 'refund', onStale: () => stales++);
+      await normal.restoreTransaction('t', onStale: () => stales++);
+      expect(stales, 4);
+    });
+
+    test('an answer that is not JSON is never mistaken for stale, and failures still throw',
+        () async {
+      var stales = 0;
+      final odd = repo((_) async => http.Response('ok', 200), []);
+      await odd.ignoreTransaction('t', reason: 'refund', onStale: () => stales++);
+      expect(stales, 0);
+      final refused = repo((_) async => http.Response('{"error":"x"}', 409), []);
+      expect(
+        () => refused.restoreTransaction('t', editedAt: at, onStale: () => stales++),
+        throwsA(isA<ApiException>()),
+      );
+    });
+  });
+
   test(
     'accepts a 200 when discovery links an existing card placeholder',
     () async {

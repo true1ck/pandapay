@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { safeErrorCode } = require('../src/safeErrorCode');
+const editTime = require('../src/edit_time');
 
 const src = fs.readFileSync(path.join(__dirname, '../src/index.js'), 'utf8').replace(/\r\n/g, '\n');
 const start = src.indexOf("app.put('/transactions/:id/spend-exclusion'");
@@ -36,9 +37,9 @@ function load({ entryKind = 'spend', found = true, dbError = false } = {}) {
     });
   };
   new Function(
-    'app', 'requireAuth', 'withUserClient', 'safeErrorCode',
+    'app', 'requireAuth', 'withUserClient', 'safeErrorCode', 'parseEditTime', 'isStaleEdit', 'stampClockSql',
     `${uuidDecl}\n${src.slice(start, end)}`,
-  )(app, () => {}, withUserClient, safeErrorCode);
+  )(app, () => {}, withUserClient, safeErrorCode, editTime.parseEditTime, editTime.isStaleEdit, editTime.stampClockSql);
   return async (params, body) => {
     const res = {
       code: 200, body: null,

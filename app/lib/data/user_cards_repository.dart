@@ -1833,16 +1833,40 @@ class UserCardsRepository {
   /// [updateTransaction] — see PATCH /transactions/:id/note's doc-comment
   /// in api/ for why a note must not trigger the reward-state recompute
   /// that a full transaction edit does. Pass null to clear.
-  Future<void> updateTransactionNote(String transactionId, String? note) async {
+  ///
+  /// [editedAt] is when the person wrote it (the server-adjusted phone clock):
+  /// a note written later on another device then stands, and [onStale] is told
+  /// when the server kept one.
+  Future<void> updateTransactionNote(
+    String transactionId,
+    String? note, {
+    DateTime? editedAt,
+    void Function()? onStale,
+  }) async {
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$transactionId/note'),
       headers: _headers,
-      body: jsonEncode({'note': note}),
+      body: jsonEncode({
+        'note': note,
+        if (editedAt != null) 'editedAt': editedAt.toUtc().toIso8601String(),
+      }),
     );
     if (response.statusCode != 200) {
       throw ApiException(
         'note update failed: ${response.statusCode} ${response.body}',
       );
+    }
+    if (onStale != null && _repliedStale(response.body)) onStale();
+  }
+
+  /// 200 with `stale: true`: a newer change to the same thing already stands on
+  /// the server and this one changed nothing.
+  static bool _repliedStale(String body) {
+    try {
+      final reply = jsonDecode(body);
+      return reply is Map && reply['stale'] == true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -2318,12 +2342,25 @@ class UserCardsRepository {
   }
 
   /// Task D-2 (ui-spec D2 "mark ignored (refund/reversal/transfer)").
-  Future<void> ignoreTransaction(String id, {required String reason}) async {
+  ///
+  /// [editedAt] is when the person deleted it, so a later restore on another
+  /// device is not undone by this one arriving late; [onStale] is told when
+  /// the server kept the later choice.
+  Future<void> ignoreTransaction(
+    String id, {
+    required String reason,
+    DateTime? editedAt,
+    void Function()? onStale,
+  }) async {
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions/$id/ignore'),
           headers: _headers,
-          body: jsonEncode({'reason': reason}),
+          body: jsonEncode({
+            'reason': reason,
+            if (editedAt != null)
+              'editedAt': editedAt.toUtc().toIso8601String(),
+          }),
         )
         .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
@@ -2331,13 +2368,23 @@ class UserCardsRepository {
         'POST /transactions/:id/ignore failed: ${response.statusCode} ${response.body}',
       );
     }
+    if (onStale != null && _repliedStale(response.body)) onStale();
   }
 
-  Future<void> restoreTransaction(String id) async {
+  /// [editedAt] and [onStale] as for [ignoreTransaction].
+  Future<void> restoreTransaction(
+    String id, {
+    DateTime? editedAt,
+    void Function()? onStale,
+  }) async {
     final response = await _client
         .post(
           Uri.parse('$apiBaseUrl/transactions/$id/restore'),
           headers: _headers,
+          body: jsonEncode({
+            if (editedAt != null)
+              'editedAt': editedAt.toUtc().toIso8601String(),
+          }),
         )
         .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
@@ -2345,17 +2392,30 @@ class UserCardsRepository {
         'POST /transactions/:id/restore failed: ${response.statusCode} ${response.body}',
       );
     }
+    if (onStale != null && _repliedStale(response.body)) onStale();
   }
 
   /// Counts the transaction in, or leaves it out of, the person's spending.
   /// Safe to repeat: it sets a value, it does not toggle. It does not touch
   /// rewards, caps or card state, so the row stays exactly as the bank has it.
-  Future<void> setSpendExclusion(String id, {required bool excluded}) async {
+  ///
+  /// [editedAt] is when the person chose it, so a later choice on another
+  /// device stands; [onStale] is told when the server kept it.
+  Future<void> setSpendExclusion(
+    String id, {
+    required bool excluded,
+    DateTime? editedAt,
+    void Function()? onStale,
+  }) async {
     final response = await _client
         .put(
           Uri.parse('$apiBaseUrl/transactions/$id/spend-exclusion'),
           headers: _headers,
-          body: jsonEncode({'excluded': excluded}),
+          body: jsonEncode({
+            'excluded': excluded,
+            if (editedAt != null)
+              'editedAt': editedAt.toUtc().toIso8601String(),
+          }),
         )
         .timeout(_transactionRequestTimeout);
     if (response.statusCode != 200) {
@@ -2363,6 +2423,7 @@ class UserCardsRepository {
         'PUT /transactions/:id/spend-exclusion failed: ${response.statusCode} ${response.body}',
       );
     }
+    if (onStale != null && _repliedStale(response.body)) onStale();
   }
 
   /// Task D-5 (ui-spec D5 Duplicate Review). Pending pairs only.

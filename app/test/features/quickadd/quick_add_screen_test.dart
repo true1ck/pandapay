@@ -77,7 +77,7 @@ class _FakeUserCardsRepository extends UserCardsRepository {
     : super(apiBaseUrl: 'http://localhost', accessToken: 't');
 
   @override
-  Future<void> ignoreTransaction(String id, {required String reason}) async {}
+  Future<void> ignoreTransaction(String id, {required String reason, DateTime? editedAt, void Function()? onStale}) async {}
 }
 
 /// Save stays in the sticky footer while the transaction form scrolls.
