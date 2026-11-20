@@ -279,6 +279,36 @@ class SpendingHomeWidgetProvider : PandaPayWidgetProvider() {
 }
 
 class BestCardWidgetProvider : PandaPayWidgetProvider() {
+    /** One rotating card pick written by the app (see HomeWidgetService). */
+    private data class Pick(
+        val caption: String,
+        val name: String,
+        val value: String,
+        val reason: String,
+        val art: String,
+    )
+
+    private fun picks(data: SharedPreferences): List<Pick> {
+        val raw = data.getString("card_picks_json", null)?.takeIf { it.isNotBlank() }
+            ?: return emptyList()
+        return try {
+            val array = org.json.JSONArray(raw)
+            (0 until array.length()).mapNotNull { index ->
+                val row = array.getJSONObject(index)
+                val name = row.optString("name")
+                if (name.isBlank()) null else Pick(
+                    caption = row.optString("caption"),
+                    name = name,
+                    value = row.optString("value"),
+                    reason = row.optString("reason"),
+                    art = row.optString("art"),
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     override fun buildWidget(
         context: Context,
         manager: AppWidgetManager,
@@ -289,20 +319,33 @@ class BestCardWidgetProvider : PandaPayWidgetProvider() {
     ): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.best_card_widget)
         setImage(views, R.id.widget_brand_mark, data.getString("widget_brand_mark_path", null))
-        setImage(views, R.id.widget_card_art, data.getString("best_card_art_path", null))
         val hasCard = !data.getBoolean("best_card_none", true)
+        // Same 20 minute rotation as the iPhone widget, so the card changes
+        // with what you spend on instead of repeating one card.
+        val list = picks(data)
+        val pick = if (list.isEmpty()) null else
+            list[((System.currentTimeMillis() / (20 * 60 * 1000L)) % list.size).toInt()]
+        setImage(
+            views,
+            R.id.widget_card_art,
+            pick?.art?.takeIf { it.isNotBlank() } ?: data.getString("best_card_art_path", null),
+        )
         views.setTextViewText(
             R.id.widget_card_name,
-            if (hasCard) data.getString("best_card_name", "") else "No card yet",
+            pick?.name ?: if (hasCard) data.getString("best_card_name", "") else "No card yet",
         )
         views.setTextViewText(
             R.id.widget_card_value,
-            if (hasCard) data.getString("best_card_value_formatted", "")
-            else "Open PandaPay to see your card picks",
+            when {
+                pick != null -> listOf(pick.value, pick.reason).filter { it.isNotBlank() }.joinToString(" · ")
+                hasCard -> data.getString("best_card_value_formatted", "")
+                else -> "Open PandaPay to see your card picks"
+            },
         )
         views.setTextViewText(
             R.id.widget_card_reason,
-            data.getString("best_card_reason", "")?.takeIf(String::isNotBlank)
+            pick?.caption?.takeIf { it.isNotBlank() }
+                ?: data.getString("best_card_reason", "")?.takeIf(String::isNotBlank)
                 ?: "Recommended for your Home selection",
         )
         views.setOnClickPendingIntent(

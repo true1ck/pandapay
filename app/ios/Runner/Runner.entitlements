@@ -8,5 +8,12 @@
 	<array>
 		<string>applinks:pandapay.pandapath.live</string>
 	</array>
+	<!-- Shared with HomeWidgetExtension: how the widgets read what
+	     home_widget_service.dart writes. Must match the extension's own
+	     entitlements and HomeWidgetService.iosAppGroupId. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.pandapay.pandapay.homewidget</string>
+	</array>
 </dict>
 </plist>

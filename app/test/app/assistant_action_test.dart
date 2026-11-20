@@ -55,4 +55,26 @@ void main() {
       isNull,
     );
   });
+
+  test('the exact links the iOS and Android widgets open both parse', () {
+    expect(
+      parseAssistantUri(
+        Uri.parse('pandapay://assistant/spending?period=month'),
+      )?.action,
+      AssistantAction.spending,
+    );
+    expect(
+      parseAssistantUri(Uri.parse('pandapay://assistant/best-card'))?.action,
+      AssistantAction.bestCard,
+    );
+  });
+
+  test('isAssistantUri matches the assistant host only', () {
+    expect(isAssistantUri(Uri.parse('pandapay://assistant/best-card')), isTrue);
+    // Unknown paths still count, so the router never shows its error page.
+    expect(isAssistantUri(Uri.parse('pandapay://assistant/unknown')), isTrue);
+    expect(isAssistantUri(Uri.parse('pandapay://i/ABC123')), isFalse);
+    expect(isAssistantUri(Uri.parse('pandapay:///home')), isFalse);
+    expect(isAssistantUri(Uri.parse('https://assistant/spending')), isFalse);
+  });
 }

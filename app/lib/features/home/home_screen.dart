@@ -16,7 +16,7 @@ import '../../app/startup_timing.dart';
 import '../../app/tutorial_keys.dart';
 import '../../data/api_exception.dart';
 import '../../data/spend_reports_repository.dart'
-    show SpendBreakdownRow, SpendPeriod, SpendReportQuery;
+    show SpendPeriod, SpendReportQuery;
 import '../../data/user_cards_repository.dart'
     show BankAccountSummary, TransactionEntry, UserCard;
 import '../../main.dart' show MoneyText;
@@ -486,11 +486,19 @@ class _HomeWidgetSyncState extends ConsumerState<_HomeWidgetSync> {
       spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
     );
     final recommendationState = ref.watch(rankedRecommendationsProvider);
-    if (!reportState.hasValue || !recommendationState.hasValue) {
+    final picks = ref.watch(widgetCardPicksProvider);
+    final report = reportState.valueOrNull;
+    // No report (signed out, or the data could not be read) must never wipe
+    // what the widgets already show: they keep the last good numbers, which is
+    // what keeps them useful offline. Sign-out clears them on purpose elsewhere.
+    if (report == null) return const SizedBox.shrink();
+    // The card list can be slow or unavailable (no saved copy and no network).
+    // Spending does not depend on it, so a failed list only means the card
+    // parts keep what they had; a list still loading is waited for briefly.
+    final cardsReady = recommendationState.hasValue;
+    if (!cardsReady && !recommendationState.hasError) {
       return const SizedBox.shrink();
     }
-
-    final report = reportState.valueOrNull;
     final recommendations = recommendationState.valueOrNull ?? const [];
     Recommendation? recommendation;
     for (final candidate in recommendations) {
@@ -500,17 +508,18 @@ class _HomeWidgetSyncState extends ConsumerState<_HomeWidgetSync> {
       }
     }
     final fingerprint = [
-      report?.spend.total.paise ?? 0,
-      report?.spend.rewards.paise ?? 0,
-      for (final row in report?.byCategory ?? const <SpendBreakdownRow>[]) ...[
-        row.label,
-        row.total.paise,
-      ],
+      cardsReady,
+      report.spend.total.paise,
+      report.spend.rewards.paise,
+      for (final row in report.byCategory) ...[row.label, row.total.paise],
       recommendation?.card.id ?? '',
       recommendation?.expectedValue.paise ?? 0,
       recommendation == null || recommendation.reasonLines.isEmpty
           ? ''
           : recommendation.reasonLines.first,
+      for (final pick in picks)
+        '${pick.caption}:${pick.recommendation.card.id}:'
+            '${pick.recommendation.expectedValue.paise}',
     ].join('|');
     if (fingerprint != _lastScheduledFingerprint) {
       _lastScheduledFingerprint = fingerprint;
@@ -523,6 +532,8 @@ class _HomeWidgetSyncState extends ConsumerState<_HomeWidgetSync> {
               (_) => service.updateHomeWidgets(
                 report: report,
                 recommendation: recommendation,
+                picks: picks,
+                cardsReady: cardsReady,
                 nowIso: clock.now().toIso8601String(),
               ),
             )

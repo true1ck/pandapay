@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -10,6 +11,7 @@ void main() {
 
   const channel = MethodChannel('home_widget');
   final calls = <MethodCall>[];
+  var lastRendered = <String, Size>{};
 
   setUp(() {
     calls.clear();
@@ -69,7 +71,8 @@ void main() {
 
     final saveCalls = calls.where((call) => call.method == 'saveWidgetData');
     final updateCalls = calls.where((call) => call.method == 'updateWidget');
-    expect(updateCalls, hasLength(3));
+    // Two reloads of the three widgets: numbers first, then pictures and card.
+    expect(updateCalls, hasLength(6));
     expect(
       updateCalls.map((call) => call.arguments['qualifiedAndroidName']),
       containsAll([
@@ -212,6 +215,262 @@ void main() {
 
   test('detects an installed PandaPay widget', () async {
     expect(await service().isWidgetInstalled(), isTrue);
+  });
+
+  group('card picks and staged refresh', () {
+    Recommendation recFor(String id, double rate) =>
+        RecommendationEngine().rank(
+          RecommendationContext(
+            amount: Money.fromRupees(1000),
+            rail: TxnRail.swipe,
+          ),
+          [CardSnapshot(product: card(id, rate))],
+        ).first;
+
+    Map<String, dynamic> saved() => {
+      for (final call in calls.where((c) => c.method == 'saveWidgetData'))
+        call.arguments['id'] as String: call.arguments['data'],
+    };
+
+    test(
+      'writes each pick with what it is best for and its own card image',
+      () async {
+        await service().updateHomeWidgets(
+          report: null,
+          recommendation: null,
+          picks: [
+            WidgetCardPick(
+              caption: 'Best for Dining',
+              recommendation: recFor('a', 5),
+            ),
+            WidgetCardPick(
+              caption: 'Best for Fuel',
+              recommendation: recFor('b', 3),
+            ),
+          ],
+          nowIso: '2026-11-21T00:00:00.000',
+        );
+        final data = saved();
+        final picks =
+            jsonDecode(data[HomeWidgetService.cardPicksJsonKey] as String)
+                as List<dynamic>;
+        expect(picks.map((p) => (p as Map)['caption']), [
+          'Best for Dining',
+          'Best for Fuel',
+        ]);
+        expect(
+          picks.map((p) => (p as Map)['art']),
+          everyElement(startsWith('/test/pandapay_best_card_')),
+        );
+        expect((picks.first as Map)['reason'], '5% back');
+      },
+    );
+
+    test('the pick on screen follows the 20 minute slot', () async {
+      final first = DateTime.utc(2026, 11, 21, 0, 0);
+      final picks = [
+        WidgetCardPick(caption: 'one', recommendation: recFor('a', 5)),
+        WidgetCardPick(caption: 'two', recommendation: recFor('b', 3)),
+      ];
+      Future<String> shownAt(DateTime at) async {
+        calls.clear();
+        await service().updateHomeWidgets(
+          report: null,
+          recommendation: null,
+          picks: picks,
+          nowIso: at.toIso8601String(),
+        );
+        return saved()[HomeWidgetService.cardCaptionKey] as String;
+      }
+
+      final a = await shownAt(first);
+      final b = await shownAt(first.add(widgetPickRotation));
+      expect(a, isNot(b));
+    });
+
+    test(
+      'numbers are written and the widgets reloaded before the pictures',
+      () async {
+        await service().updateHomeWidgets(
+          report: null,
+          recommendation: null,
+          nowIso: '2026-11-21T00:00:00.000',
+        );
+        final firstReload = calls.indexWhere((c) => c.method == 'updateWidget');
+        final firstPicture = calls.indexWhere(
+          (c) =>
+              c.method == 'saveWidgetData' &&
+              (c.arguments['id'] as String).endsWith('details_path'),
+        );
+        final totalWrite = calls.indexWhere(
+          (c) =>
+              c.method == 'saveWidgetData' &&
+              c.arguments['id'] == HomeWidgetService.spendTotalKey,
+        );
+        expect(totalWrite, lessThan(firstReload));
+        expect(firstReload, lessThan(firstPicture));
+      },
+    );
+
+    test(
+      'cards not ready leaves the card keys and card pictures alone',
+      () async {
+        await service().updateHomeWidgets(
+          report: null,
+          recommendation: null,
+          cardsReady: false,
+          nowIso: '2026-11-21T00:00:00.000',
+        );
+        final data = saved();
+        for (final key in [
+          HomeWidgetService.cardNameKey,
+          HomeWidgetService.cardValueKey,
+          HomeWidgetService.cardPicksJsonKey,
+          HomeWidgetService.noCardKey,
+          HomeWidgetService.compactDetailsPathKey,
+          HomeWidgetService.expandedMediumDetailsPathKey,
+        ]) {
+          expect(data.containsKey(key), isFalse, reason: key);
+        }
+        // The spending side still updates.
+        expect(data[HomeWidgetService.spendTotalKey], isNotNull);
+        expect(
+          data[HomeWidgetService.spendingMediumDetailsPathKey],
+          startsWith('/test/'),
+        );
+      },
+    );
+  });
+
+  group('iPhone images', () {
+    Future<Map<String, String>> savedAfterUpdate({required bool ios}) async {
+      final rendered = <String, Size>{};
+      final widgetService = HomeWidgetService(
+        isIos: ios,
+        renderer: (widget, {required key, required logicalSize}) async {
+          rendered[key] = logicalSize;
+          return '/test/$key.png';
+        },
+      );
+      await widgetService.updateHomeWidgets(
+        report: null,
+        recommendation: null,
+        nowIso: '2026-11-21T00:00:00.000',
+      );
+      lastRendered = rendered;
+      return {
+        for (final call in calls.where((c) => c.method == 'saveWidgetData'))
+          call.arguments['id'] as String: '${call.arguments['data']}',
+      };
+    }
+
+    test(
+      'renders only the six images iPhone reads, at real point sizes',
+      () async {
+        final saved = await savedAfterUpdate(ios: true);
+        expect(
+          lastRendered['pandapay_widget_expanded_medium'],
+          const Size(364, 170),
+        );
+        expect(
+          lastRendered['pandapay_widget_expanded_large'],
+          const Size(364, 382),
+        );
+        expect(lastRendered['pandapay_widget_compact'], const Size(170, 170));
+        for (final key in [
+          HomeWidgetService.compactDetailsPathKey,
+          HomeWidgetService.spendingCompactDetailsPathKey,
+          HomeWidgetService.expandedMediumDetailsPathKey,
+          HomeWidgetService.expandedLargeDetailsPathKey,
+          HomeWidgetService.spendingMediumDetailsPathKey,
+          HomeWidgetService.spendingLargeDetailsPathKey,
+        ]) {
+          expect(saved[key], startsWith('/test/'), reason: key);
+        }
+        // The Android-only shapes are not drawn on an iPhone.
+        expect(
+          saved.containsKey(HomeWidgetService.expandedWideDetailsPathKey),
+          isFalse,
+        );
+        expect(
+          saved.containsKey(HomeWidgetService.compactWideDetailsPathKey),
+          isFalse,
+        );
+      },
+    );
+
+    test('Android still gets its full set of shapes', () async {
+      final saved = await savedAfterUpdate(ios: false);
+      expect(
+        saved[HomeWidgetService.expandedWideDetailsPathKey],
+        startsWith('/test/'),
+      );
+      expect(
+        saved[HomeWidgetService.compactWideDetailsPathKey],
+        startsWith('/test/'),
+      );
+      expect(
+        lastRendered['pandapay_widget_expanded_medium'],
+        const Size(600, 300),
+      );
+    });
+  });
+
+  group('iOS installed widgets (WidgetKit kind, no Android class name)', () {
+    void reportIosWidgets(List<Map<String, String>> widgets) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            calls.add(call);
+            if (call.method == 'getInstalledWidgets') return widgets;
+            return true;
+          });
+    }
+
+    test('each PandaPay kind counts as installed', () async {
+      for (final kind in const [
+        'PandaPayCombinedWidget',
+        'PandaPaySpendingWidget',
+        'PandaPayBestCardWidget',
+      ]) {
+        reportIosWidgets([
+          {'family': 'systemSmall', 'kind': kind},
+        ]);
+        expect(await service().isWidgetInstalled(), isTrue, reason: kind);
+      }
+    });
+
+    test('an unrelated kind does not count', () async {
+      reportIosWidgets([
+        {'family': 'systemSmall', 'kind': 'SomeOtherWidget'},
+      ]);
+      expect(await service().isWidgetInstalled(), isFalse);
+    });
+
+    test(
+      'updateHomeWidgets writes data when only an iOS widget exists',
+      () async {
+        reportIosWidgets([
+          {'family': 'systemMedium', 'kind': 'PandaPaySpendingWidget'},
+        ]);
+        await service().updateHomeWidgets(
+          report: null,
+          recommendation: null,
+          nowIso: '2026-11-21T00:00:00.000',
+        );
+        expect(calls.where((c) => c.method == 'saveWidgetData'), isNotEmpty);
+        expect(
+          calls
+              .where((c) => c.method == 'updateWidget')
+              .map((c) => (c.arguments as Map)['ios'])
+              .toSet(),
+          containsAll(<String>[
+            'PandaPayCombinedWidget',
+            'PandaPaySpendingWidget',
+            'PandaPayBestCardWidget',
+          ]),
+        );
+      },
+    );
   });
 
   group('clearAll', () {

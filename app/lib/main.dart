@@ -402,6 +402,15 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
       return;
     }
     if (request == null) return;
+    // Screens that sit above the tabs are pushed on top of Home, not swapped in
+    // with go(): a swapped-in page is the only page in the stack, so the iPhone
+    // edge-swipe has nothing to go back to and Android's back button leaves the
+    // app instead of returning Home.
+    void openAbove(String location, {Object? extra}) {
+      router.go(AppRoute.home);
+      router.push(location, extra: extra);
+    }
+
     switch (request.action) {
       case AssistantAction.spending:
         final period = SpendPeriod.values.firstWhere(
@@ -410,19 +419,19 @@ class _PandaPayAppState extends ConsumerState<PandaPayApp> {
         );
         ref.read(selectedSpendQueryProvider.notifier).state =
             SpendReportQuery.preset(period);
-        router.go(AppRoute.assistantSpending);
+        openAbove(AppRoute.assistantSpending);
       case AssistantAction.addSpend:
-        router.go(AppRoute.assistantAddSpend, extra: request);
+        openAbove(AppRoute.assistantAddSpend, extra: request);
       case AssistantAction.dueDates:
-        router.go(AppRoute.assistantDueDates);
+        openAbove(AppRoute.assistantDueDates);
       case AssistantAction.wallet:
         router.go(AppRoute.cards);
       case AssistantAction.findCards:
-        router.go(AppRoute.assistantFindCards);
+        openAbove(AppRoute.assistantFindCards);
       case AssistantAction.nearbyMerchants:
-        router.go(AppRoute.assistantNearbyMerchants);
+        openAbove(AppRoute.assistantNearbyMerchants);
       case AssistantAction.scanUpi:
-        router.go(AppRoute.assistantScanUpi);
+        openAbove(AppRoute.assistantScanUpi);
       case AssistantAction.bestCard:
       case AssistantAction.home:
         router.go(AppRoute.home);

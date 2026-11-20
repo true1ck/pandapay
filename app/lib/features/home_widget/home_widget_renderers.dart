@@ -88,25 +88,36 @@ class WidgetExpandedDetails extends StatelessWidget {
     required this.recommendation,
     this.showRecommendation = true,
     this.canvasSize = const Size(320, 320),
+    this.textScale = 1.0,
+    this.recommendationLabel,
   });
 
   final SpendReport? report;
   final Recommendation? recommendation;
+
+  /// What the recommended card is best for, e.g. "Best for Dining". Null keeps
+  /// the generic wording Android has always shown.
+  final String? recommendationLabel;
   final bool showRecommendation;
   final Size canvasSize;
+
+  /// 1 keeps the sizes Android has always used. iPhone renders each image at
+  /// the widget's real point size, where the same proportions come out small,
+  /// so it asks for larger type and a roomier category block.
+  final double textScale;
 
   @override
   Widget build(BuildContext context) {
     final rows = _categories(report);
     final rec = recommendation?.isExcluded == false ? recommendation : null;
     final wide = canvasSize.aspectRatio >= 1.6;
+    final roomy = textScale > 1;
     final inset = canvasSize.width * (wide ? .025 : .022);
     final gap = canvasSize.width * (wide ? .014 : .018);
-    final headerHeight = wide
-        ? canvasSize.height * .13
-        : canvasSize.width * .105;
+    final headerHeight =
+        (wide ? canvasSize.height * .13 : canvasSize.width * .105) * textScale;
     final panelHeight = wide
-        ? canvasSize.height * .28
+        ? canvasSize.height * (roomy ? .31 : .28)
         : math.min(canvasSize.width * .42, canvasSize.height * .30);
 
     return SizedBox.fromSize(
@@ -119,7 +130,11 @@ class WidgetExpandedDetails extends StatelessWidget {
             children: [
               SizedBox(
                 height: headerHeight,
-                child: _Header(report: report, compact: false),
+                child: _Header(
+                  report: report,
+                  compact: false,
+                  textScale: textScale,
+                ),
               ),
               SizedBox(height: gap),
               Expanded(
@@ -154,7 +169,7 @@ class WidgetExpandedDetails extends StatelessWidget {
                                 ? Text(
                                     'Add a transaction to see your categories',
                                     style: _type(
-                                      canvasSize.width * .03,
+                                      canvasSize.width * .03 * textScale,
                                       color: _muted,
                                     ),
                                   )
@@ -162,12 +177,13 @@ class WidgetExpandedDetails extends StatelessWidget {
                                 ? _CategoryGrid(
                                     rows: rows,
                                     total: report?.spend.total.paise ?? 0,
+                                    roomy: roomy,
                                   )
                                 : _CategoryList(
                                     rows: rows,
                                     total: report?.spend.total.paise ?? 0,
                                     fontSize: math.min(
-                                      canvasSize.width * .030,
+                                      canvasSize.width * .030 * textScale,
                                       constraints.maxHeight / rows.length * .62,
                                     ),
                                   ),
@@ -182,7 +198,12 @@ class WidgetExpandedDetails extends StatelessWidget {
                 SizedBox(height: gap),
                 SizedBox(
                   height: panelHeight,
-                  child: _RecommendationPanel(recommendation: rec, wide: wide),
+                  child: _RecommendationPanel(
+                    recommendation: rec,
+                    wide: wide,
+                    textScale: textScale,
+                    label: recommendationLabel,
+                  ),
                 ),
               ],
             ],
@@ -202,12 +223,20 @@ class WidgetCompactDetails extends StatelessWidget {
     required this.recommendation,
     this.showRecommendation = true,
     this.canvasSize = const Size(200, 220),
+    this.textScale = 1.0,
+    this.recommendationLabel,
   });
 
   final SpendReport? report;
   final Recommendation? recommendation;
+
+  /// See [WidgetExpandedDetails.recommendationLabel].
+  final String? recommendationLabel;
   final bool showRecommendation;
   final Size canvasSize;
+
+  /// See [WidgetExpandedDetails.textScale].
+  final double textScale;
 
   @override
   Widget build(BuildContext context) {
@@ -219,13 +248,17 @@ class WidgetCompactDetails extends StatelessWidget {
       child: ColoredBox(
         color: Colors.white,
         child: Padding(
-          padding: const EdgeInsets.all(9),
+          padding: EdgeInsets.all(textScale > 1 ? 7 : 9),
           child: Column(
             children: [
               const SizedBox(height: 1),
               SizedBox(
-                height: 25,
-                child: _Header(report: report, compact: true),
+                height: 25 * textScale,
+                child: _Header(
+                  report: report,
+                  compact: true,
+                  textScale: textScale,
+                ),
               ),
               const SizedBox(height: 5),
               Expanded(
@@ -233,7 +266,8 @@ class WidgetCompactDetails extends StatelessWidget {
                   builder: (context, constraints) {
                     final diameter = math.min(
                       constraints.maxHeight - 2,
-                      constraints.maxWidth * (wide ? .29 : .51),
+                      constraints.maxWidth *
+                          (wide ? .29 : (textScale > 1 ? .46 : .51)),
                     );
                     return Row(
                       children: [
@@ -243,12 +277,12 @@ class WidgetCompactDetails extends StatelessWidget {
                           child: rows.isEmpty
                               ? Text(
                                   'Your spending at a glance',
-                                  style: _type(10, color: _muted),
+                                  style: _type(10 * textScale, color: _muted),
                                 )
                               : _CategoryList(
                                   rows: rows.take(wide ? 3 : 2).toList(),
                                   total: report?.spend.total.paise ?? 0,
-                                  fontSize: wide ? 10 : 8.5,
+                                  fontSize: (wide ? 10 : 8.5) * textScale,
                                   stacked: !wide,
                                 ),
                         ),
@@ -260,11 +294,13 @@ class WidgetCompactDetails extends StatelessWidget {
               if (showRecommendation) ...[
                 const SizedBox(height: 7),
                 SizedBox(
-                  height: wide ? 42 : 54,
+                  height: (wide ? 42 : 54) * textScale,
                   child: _RecommendationPanel(
                     recommendation: rec,
                     wide: true,
                     compact: true,
+                    textScale: textScale,
+                    label: recommendationLabel,
                   ),
                 ),
               ] else if (!wide && rows.length > 2) ...[
@@ -275,6 +311,7 @@ class WidgetCompactDetails extends StatelessWidget {
                     rows: rows.skip(2).take(2).toList(),
                     total: report?.spend.total.paise ?? 0,
                     columns: 2,
+                    roomy: textScale > 1,
                   ),
                 ),
               ],
@@ -287,14 +324,19 @@ class WidgetCompactDetails extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.report, required this.compact});
+  const _Header({
+    required this.report,
+    required this.compact,
+    this.textScale = 1.0,
+  });
   final SpendReport? report;
   final bool compact;
+  final double textScale;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final size = compact ? 8.2 : constraints.maxHeight * .34;
+      final size = compact ? 8.2 * textScale : constraints.maxHeight * .34;
       final markSize = constraints.maxHeight * .78;
       return Row(
         children: [
@@ -351,26 +393,31 @@ class _CategoryList extends StatelessWidget {
                 SizedBox(width: fontSize * .5),
                 Expanded(
                   child: stacked
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              rows[i].label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: _type(fontSize),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              '${_amount(rows[i].total)} · ${_share(rows[i], total)}',
-                              maxLines: 1,
-                              style: _type(
-                                fontSize + 1,
-                                weight: FontWeight.w700,
+                      // Name and amount scale down together when a row is
+                      // shorter or narrower than its text, never clip or spill.
+                      ? FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                rows[i].label,
+                                maxLines: 1,
+                                style: _type(fontSize),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 3),
+                              Text(
+                                '${_amount(rows[i].total)} · ${_share(rows[i], total)}',
+                                maxLines: 1,
+                                style: _type(
+                                  fontSize + 1,
+                                  weight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                         )
                       : FittedBox(
                           alignment: Alignment.centerLeft,
@@ -416,23 +463,37 @@ class _CategoryGrid extends StatelessWidget {
     required this.rows,
     required this.total,
     this.columns = 3,
+    this.roomy = false,
   });
   final List<SpendBreakdownRow> rows;
   final int total;
   final int columns;
+
+  /// Larger type for iPhone: the name sits alone on the first line and the
+  /// amount and share share the second, so each cell is narrower and the name
+  /// can be bigger without being shrunk to fit.
+  final bool roomy;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final count = (rows.length / columns).ceil();
       if (count == 0) return const SizedBox.shrink();
-      final font = math.min(
-        13.0,
-        math.min(
-          constraints.maxHeight / count * .29,
-          constraints.maxWidth / columns * .079,
-        ),
-      );
+      final font = roomy
+          ? math.min(
+              13.0,
+              math.min(
+                constraints.maxHeight / count * .36,
+                constraints.maxWidth / columns * .118,
+              ),
+            )
+          : math.min(
+              13.0,
+              math.min(
+                constraints.maxHeight / count * .29,
+                constraints.maxWidth / columns * .079,
+              ),
+            );
       return Column(
         children: [
           for (var y = 0; y < count; y++)
@@ -455,29 +516,41 @@ class _CategoryGrid extends StatelessWidget {
                                   ),
                                   SizedBox(width: font * .4),
                                   Expanded(
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          alignment: Alignment.centerLeft,
-                                          child: Text(
-                                            '${rows[y * columns + x].label} · ${_share(rows[y * columns + x], total)}',
-                                            style: _type(font),
+                                    child: _fitCell(
+                                      roomy,
+                                      Column(
+                                        mainAxisSize: roomy
+                                            ? MainAxisSize.min
+                                            : MainAxisSize.max,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            alignment: Alignment.centerLeft,
+                                            child: Text(
+                                              roomy
+                                                  ? rows[y * columns + x].label
+                                                  : '${rows[y * columns + x].label} · ${_share(rows[y * columns + x], total)}',
+                                              style: _type(font),
+                                            ),
                                           ),
-                                        ),
-                                        SizedBox(height: font * .25),
-                                        Text(
-                                          _amount(rows[y * columns + x].total),
-                                          style: BambooFonts.money(
-                                            font,
-                                            color: _muted,
+                                          SizedBox(height: font * .25),
+                                          Text(
+                                            roomy
+                                                ? '${_amount(rows[y * columns + x].total)} · ${_share(rows[y * columns + x], total)}'
+                                                : _amount(
+                                                    rows[y * columns + x].total,
+                                                  ),
+                                            style: BambooFonts.money(
+                                              font,
+                                              color: _muted,
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -492,6 +565,17 @@ class _CategoryGrid extends StatelessWidget {
     },
   );
 }
+
+/// In the larger-type layout a cell scales down together if its text is taller
+/// or wider than the cell, instead of overflowing it. Other layouts are
+/// returned untouched.
+Widget _fitCell(bool fit, Widget child) => fit
+    ? FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: child,
+      )
+    : child;
 
 class _CategoryDot extends StatelessWidget {
   const _CategoryDot({required this.label, required this.size});
@@ -513,10 +597,14 @@ class _RecommendationPanel extends StatelessWidget {
     required this.recommendation,
     required this.wide,
     this.compact = false,
+    this.textScale = 1.0,
+    this.label,
   });
   final Recommendation? recommendation;
   final bool wide;
   final bool compact;
+  final double textScale;
+  final String? label;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -534,21 +622,27 @@ class _RecommendationPanel extends StatelessWidget {
           : wide
           ? height * 1.38
           : math.min(width * .435, (height - padding * 2) * 1.586);
-      final nameSize = compact
-          ? 9.0
-          : wide
-          ? height * .22
-          : width * .049;
-      final copySize = compact
-          ? 7.0
-          : wide
-          ? height * .14
-          : width * .033;
-      final rewardSize = compact
-          ? 8.0
-          : wide
-          ? height * .20
-          : width * .038;
+      final nameSize =
+          (compact
+              ? 9.0
+              : wide
+              ? height * .22
+              : width * .049) *
+          (compact || !wide ? textScale : 1.0);
+      final copySize =
+          (compact
+              ? 7.0
+              : wide
+              ? height * .14
+              : width * .033) *
+          textScale;
+      final rewardSize =
+          (compact
+              ? 8.0
+              : wide
+              ? height * .20
+              : width * .038) *
+          (compact || !wide ? textScale : 1.0);
       return Container(
         padding: EdgeInsets.all(padding),
         decoration: BoxDecoration(
@@ -591,7 +685,7 @@ class _RecommendationPanel extends StatelessWidget {
                               'RECOMMENDED FOR YOU',
                               maxLines: 1,
                               style: _type(
-                                width * .020,
+                                width * .020 * textScale,
                                 weight: FontWeight.w700,
                                 color: const Color(0xFF0648BA),
                               ),
@@ -611,9 +705,10 @@ class _RecommendationPanel extends StatelessWidget {
                         if (!compact && (!shallow || wide)) ...[
                           SizedBox(height: width * .01),
                           Text(
-                            wide
-                                ? 'Best card for your spending'
-                                : 'Get rewarded on your\ndaily spends',
+                            label ??
+                                (wide
+                                    ? 'Best card for your spending'
+                                    : 'Get rewarded on your\ndaily spends'),
                             maxLines: 2,
                             style: _type(
                               copySize,
@@ -623,11 +718,15 @@ class _RecommendationPanel extends StatelessWidget {
                         ],
                         if (!wide || compact) ...[
                           SizedBox(height: compact ? 2 : width * .025),
-                          _RewardPill(
-                            value: _amount(recommendation!.expectedValue),
-                            fontSize: rewardSize,
-                            label: 'Earn',
-                            earned: true,
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: _RewardPill(
+                              value: _amount(recommendation!.expectedValue),
+                              fontSize: rewardSize,
+                              label: 'Earn',
+                              earned: true,
+                            ),
                           ),
                         ],
                       ],

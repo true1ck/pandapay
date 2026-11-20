@@ -2,6 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <!-- Personal Team device tests cannot provision Associated Domains.
-     Release/Profile retain Runner.entitlements and universal-link support. -->
-<dict/>
+     Release/Profile retain Runner.entitlements and universal-link support.
+     The App Group stays here: the home-screen widgets cannot read the app's
+     data without it. -->
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.pandapay.pandapay.homewidget</string>
+	</array>
+</dict>
 </plist>

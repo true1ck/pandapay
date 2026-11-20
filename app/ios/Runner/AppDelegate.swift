@@ -24,10 +24,12 @@ import UserNotifications
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     IncomingSmsBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
     StorageBackupBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
+    AssistantLinkBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
 #else
     SimulatorPluginRegistrant.register(with: engineBridge.pluginRegistry)
     IncomingSmsBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
     StorageBackupBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
+    AssistantLinkBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
 #if DEBUG
     PrototypeBankMessageBridge.register(messenger: engineBridge.applicationRegistrar.messenger())
     if #available(iOS 16.0, *) {

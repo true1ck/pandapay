@@ -428,6 +428,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       final splitJoin = splitJoinLocationForUri(state.uri);
       if (splitJoin != null && path != splitJoin) return splitJoin;
 
+      // iOS widget taps (and any other assistant link) can reach the router as
+      // a page address when they launch the app. The native assistant channel
+      // delivers the real action to PandaPayApp, which waits for sign-in
+      // restore before navigating, so just land on Home here.
+      if (isAssistantUri(state.uri)) return AppRoute.home;
+
       // S5/S6 — checked first, ahead of the onboarding guard below: a
       // maintenance window or a too-old install blocks the app regardless
       // of onboarding state. Only acts once appStatusProvider has actually

@@ -7377,6 +7377,114 @@ final rankedRecommendationsProvider =
 /// Context passed by Quick Add as the user fills in a transaction. Keeping
 /// the rank request tied to the actual form values makes its card verdict use
 /// the same engine, wallet state, caps, overrides, and reward rules as Home.
+/// The cards the home-screen widgets rotate through, each with what it is best
+/// FOR. Home's own pick is one fixed selection (default chip "Online", ₹1,000),
+/// which for most wallets is the same card every time. This ranks the wallet
+/// again for the user's biggest spending categories this month (at a typical
+/// transaction size for each), and for the merchant the phone is near when
+/// Home has resolved one, using the same engine as Home so the numbers agree.
+final widgetCardPicksProvider = Provider<List<WidgetCardPick>>((ref) {
+  final report = ref
+      .watch(
+        spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
+      )
+      .valueOrNull;
+  final categories =
+      ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+  final nearby = ref.watch(homeNearbyContextProvider);
+  final now = ref.watch(clockProvider).now();
+  final picks = <WidgetCardPick>[];
+  final usedCategories = <String>{};
+
+  void add({
+    required String caption,
+    Money? amount,
+    String? categoryId,
+    String? slug,
+    String? merchantName,
+  }) {
+    final ranked = _rankRecommendations(
+      ref,
+      amount: amount ?? const Money.fromPaise(100000),
+      categoryId: categoryId,
+      categorySlug: slug,
+      merchantName: merchantName,
+    );
+    final best = ranked.valueOrNull?.firstWhereOrNull(
+      (recommendation) => !recommendation.isExcluded,
+    );
+    if (best != null) {
+      picks.add(WidgetCardPick(caption: caption, recommendation: best));
+    }
+  }
+
+  // Where the phone is right now, when Home has worked it out recently.
+  final match = nearby?.match;
+  if (match != null && now.difference(nearby!.resolvedAt).inHours < 3) {
+    final candidate = match.candidate;
+    final category = categories.firstWhereOrNull(
+      (c) => c.id == candidate.categoryId || c.slug == candidate.categoryId,
+    );
+    add(
+      caption: 'Best near ${candidate.displayName}',
+      categoryId: candidate.categoryId ?? category?.id,
+      slug: category?.slug,
+      merchantName: candidate.displayName,
+    );
+    if (category != null) usedCategories.add(category.id);
+  }
+
+  // The user's biggest categories this month.
+  final rows =
+      (report?.byCategory ?? const <SpendBreakdownRow>[])
+          .where((row) => row.total.paise > 0)
+          .toList()
+        ..sort((a, b) => b.total.paise.compareTo(a.total.paise));
+  for (final row in rows) {
+    if (picks.length >= 4) break;
+    final category =
+        categories.firstWhereOrNull((c) => c.id == row.categoryId) ??
+        categories.firstWhereOrNull(
+          (c) => c.name.toLowerCase() == row.label.toLowerCase(),
+        );
+    if (category == null ||
+        category.slug == 'other' ||
+        category.slug == 'emi' ||
+        !usedCategories.add(category.id)) {
+      continue;
+    }
+    final typical = row.txnCount > 0 ? row.total.paise ~/ row.txnCount : 100000;
+    add(
+      caption: 'Best for ${category.name}',
+      amount: Money.fromPaise(
+        typical < 50000 ? 50000 : (typical > 2000000 ? 2000000 : typical),
+      ),
+      categoryId: category.id,
+      slug: category.slug,
+    );
+  }
+
+  // Too little spending history to vary on: fill in everyday categories so the
+  // widget still moves between cards and says what each is for.
+  for (final slug in const [
+    'dining',
+    'fuel',
+    'groceries',
+    'online',
+    'travel',
+  ]) {
+    if (picks.length >= 3) break;
+    final category = categories.firstWhereOrNull((c) => c.slug == slug);
+    if (category == null || !usedCategories.add(category.id)) continue;
+    add(
+      caption: 'Best for ${category.name}',
+      categoryId: category.id,
+      slug: category.slug,
+    );
+  }
+  return picks;
+});
+
 typedef QuickAddRecommendationQuery = ({
   Money amount,
   String? categoryId,

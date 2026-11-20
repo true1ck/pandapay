@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -245,7 +247,9 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              ranked.when(skipLoadingOnReload: true, skipLoadingOnRefresh: true, 
+              ranked.when(
+                skipLoadingOnReload: true,
+                skipLoadingOnRefresh: true,
                 loading: () => const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
@@ -436,12 +440,22 @@ class _WidgetSettingsScreenState extends ConsumerState<WidgetSettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '1. Long-press any empty space on your home screen.\n'
-                      '2. Tap "Widgets" in the menu that appears.\n'
-                      '3. Scroll to "PandaPay".\n'
-                      '4. Choose Spending + card, Spending only, or Card pick only.\n'
-                      '5. Touch and hold the widget and drag it to your screen. '
-                      'Tap the spending pie to open every category.',
+                      defaultTargetPlatform == TargetPlatform.iOS
+                          // iPhone has no in-app "add widget" call, so the
+                          // steps are the only way and must match iOS menus.
+                          ? '1. Touch and hold an empty space on your Home Screen until the icons wiggle.\n'
+                                '2. Tap the + button at the top left.\n'
+                                '3. Search for "PandaPay".\n'
+                                '4. Choose Spending + Card, Spending, or Card Pick, '
+                                'swipe to a size, then tap Add Widget.\n'
+                                '5. Tap Done. Tap the spending pie to open every '
+                                'category. Open PandaPay once so the widget has data.'
+                          : '1. Long-press any empty space on your home screen.\n'
+                                '2. Tap "Widgets" in the menu that appears.\n'
+                                '3. Scroll to "PandaPay".\n'
+                                '4. Choose Spending + card, Spending only, or Card pick only.\n'
+                                '5. Touch and hold the widget and drag it to your screen. '
+                                'Tap the spending pie to open every category.',
                       style: BambooFonts.ui(12.5, color: BambooInk.ink900),
                     ),
                   ],

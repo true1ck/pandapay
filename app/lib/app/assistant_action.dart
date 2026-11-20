@@ -31,6 +31,13 @@ final class AssistantRequest {
   });
 }
 
+/// True for any `pandapay://assistant/...` link, valid or not. On iOS a widget
+/// tap that launched the app is also handed to the router as a page address;
+/// the router uses this to send it to Home rather than to its error page,
+/// while the native bridge delivers the real action through [parseAssistantUri].
+bool isAssistantUri(Uri uri) =>
+    uri.scheme == 'pandapay' && uri.host == 'assistant';
+
 /// Parses only PandaPay's own assistant URI format.
 ///
 /// App Actions use a custom scheme because fulfillment is an Android intent,

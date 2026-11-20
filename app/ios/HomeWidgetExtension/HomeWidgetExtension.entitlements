@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict/>
+<dict>
+	<!-- Same App Group as the Runner app. The widgets read the numbers and the
+	     rendered pie/card images the app writes through home_widget; without
+	     this group they only ever show the empty placeholder. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.app.pandapay.pandapay.homewidget</string>
+	</array>
+</dict>
 </plist>
