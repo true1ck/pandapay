@@ -8,6 +8,7 @@ import '../sms_v2/similar/similar_offer_sheet.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/providers/data_providers.dart';
+import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -214,6 +215,27 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// The row is marked as read on this phone but its stored reading is gone.
   bool _readingMissing = false;
   bool _readingChecked = false;
+  bool _recoveryTried = false;
+
+  /// A row seen on this phone first (it came from another phone) can reach the
+  /// transactions list before its reading is pulled. Pull once, quietly, then
+  /// look again; the screen keeps working either way.
+  Future<void> _recoverReading() async {
+    if (_recoveryTried) return;
+    _recoveryTried = true;
+    try {
+      final runtime = ref.read(smsV2RuntimeProvider).valueOrNull;
+      if (runtime == null) return;
+      await runtime.sync().timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // Offline or busy: the entry stays as it is and the notice explains.
+    }
+    if (!mounted) return;
+    setState(() {
+      _readingChecked = false;
+      _readingMissing = false;
+    });
+  }
 
   /// Looks the stored reading up once the phone's database is available (it can
   /// still be loading when the screen first opens from a tapped row).
@@ -241,6 +263,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // server copy on a new phone, or a row left after a re-read). Corrections
       // need the reading, so the save must not try them.
       _readingMissing = stored == null;
+      if (_readingMissing) _recoverReading();
     } catch (_) {
       // Without it the choice just starts on "between my accounts".
     }
