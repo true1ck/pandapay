@@ -168,6 +168,7 @@ Server-side commits waiting (all invisible to the app, the admin console and the
 | dev `b13c04e5` | admin card list read 25 rows at a time through a cursor (peak about halved, same bytes) | admin API (prod API image) |
 | dev `fe58992c` | admin health checks use wget, not a Node start every 30 s (~2% CPU each, all day) | admin compose |
 | dev `6305cad2` | rewards worker: idle cycle is one transaction (12 -> 6 round trips every 5 s), idle log once a minute | rewards worker |
+| dev `e65850c5` | `GET /points-ledgers?userCardIds=` answers every card's ledger in one request (per-card route kept) | API |
 
 Steps:
 1. Cherry-pick the five dev commits onto `prod` (on top of `d0cb1241`), run the API and auth suites, push `prod` once.
@@ -179,13 +180,13 @@ Steps:
 3. Check: iPhone sync gives no 429; `/user-cards` timings; console card list opens and matches; deleting a rule-family
    row says success; `docker stats` for the admin containers at rest (~0% CPU) and after opening the card list.
 
-### App-side items (need an app build; proposed, not done)
+### App-side items (21 Nov)
 
-| Call | Today | Change | Gain |
-|---|---|---|---|
-| `GET /user-cards/:id/points-ledger` | one call per card (~10 at once) on every app open (`providers.dart` 4239) | one batched call for all cards (new route; old route kept for old builds) | 10 requests -> 1; frees the pool at app open |
-| `GET /transactions?from=` / `from&to` | whole date range in one reply, up to 2 MB raw (~250 KB gzip) | ask with `pageSize` and follow the cursor (server already supports it) | smaller replies and server memory per call |
-| `GET /catalogue` | whole 10.5 MB catalogue (1.3 MB gzip) when its version changes | split: card list + details only for the user's cards | ~1.3 MB -> tens of KB per change; bigger change, needs design |
+| Call | Today | Outcome |
+|---|---|---|
+| `GET /user-cards/:id/points-ledger` | one call per card (~10 at once) on every app open | **Done** (dev `4ac0e813` app, `e65850c5` API): calls arriving within 25 ms go out as one `GET /points-ledgers`; each card gets exactly its own list and the same errors; against a server without the route the app asks per card, as before. Ships with the next app build; the server route must be deployed first or the app simply keeps asking per card. |
+| `GET /transactions?from=` / `from&to` | whole date range in one reply, up to 2 MB raw (~250 KB gzip) | **Not changed, on purpose.** A full list replaces what the phone holds (rows missing from it are removed locally; see `TransactionPage` and the provider at `providers.dart` ~6910). Pages are not one consistent snapshot, so a transaction edited while the pages are read could be missed and removed from the phone: that breaks "never lose a record". Compression already cut it ~8x. Doing it safely needs a snapshot-consistent paging protocol (e.g. a revision checked across pages). |
+| `GET /catalogue` | whole 10.5 MB catalogue (1.3 MB gzip) | **Not changed, on purpose.** 19 parts of the app read the whole catalogue (Discover, Find cards, calculator, scan result, SMS runtime compare cards the person does not own). It is downloaded only when its version changes (ETag), and the server keeps one gzip copy per version. A per-card or delta catalogue would change those screens (loading states, missing comparisons). |
 
 ## 5. Not done here
 - Deploying: all the server changes above need a production deploy (owner's go-ahead); the nginx changes are a separate, manual config change on the host.
