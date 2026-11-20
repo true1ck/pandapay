@@ -609,6 +609,8 @@ class SyncEngine {
       // backlog safely on the next cycle.
       final repository = _ref.read(userCardsRepositoryProvider);
       if (repository == null) throw StateError('Sign in to sync');
+      // Rows are stamped with when they were requested, not when they arrived.
+      final requestedAt = DateTime.now();
       final delta = await fetchSyncTransactionDelta(
         transactionChanges,
         fetch: repository.fetchTransaction,
@@ -632,6 +634,7 @@ class SyncEngine {
         delta.rows,
         delta.deletedIds,
         serverSeq: since,
+        at: requestedAt,
       );
       _invalidateFor(entities);
       await api.ack(deviceId: deviceId, serverSeq: since);

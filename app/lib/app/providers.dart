@@ -3267,6 +3267,7 @@ Map<String, CommandHandler> commandHandlersFor(
   Map<String, CommandHandler> accountHandlers = const {},
   CardCommandContext? cards,
   Future<bool> Function(String tagId)? tagReady,
+  void Function(String transactionId)? onStaleTransactionEdit,
 }) => {
   // WP-C11: consents, name, opt-in, tickets, card reports, inbox read marks.
   ...accountHandlers,
@@ -3280,7 +3281,7 @@ Map<String, CommandHandler> commandHandlersFor(
     onRefused: onNotificationRefused,
   ),
   // WP-C5: payment-method change queued while offline.
-  ...paymentMethodCommandHandlers(repo),
+  ...paymentMethodCommandHandlers(repo, onStale: onStaleTransactionEdit),
   // A repeat answers 409/404 although the state the person wanted is already
   // in place; that is success, not a refusal (SRV-17).
   OutboxCommand.ignoreTransaction: (p) => ignoreAlreadyDoneIsDone(
@@ -3462,8 +3463,12 @@ final outboxFlushProvider = Provider<void>((ref) {
       final outbox = await ref.read(outboxRepositoryProvider.future);
       if (disposed || outbox.namespace != namespace) return;
       final commands = await ref.read(commandOutboxProvider.future);
+      final store = (await ref.read(responseCacheProvider.future)).financialStore;
+      // Transactions whose edit lost to a newer one on the server this pass.
+      final staleEdits = <String>{};
       final handlers = commandHandlersFor(
         repo,
+        onStaleTransactionEdit: staleEdits.add,
         spend: ref.read(spendReportsRepositoryProvider),
         notificationPrefs: ref.read(notificationPreferencesRepositoryProvider),
         onNotificationInboxSynced: () => ref.invalidate(notificationsProvider),
@@ -3502,6 +3507,21 @@ final outboxFlushProvider = Provider<void>((ref) {
                   // A command naming a card still only on the phone waits for
                   // its add (held, not failed, never parked).
                   holdIds: unsentCardAddTargets(commands),
+                  // What the command laid over the stored row is written into
+                  // it now, so no refresh already in flight can undo it.
+                  onDelivered: (kind, target) {
+                    if (!staleEdits.remove(target)) {
+                      store.settleDelivered(namespace, kind, target);
+                      return;
+                    }
+                    // A newer edit stands on the server: take its copy.
+                    unawaited(
+                      repo
+                          .fetchTransaction(target)
+                          .then((row) => store.saveTransactions(namespace, [row]))
+                          .catchError((_) {}),
+                    );
+                  },
                 ));
       if (commandsSent > 0) {
         // Drop the cached server lists so the next read shows what the server

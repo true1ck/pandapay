@@ -370,3 +370,37 @@ test('the transaction list and detail queries already return payment_method', ()
   const selects = indexSource.match(/t\.rail, t\.payment_method, t\.status, t\.source, t\.note/g) || [];
   assert.ok(selects.length >= 2, 'GET /transactions list and detail select payment_method');
 });
+
+test('PATCH /transactions/:id ignores an edit older than the stored one and changes nothing', async () => {
+  const h = loadPatchHandler(storedRow({ edited_at: new Date('2026-11-20T10:00:00Z') }));
+  const res = await patch(h, { merchantName: 'Old edit', editedAt: '2026-11-20T09:59:59Z' });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.stale, true);
+  assert.equal(res.body.transaction.merchant_name, 'Landlord'); // the stored copy comes back
+  assert.equal(updateCall(h), undefined); // no write, no reward state reversed
+});
+
+test('PATCH /transactions/:id applies a newer or undated edit and stamps its time', async () => {
+  let h = loadPatchHandler(storedRow({ edited_at: new Date('2026-11-20T10:00:00Z') }));
+  let res = await patch(h, { merchantName: 'New', editedAt: '2026-11-20T10:00:01Z' });
+  assert.equal(res.code, 200);
+  assert.equal(res.body.stale, undefined);
+  assert.equal(updateCall(h).params[11].toISOString(), '2026-11-20T10:00:01.000Z');
+
+  h = loadPatchHandler(storedRow({ edited_at: new Date('2026-11-20T10:00:00Z') }));
+  res = await patch(h, { merchantName: 'Undated app version' }); // older apps send no time
+  assert.equal(res.code, 200);
+  assert.equal(updateCall(h).params[11], null); // SQL stamps now()
+});
+
+test('PATCH /transactions/:id never trusts an edit time in the future', async () => {
+  const h = loadPatchHandler(storedRow());
+  const res = await patch(h, { merchantName: 'x', editedAt: '2099-01-01T00:00:00Z' });
+  assert.equal(res.code, 200);
+  assert.ok(updateCall(h).params[11].getTime() <= Date.now());
+});
+
+test('PATCH /transactions/:id rejects an unreadable edit time', async () => {
+  const res = await patch(loadPatchHandler(storedRow()), { merchantName: 'x', editedAt: 'not a date' });
+  assert.equal(res.code, 400);
+});

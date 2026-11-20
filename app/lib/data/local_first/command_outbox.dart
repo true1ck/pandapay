@@ -259,6 +259,8 @@ class CommandOutbox {
   /// Sends due commands, oldest first, at most [limit] in this pass. Returns
   /// how many were delivered. Never throws: a failure is recorded on the row.
   ///
+  /// [onDelivered] runs once the server accepted a command, before it is removed.
+  ///
   /// [onlyKinds] limits the pass to those kinds (WP-C6 sends queued card adds
   /// before the transactions that may name those cards); the rest stay queued.
   Future<int> flush(
@@ -266,6 +268,7 @@ class CommandOutbox {
     int limit = 20,
     Set<String>? onlyKinds,
     Set<String> holdIds = const {},
+    void Function(String kind, String target)? onDelivered,
   }) async {
     lastFlushUnreachable = false;
     final now = _now().millisecondsSinceEpoch;
@@ -319,6 +322,13 @@ class CommandOutbox {
             jsonDecode(fresh.first['payload_json'] as String) as Map,
           ),
         );
+        // Before the row leaves the outbox, so what it was laid over the stored
+        // copy can be written into it (FinancialStore.settleDelivered).
+        try {
+          onDelivered?.call(row['kind'] as String, target);
+        } catch (_) {
+          /* a display refresh must never undo a delivery */
+        }
         _appDb.db.execute('DELETE FROM command_outbox WHERE id=?', [id]);
         delivered++;
       } catch (error) {

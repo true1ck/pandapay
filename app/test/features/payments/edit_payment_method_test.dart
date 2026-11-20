@@ -40,6 +40,8 @@ class _Repo implements UserCardsRepository {
     bool clearCategory = false,
     String? paymentMethod,
     bool clearPaymentMethod = false,
+    DateTime? editedAt,
+    void Function()? onStale,
   }) async {
     editCalls++;
     last = {

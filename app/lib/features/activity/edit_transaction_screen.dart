@@ -25,6 +25,7 @@ import '../../data/catalogue_repository.dart'
 import '../../data/merchant_category_rules_repository.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
+import '../../data/server_clock.dart';
 import '../../data/local/financial_store.dart' show FinancialStore, canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -582,6 +583,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       final store = (await ref.read(responseCacheProvider.future)).financialStore;
       final namespace = ref.read(cacheNamespaceProvider);
+      // One edit time for the stored row and the queued command(s).
+      final editedAt = ServerClock.instance.now();
       if (typed.isNotEmpty) {
         await queueCommand(
           ref,
@@ -590,9 +593,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           payload: {
             'id': widget.transactionId,
             ...typed.map((k, v) => MapEntry(_typedWireKey(k), v)),
+            'editedAt': editedAt.toUtc().toIso8601String(),
           },
         );
-        store.patchTransaction(namespace, widget.transactionId, typed);
+        store.patchTransaction(
+          namespace,
+          widget.transactionId,
+          typed,
+          editedAt: editedAt,
+        );
       }
       if (_methodChanged) {
         final method = _methodToSend;
@@ -600,11 +609,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ref,
           kind: PaymentMethodCommand.set,
           target: widget.transactionId,
-          payload: {'id': widget.transactionId, 'paymentMethod': method},
+          payload: {
+            'id': widget.transactionId,
+            'paymentMethod': method,
+            'editedAt': editedAt.toUtc().toIso8601String(),
+          },
         );
         store.patchTransaction(namespace, widget.transactionId, {
           'payment_method': method,
-        });
+        }, editedAt: editedAt);
       }
       if (fields.isNotEmpty) unawaited(ref.read(syncEngineProvider).sync());
       return;
