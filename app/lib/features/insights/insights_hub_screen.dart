@@ -576,21 +576,31 @@ class _PeriodChips extends ConsumerWidget {
   Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
     final now = ref.read(clockProvider).now();
     final current = ref.read(insightsCustomRangeProvider);
-    final existing = current == null
-        ? null
-        : DateTimeRange(start: current.from, end: current.to);
-    final picked = await showDateRangePicker(
+    final firstDate = DateTime(2020);
+    final today = DateTime(now.year, now.month, now.day);
+    DateTime clamp(DateTime d, DateTime lo) =>
+        d.isBefore(lo) ? lo : (d.isAfter(today) ? today : d);
+    // Same start-then-end calendar dialogs as Spend trends' custom range,
+    // instead of the full-screen range picker no other Insights screen uses.
+    final start = await showDatePicker(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(now.year, now.month, now.day),
-      initialDateRange: existing,
-      helpText: 'Choose insight dates',
-      saveText: 'Apply dates',
+      firstDate: firstDate,
+      lastDate: today,
+      initialDate: clamp(current?.from ?? today, firstDate),
+      helpText: 'Select start date',
     );
-    if (picked == null || !context.mounted) return;
+    if (start == null || !context.mounted) return;
+    final end = await showDatePicker(
+      context: context,
+      firstDate: start,
+      lastDate: today,
+      initialDate: clamp(current?.to ?? today, start),
+      helpText: 'Select end date',
+    );
+    if (end == null || !context.mounted) return;
     ref.read(insightsCustomRangeProvider.notifier).state = InsightsDateRange(
-      from: picked.start,
-      to: picked.end,
+      from: start,
+      to: end,
     );
     ref.read(insightsPeriodProvider.notifier).state = InsightsPeriod.custom;
   }
