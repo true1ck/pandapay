@@ -174,7 +174,7 @@ void main() {
       expect(find.text('Category from source: Dining'), findsOneWidget);
       expect(find.text('Team lunch'), findsOneWidget);
       final categoryDropdown = find.byKey(
-        const ValueKey('import-edit-category'),
+        const ValueKey('import-edit-category-spend'),
       );
       await tester.ensureVisible(categoryDropdown);
       await tester.tap(categoryDropdown);

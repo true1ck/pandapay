@@ -22,6 +22,7 @@ import '../../app/router.dart' show AppRoute;
 import '../../app/transaction_tag_picker.dart';
 import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart' show SpendCategory;
+import '../../data/category_scope.dart';
 import '../../data/merchant_identity.dart';
 import '../../data/foreign_payment.dart';
 import '../../data/spending_selection.dart';
@@ -521,11 +522,34 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
     categories ??= const [];
     if (!mounted) return;
 
+    // Only categories every selected row can take: Salary is no category for a
+    // spend, Travel none for an investment.
+    final kinds = {
+      for (final e in visible)
+        if (_selectedIds.contains(e.id)) e.entryKind,
+    };
+    final allowed = [
+      for (final c in categories)
+        if (kinds.every((k) => categoriesForKind(categories!, k).contains(c)))
+          c,
+    ];
+    if (allowed.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'These transactions are different types, so no one category fits '
+            'them all. Select one type at a time.',
+          ),
+        ),
+      );
+      return;
+    }
     final chosen = await showCategoryBottomSheet(
       context,
       ref,
-      categories,
+      allowed,
       title: 'Set category for ${ids.length} transactions',
+      allowTopLevel: kinds.every((k) => k == TxnEntryKind.spend),
     );
     if (chosen == null || !mounted) return;
 
@@ -3357,7 +3381,34 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
     if (picked != null && mounted) setState(() => _merchants = picked);
   }
 
+  /// The kinds of entry a type filter covers, or null when it covers all.
+  Set<TxnEntryKind>? _kindsFor(_ActivityTypeFilter type) => switch (type) {
+    _ActivityTypeFilter.spending => {TxnEntryKind.spend},
+    _ActivityTypeFilter.moneyIn => {
+      TxnEntryKind.income,
+      TxnEntryKind.investmentReturn,
+    },
+    _ActivityTypeFilter.transfers => {TxnEntryKind.transfer},
+    _ActivityTypeFilter.investments => {TxnEntryKind.investment},
+    _ => null,
+  };
+
+  /// Categories worth offering under [type]: ones it can actually contain.
+  List<SpendCategory> _categoriesFor(_ActivityTypeFilter type) {
+    final kinds = _kindsFor(type);
+    if (kinds == null) return widget.categories;
+    final fits = {
+      for (final k in kinds)
+        for (final c in categoriesForKind(widget.categories, k)) c.id,
+    };
+    return [
+      for (final c in widget.categories)
+        if (fits.contains(c.id)) c,
+    ];
+  }
+
   Future<void> _pickCategories() async {
+    final offered = _categoriesFor(_type);
     final counts = <String, int>{};
     for (final e in widget.entries) {
       final id = e.parentCategoryId ?? e.categoryId;
@@ -3368,7 +3419,7 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
       title: 'Category',
       searchHint: 'Search categories',
       options: [
-        for (final c in widget.categories.where((c) => !c.isSubcategory))
+        for (final c in offered.where((c) => !c.isSubcategory))
           _PickOption(c.id, c.name, counts[c.id]),
       ],
       selected: _categoryIds,
@@ -3523,6 +3574,14 @@ class _ActivityFilterSheetState extends State<_ActivityFilterSheet> {
                             onTap: () => setState(() {
                               _type = type;
                               _moneyInKinds = {};
+                              // A category picked under another type may not
+                              // exist in this one; drop it, with its chip.
+                              final offered = {
+                                for (final c in _categoriesFor(type)) c.id,
+                              };
+                              _categoryIds.removeWhere(
+                                (id) => !offered.contains(id),
+                              );
                             }),
                           ),
                       ],

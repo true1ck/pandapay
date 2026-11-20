@@ -5,6 +5,7 @@ import '../../data/local/financial_store.dart';
 import '../../data/local/sync_queue.dart';
 import '../../data/local/transaction_outbox_repository.dart';
 import '../../data/local_first/command_outbox.dart';
+import '../../data/category_scope.dart';
 import '../../data/user_cards_repository.dart' show TransactionEntry;
 
 /// Command kind of "ignore this transaction"; same string as
@@ -68,6 +69,14 @@ class BulkTransactionActions {
   }) async {
     var done = 0;
     final failed = <String>[];
+    // A category only fits the kinds it was made for (no Travel on an
+    // Investment): rows it does not fit are left alone and reported.
+    final all = categories.toList();
+    final misfits = selected
+        .where((e) => !categoryFitsKind(all, categoryId, e.entryKind))
+        .toList();
+    failed.addAll(misfits.map((e) => e.id));
+    selected = selected.where((e) => !misfits.contains(e)).toList();
     final sms = selected.where(isSms).toList();
     if (sms.isNotEmpty) {
       try {

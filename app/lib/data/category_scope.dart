@@ -29,11 +29,14 @@ List<SpendCategory> categoriesForKind(
   return all.where(allowed).toList();
 }
 
-/// Whether [categoryId] is still valid once the entry becomes [kind].
+/// Whether [categoryId] is still valid once the entry becomes [kind]. A
+/// category we cannot find (not loaded yet, since removed) is not ours to
+/// judge, so it is left alone rather than cleared.
 bool categoryFitsKind(
   List<SpendCategory> all,
   String? categoryId,
   TxnEntryKind kind,
 ) =>
     categoryId == null ||
+    !all.any((c) => c.id == categoryId) ||
     categoriesForKind(all, kind).any((c) => c.id == categoryId);

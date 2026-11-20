@@ -41,6 +41,8 @@ void main() {
     expect(categoryFitsKind(all, 'travel', TxnEntryKind.investment), isFalse);
     expect(categoryFitsKind(all, 'sip', TxnEntryKind.investment), isTrue);
     expect(categoryFitsKind(all, null, TxnEntryKind.investment), isTrue);
+    // Not in the list at all: not ours to judge.
+    expect(categoryFitsKind(all, 'gone', TxnEntryKind.investment), isTrue);
   });
 
   test('entry kinds survive json and default to spend', () {

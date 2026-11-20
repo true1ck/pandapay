@@ -18,6 +18,7 @@ import '../../data/import_models.dart';
 import '../../data/local/financial_store.dart' show TransactionQuery;
 import '../../data/statement_import_continuation.dart';
 import '../../data/transaction_import_pipeline.dart';
+import '../../data/category_scope.dart';
 import '../../data/user_cards_repository.dart';
 
 /// All document and screenshot adapters share this review and commit workflow.
@@ -145,7 +146,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
     if (repository == null || session.submitting || _preparingContinuation) {
       return;
     }
-    final categories = ref.read(spendCategoriesProvider).valueOrNull;
+    final categories = ref.read(categoriesProvider).valueOrNull;
     // Rows parsed from an export written by a different database can carry
     // category ids this account's catalogue does not have. The row keeps its
     // category hint, so dropping the stale id still classifies it instead of
@@ -230,7 +231,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
       context: context,
       builder: (_) => _EditImportRow(
         row: row,
-        categories: ref.read(spendCategoriesProvider).valueOrNull ?? const [],
+        categories: ref.read(categoriesProvider).valueOrNull ?? const [],
         raw: rejected?.cells.join(' | '),
         reason: index == null
             ? rejected?.reason
@@ -296,7 +297,7 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
     }
     final cards = ref.watch(userCardsProvider);
     final categories =
-        ref.watch(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
+        ref.watch(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
     final bankAccounts = ref.watch(bankAccountSummariesProvider);
     final bankDataResolved = bankAccounts.hasValue || bankAccounts.hasError;
     if (cards.hasValue && bankDataResolved && !_destinationsSuggested) {
@@ -1184,7 +1185,9 @@ class _EditImportRowState extends State<_EditImportRow> {
       : widget.row?.isCredit == true
       ? 'income'
       : 'spend';
-  late String? _selectedCategoryId = _initialCategoryId();
+  // A hint that matches a spend category must not ride along on an
+  // Investment or Transfer row.
+  late String? _selectedCategoryId = _fitCategory(_initialCategoryId(), _kind);
   late TxnInstrument? _instrument = widget.row?.instrument;
   late String? _rail = widget.row?.rail;
   String? _error;
@@ -1345,6 +1348,11 @@ class _EditImportRowState extends State<_EditImportRow> {
     }
     return null;
   }
+
+  TxnEntryKind _entryKindOf(String kind) => TxnEntryKind.fromJson(kind);
+
+  String? _fitCategory(String? id, String kind) =>
+      categoryFitsKind(widget.categories, id, _entryKindOf(kind)) ? id : null;
 
   void _selectCategory(String? value) {
     setState(() {
@@ -1590,7 +1598,15 @@ class _EditImportRowState extends State<_EditImportRow> {
                             child: Text('Transfer'),
                           ),
                         ],
-                        onChanged: (value) => setState(() => _kind = value!),
+                        onChanged: (value) => setState(() {
+                          _kind = value!;
+                          if (_fitCategory(_selectedCategoryId, _kind) == null &&
+                              _selectedCategoryId != null) {
+                            _selectedCategoryId = null;
+                            _categoryHint.clear();
+                            _subcategoryHint.clear();
+                          }
+                        }),
                       ),
                       fieldGap,
                       TextField(
@@ -1619,7 +1635,7 @@ class _EditImportRowState extends State<_EditImportRow> {
                       ),
                       fieldGap,
                       DropdownButtonFormField<String?>(
-                        key: const ValueKey('import-edit-category'),
+                        key: ValueKey('import-edit-category-$_kind'),
                         isExpanded: true,
                         initialValue: _selectedCategoryId,
                         decoration: const InputDecoration(
@@ -1633,7 +1649,10 @@ class _EditImportRowState extends State<_EditImportRow> {
                             value: null,
                             child: Text('Automatic classification'),
                           ),
-                          for (final category in widget.categories)
+                          for (final category in categoriesForKind(
+                            widget.categories,
+                            _entryKindOf(_kind),
+                          ))
                             DropdownMenuItem<String?>(
                               value: category.id,
                               child: Text(
