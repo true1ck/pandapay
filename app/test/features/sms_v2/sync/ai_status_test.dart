@@ -186,6 +186,15 @@ void main() {
       if (text) db.execute('INSERT INTO sms_captured_messages VALUES (?,?)', ['user:1', source]);
     }
 
+    test('the erase time and restore tries are reported', () {
+      state.put('wipe:ai:at', '2026-11-19T10:00:00Z');
+      state.put('restore:ai:count', '2');
+      final d = AiStatusReader(state).diagnostics();
+      expect(d.lastErasedAt, '2026-11-19T10:00:00Z');
+      expect(d.restoresTried, 2);
+      expect(d.withActiveAiRules(3).lastErasedAt, '2026-11-19T10:00:00Z');
+    });
+
     test('an empty phone reports zeros', () {
       final d = AiStatusReader(state).diagnostics();
       expect(

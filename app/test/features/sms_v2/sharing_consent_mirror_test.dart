@@ -164,4 +164,29 @@ void main() {
       expect(await tester.runAsync(() => readSharingConsent(ref)), isFalse);
     },
   );
+
+  group('sharingConsentAnswer: only a clear "no" is withdrawn', () {
+    Future<ConsentAnswer> answer(Future<ConsentRecord?> Function() read) =>
+        sharingConsentAnswer(namespace: ns, read: read);
+
+    test('the server saying granted or no grant is a clear answer', () async {
+      expect(await answer(() async => _granted()), ConsentAnswer.granted);
+      expect(await answer(() async => null), ConsentAnswer.withdrawn);
+    });
+
+    test('a lookup that failed for any reason is unknown, never withdrawn', () async {
+      expect(await answer(() async => throw StateError('401 while the token refreshes')), ConsentAnswer.unknown);
+      expect(await answer(() async => throw Exception('429 or 503')), ConsentAnswer.unknown);
+    });
+
+    test('offline: the mirror says granted, and no mirror is unknown, not withdrawn', () async {
+      expect(await answer(() async => throw TimeoutException('slow')), ConsentAnswer.unknown);
+      await answer(() async => _granted());
+      expect(await answer(() async => throw TimeoutException('slow')), ConsentAnswer.granted);
+    });
+
+    test('the bool form still treats unknown as not agreed', () async {
+      expect(await ask(() async => throw StateError('x')), isFalse);
+    });
+  });
 }

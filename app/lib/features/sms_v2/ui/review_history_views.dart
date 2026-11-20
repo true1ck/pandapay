@@ -713,14 +713,16 @@ class _PhoneDetails extends ConsumerWidget {
       key: const Key('gemini-phone-details'),
       padding: const EdgeInsets.only(top: 4),
       child: details.when(
+        skipLoadingOnReload: true,
         loading: () => Text('Reading this phone…', style: style),
         error: (_, _) => Text('Could not read this phone.', style: style),
         data: (d) => Text(
           'AI answers saved here: ${d.answersReady} usable, ${d.answersFailed} failed\n'
-          'Usable answers with their link: ${d.readyWithLink} of ${d.answersReady}\n'
+          'Formats linked to answers: ${d.linksSaved}; usable answers with their link: ${d.readyWithLink} of ${d.answersReady}\n'
           'AI rules in use now: ${d.activeAiRules}\n'
           'Messages read by an AI rule: ${d.readByAiRule}\n'
-          'Unknown messages: ${d.unknownMessages}, text still here: ${d.unknownWithText}',
+          'Unknown messages: ${d.unknownMessages}, text still here: ${d.unknownWithText}\n'
+          'Answers last erased: ${d.lastErasedAt ?? 'never'}; restores tried: ${d.restoresTried}',
           style: style,
         ),
       ),

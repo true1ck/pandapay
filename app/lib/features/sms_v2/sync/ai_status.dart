@@ -42,6 +42,8 @@ class AiPhoneDiagnostics {
     this.unknownWithText = 0,
     this.readByAiRule = 0,
     this.activeAiRules = 0,
+    this.lastErasedAt,
+    this.restoresTried = 0,
   });
 
   /// Answers the server sent that carry a usable rule.
@@ -69,6 +71,12 @@ class AiPhoneDiagnostics {
   /// rule bundle).
   final int activeAiRules;
 
+  /// When the phone last erased its AI answers (sharing withdrawn), if ever.
+  final String? lastErasedAt;
+
+  /// How many times the phone asked the server to send its answers again.
+  final int restoresTried;
+
   AiPhoneDiagnostics withActiveAiRules(int count) => AiPhoneDiagnostics(
     answersReady: answersReady,
     answersFailed: answersFailed,
@@ -78,6 +86,8 @@ class AiPhoneDiagnostics {
     unknownWithText: unknownWithText,
     readByAiRule: readByAiRule,
     activeAiRules: count,
+    lastErasedAt: lastErasedAt,
+    restoresTried: restoresTried,
   );
 }
 
@@ -164,6 +174,8 @@ class AiStatusReader {
       unknownMessages: unknown,
       unknownWithText: unknownWithText,
       readByAiRule: readByAi,
+      lastErasedAt: state.get('wipe:ai:at'),
+      restoresTried: int.tryParse(state.get('restore:ai:count') ?? '') ?? 0,
     );
   }
 

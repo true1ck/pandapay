@@ -168,6 +168,7 @@ class DraftRejectionUpload {
     required this.baseUri,
     required this.headers,
     required this.hasConsent,
+    this.consentWithdrawn,
     required this.accountIsCurrent,
     DateTime Function()? clock,
   }) : clock = clock ?? DateTime.now;
@@ -177,6 +178,9 @@ class DraftRejectionUpload {
   final Uri baseUri;
   final Future<Map<String, String>> Function() headers;
   final Future<bool> Function() hasConsent;
+
+  /// See [TemplateUpload.consentWithdrawn].
+  final Future<bool> Function()? consentWithdrawn;
   final bool Function() accountIsCurrent;
   final DateTime Function() clock;
 
@@ -193,7 +197,11 @@ class DraftRejectionUpload {
       return false;
     }
     if (!accountIsCurrent()) return false;
-    if (!consent) TemplateUpload.forgetSharedState(queue);
+    if (!consent) {
+      final gone = consentWithdrawn == null || await consentWithdrawn!();
+      if (!accountIsCurrent()) return false;
+      if (gone) TemplateUpload.forgetSharedState(queue);
+    }
     return consent;
   }
 

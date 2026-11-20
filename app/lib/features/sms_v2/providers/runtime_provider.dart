@@ -57,6 +57,9 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
   );
   final attestation = DeviceAttestation(deviceId: deviceId);
   final categories = ref.watch(app.categoriesProvider).valueOrNull ?? const [];
+  // The last answer the consent lookup gave, so the upload code can tell a
+  // clear "withdrawn" from a lookup that merely failed.
+  var lastConsent = ConsentAnswer.unknown;
   return SmsV2Runtime(
     financial: cache.financialStore,
     catalogue: ref.watch(app.catalogueProvider).valueOrNull ?? const [],
@@ -93,12 +96,14 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
     hasSharingConsent: () async {
       if (!current()) return false;
       // The server's answer, or its local mirror when it cannot be reached.
-      final granted = await sharingConsentWithMirror(
+      lastConsent = await sharingConsentAnswer(
         namespace: namespace,
         read: () => ref.read(app.smsSharedLearningConsentProvider.future),
       );
-      return current() && granted;
+      return current() && lastConsent == ConsentAnswer.granted;
     },
+    // Erase the AI answers only when the server clearly said "withdrawn".
+    consentWithdrawn: () async => lastConsent == ConsentAnswer.withdrawn,
     categoryIdBySlug: {
       for (final category in categories) category.slug: category.id,
     },

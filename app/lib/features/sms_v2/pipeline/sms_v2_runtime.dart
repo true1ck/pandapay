@@ -39,6 +39,7 @@ import '../sync/learning_signals.dart';
 import '../sync/sharing_consent_mirror.dart';
 import '../sync/draft_feedback.dart';
 import '../sync/ai_server_status.dart';
+import '../sync/ai_answer_restore.dart';
 import '../sync/template_resend.dart';
 import '../sync/template_upload.dart';
 import '../sync/stats_upload.dart';
@@ -70,6 +71,7 @@ class SmsV2Runtime {
     required this.loadShippedBundle,
     required this.accountIsCurrent,
     this.hasSharingConsent = _noConsent,
+    this.consentWithdrawn,
     this.ownerNames = _noOwnerNames,
     this.catalogue = const [],
     this.cardRepository,
@@ -105,6 +107,11 @@ class SmsV2Runtime {
   static Future<bool> _noConsent() async => false;
   static List<String> _noOwnerNames() => const [];
   final Future<bool> Function() hasSharingConsent;
+
+  /// True only when the server clearly said sharing is withdrawn (not when the
+  /// lookup failed). Decides whether saved AI answers are erased. Null keeps
+  /// the old behaviour (any "no" erases).
+  final Future<bool> Function()? consentWithdrawn;
 
   /// The account owner's names, read when messages are captured.
   final List<String> Function() ownerNames;
@@ -636,6 +643,13 @@ class SmsV2Runtime {
     // person having to open the review screen.
     await networked(() async {
       if (!await hasSharingConsent()) return;
+      // A phone that lost its saved AI answers while the server already
+      // answered gets them again (see restoreLostAiAnswers).
+      restoreLostAiAnswers(
+        financial.database.db,
+        namespace: namespace,
+        now: clock(),
+      );
       await releaseHeldTemplatesInBackground(
         financial.database.db,
         namespace: namespace,
@@ -655,6 +669,7 @@ class SmsV2Runtime {
         baseUri: baseUri,
         headers: headers,
         hasConsent: hasSharingConsent,
+        consentWithdrawn: consentWithdrawn,
         accountIsCurrent: accountIsCurrent,
         clock: clock,
       ).drain(),
@@ -750,6 +765,7 @@ class SmsV2Runtime {
         baseUri: baseUri,
         headers: headers,
         hasConsent: hasSharingConsent,
+        consentWithdrawn: consentWithdrawn,
         accountIsCurrent: accountIsCurrent,
         clock: clock,
       ).drain(),

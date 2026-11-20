@@ -64,12 +64,25 @@ bool consentLookupWasOffline(Object error) =>
     error is TimeoutException ||
     isTransientNetworkFailure(error);
 
-/// Whether sharing is agreed: the server's answer when there is one (which
-/// also refreshes the mirror, so a withdrawal is seen as soon as the server
-/// is asked), the mirror when the server could not be reached. Any other
-/// failure is "not agreed": nothing is shared on a guess. [read] returns the
-/// current grant record, or null when there is none.
-Future<bool> sharingConsentWithMirror({
+/// What the server and the local mirror say about sharing consent.
+enum ConsentAnswer {
+  /// A current grant: the server said so, or (offline) the mirror remembers it.
+  granted,
+
+  /// The server answered and there is no current grant. The only answer that
+  /// justifies erasing what came from sharing.
+  withdrawn,
+
+  /// The lookup failed (offline with no mirror, an expired login, a busy or
+  /// broken server). Nothing is shared on a guess, and nothing is erased on one.
+  unknown,
+}
+
+/// The three-way answer behind [sharingConsentWithMirror]. A failed lookup is
+/// [ConsentAnswer.unknown], never [ConsentAnswer.withdrawn]: a phone that is
+/// offline, or whose login is being renewed, must not lose the AI answers it
+/// holds (the server sends each answer once).
+Future<ConsentAnswer> sharingConsentAnswer({
   required String namespace,
   required Future<ConsentRecord?> Function() read,
 }) async {
@@ -78,10 +91,24 @@ Future<bool> sharingConsentWithMirror({
     record = await read();
   } catch (error) {
     if (consentLookupWasOffline(error)) {
-      return SmsSharedLearningConsentMirror.isGranted(namespace);
+      return await SmsSharedLearningConsentMirror.isGranted(namespace)
+          ? ConsentAnswer.granted
+          : ConsentAnswer.unknown;
     }
-    return false;
+    return ConsentAnswer.unknown;
   }
   await SmsSharedLearningConsentMirror.set(namespace, record != null);
-  return record != null;
+  return record != null ? ConsentAnswer.granted : ConsentAnswer.withdrawn;
 }
+
+/// Whether sharing is agreed: the server's answer when there is one (which
+/// also refreshes the mirror, so a withdrawal is seen as soon as the server
+/// is asked), the mirror when the server could not be reached. Any other
+/// failure is "not agreed": nothing is shared on a guess. [read] returns the
+/// current grant record, or null when there is none.
+Future<bool> sharingConsentWithMirror({
+  required String namespace,
+  required Future<ConsentRecord?> Function() read,
+}) async =>
+    await sharingConsentAnswer(namespace: namespace, read: read) ==
+    ConsentAnswer.granted;

@@ -24,6 +24,7 @@ class TemplateUpload {
     required this.baseUri,
     required this.headers,
     required this.hasConsent,
+    this.consentWithdrawn,
     required this.accountIsCurrent,
     this.shareWording = smsShareWording,
     DateTime Function()? clock,
@@ -35,6 +36,12 @@ class TemplateUpload {
   final Uri baseUri;
   final Future<Map<String, String>> Function() headers;
   final Future<bool> Function() hasConsent;
+
+  /// True only when the server clearly says sharing is withdrawn. [hasConsent]
+  /// is also false when the lookup failed, which must not erase the AI answers
+  /// this phone holds. Null (callers that do not know the difference) keeps the
+  /// old behaviour: any "no" erases.
+  final Future<bool> Function()? consentWithdrawn;
   final bool Function() accountIsCurrent;
   final bool shareWording;
   final DateTime Function() clock;
@@ -61,7 +68,9 @@ class TemplateUpload {
     if (!accountIsCurrent()) return false;
     if (!consent) {
       _consentConfirmed = null;
-      forgetSharedState(queue);
+      final gone = consentWithdrawn == null || await consentWithdrawn!();
+      if (!accountIsCurrent()) return false;
+      if (gone) forgetSharedState(queue);
     } else {
       _consentConfirmed = Stopwatch()..start();
     }
@@ -80,6 +89,11 @@ class TemplateUpload {
       queue.db.execute(
         "DELETE FROM v2_outbox WHERE namespace=? AND kind IN ('template','draft_rejection')",
         [queue.namespace],
+      );
+      // Written down so a phone that lost its answers can say when and why.
+      SyncStateStore(queue.db, namespace: queue.namespace).put(
+        'wipe:ai:at',
+        DateTime.now().toUtc().toIso8601String(),
       );
       queue.db.execute('RELEASE sms_v2_template_revoke');
     } catch (_) {

@@ -655,6 +655,8 @@ void main() {
                 unknownWithText: 120,
                 readByAiRule: 7,
                 activeAiRules: 46,
+                lastErasedAt: '2026-11-19T10:00:00Z',
+                restoresTried: 1,
               ),
             ),
             app.smsSharedLearningConsentProvider.overrideWith(
@@ -678,6 +680,8 @@ void main() {
       await tester.pump();
       expect(find.textContaining('50 usable, 14 failed'), findsOneWidget);
       expect(find.textContaining('46 of 50'), findsOneWidget);
+      expect(find.textContaining('Formats linked to answers: 48'), findsOneWidget);
+      expect(find.textContaining('last erased: 2026-11-19T10:00:00Z; restores tried: 1'), findsOneWidget);
       expect(find.textContaining('AI rules in use now: 46'), findsOneWidget);
       expect(find.textContaining('read by an AI rule: 7'), findsOneWidget);
       expect(find.textContaining('Unknown messages: 123, text still here: 120'), findsOneWidget);

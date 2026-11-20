@@ -885,4 +885,60 @@ void main() {
       expect(ProvisionalStore(state).overlay(shared).bundle, shared);
     },
   );
+
+  group('a saved AI answer is erased only when sharing is clearly withdrawn', () {
+    late AppDatabase db;
+    late OutboxStore queue;
+    late SyncStateStore state;
+    setUp(() {
+      db = AppDatabase.forTesting(sqlite3.openInMemory());
+      SmsV2Schema.ensure(db.db);
+      SmsIntakeRepository(db);
+      queue = OutboxStore(db.db, namespace: 'a');
+      state = SyncStateStore(db.db, namespace: 'a');
+      state.put('ai:${'a' * 64}', jsonEncode({'templateHash': 'a' * 64, 'status': 'ready', 'rule': {'id': 'AI-x'}}));
+      state.put('template:origins:${'a' * 64}', jsonEncode({'senderBrand': 'HDFCBK', 'localHashes': ['b' * 64]}));
+    });
+    tearDown(() => db.db.dispose());
+
+    TemplateUpload uploader({
+      required bool consent,
+      Future<bool> Function()? withdrawn,
+    }) => TemplateUpload(
+      intake: SmsIntakeRepository(db),
+      queue: queue,
+      baseUri: Uri.parse('https://api.invalid'),
+      headers: () async => {},
+      hasConsent: () async => consent,
+      consentWithdrawn: withdrawn,
+      accountIsCurrent: () => true,
+      clock: () => DateTime.utc(2026, 11, 20),
+      client: MockClient((_) async => http.Response('{}', 200)),
+    );
+
+    bool kept() => state.get('ai:${'a' * 64}') != null && state.get('template:origins:${'a' * 64}') != null;
+
+    test('a failed consent lookup does not erase the answers', () async {
+      await uploader(consent: false, withdrawn: () async => false).drain();
+      expect(kept(), isTrue);
+      expect(state.get('wipe:ai:at'), isNull);
+    });
+
+    test('a clear withdrawal erases them and writes down when', () async {
+      await uploader(consent: false, withdrawn: () async => true).drain();
+      expect(state.get('ai:${'a' * 64}'), isNull);
+      expect(state.get('template:origins:${'a' * 64}'), isNull);
+      expect(state.get('wipe:ai:at'), isNotNull);
+    });
+
+    test('without the new check the old behaviour stays (every other caller)', () async {
+      await uploader(consent: false).drain();
+      expect(kept(), isFalse);
+    });
+
+    test('with consent nothing is erased', () async {
+      await uploader(consent: true, withdrawn: () async => true).drain();
+      expect(kept(), isTrue);
+    });
+  });
 }
