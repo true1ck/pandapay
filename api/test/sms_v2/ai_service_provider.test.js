@@ -56,7 +56,10 @@ function makeStore() {
       assert.fail("service outages must not count against layouts");
     },
     async recordAttempt(_template, _attempt, entry) { attempts.push(entry); },
-    async finish(_template, entry) { finished.push(entry); },
+    async finish(_template, entry) {
+      if (entry.acceptedAttempt) attempts.push(entry.acceptedAttempt.usage);
+      finished.push(entry);
+    },
   };
 }
 
@@ -118,6 +121,85 @@ test("worker requeues service outages with Retry-After and resumes when availabl
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
 });
 
+test("ordered routing resumes after a backend-rejected draft on the capability-only endpoint", async () => {
+  const store = makeStore();
+  store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 1, ai_excluded_providers: ["experiential"] });
+  const calls = [];
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (url, options) => {
+      const headers = new Headers(options.headers);
+      calls.push({
+        path: url.pathname, after: headers.get("x-ai-after-provider"), skip: headers.get("x-ai-skip-providers"),
+        timeout: Number(headers.get("x-ai-timeout-ms")),
+      });
+      const draft = answer();
+      if (calls.length === 1) draft.emit[0].attrs.direction = "sideways";
+      const identity = calls.length === 1
+        ? { provider: "gemini", model: config.model }
+        : { provider: "groq", model: "openai/gpt-oss-20b" };
+      return serviceJson({ answer: draft, ...usage, ...identity, routeHadInfrastructureFailure: false }, {
+        headers: { "x-ai-routing": "ordered-v1" },
+      });
+    },
+  });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.finished[0].model, "openai/gpt-oss-20b");
+  assert.deepEqual(store.attempts.map((entry) => [entry.outcome, entry.totalTokens, entry.costUsd]), [
+    // A rejected draft was billed: its tokens are recorded (outcome stays "rejected", not "valid"); the service owns the price.
+    ["rejected", 60, null],
+    ["valid", 60, null],
+  ]);
+  assert.deepEqual(calls.map(({ path, after, skip }) => [path, after, skip]), [
+    ["/v1/sms-rule-drafts/ordered", null, "experiential"],
+    ["/v1/sms-rule-drafts/ordered", "gemini", "experiential"],
+  ]);
+  assert.ok(calls[0].timeout > 0 && calls[0].timeout <= 90000);
+  assert.ok(calls[1].timeout <= calls[0].timeout);
+});
+
+test("an infrastructure failure earlier in the route stays retryable after all remaining candidates fail", async () => {
+  const store = makeStore();
+  store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 3 });
+  const calls = [];
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, { headers }) => {
+      calls.push(new Headers(headers));
+      const options = { headers: { "x-ai-routing": "ordered-v1" } };
+      if (calls.length === 2) {
+        return serviceJson({ error: { code: "invalid_provider_output" } }, { ...options, status: 502 });
+      }
+      const badDraft = answer();
+      badDraft.emit[0].attrs.direction = "sideways";
+      return serviceJson({
+        ...usage, answer: badDraft, provider: "groq", model: "openai/gpt-oss-20b", routeHadInfrastructureFailure: true,
+      }, options);
+    },
+  });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "retry_scheduled");
+  assert.equal(calls[1].get("x-ai-prior-unavailable"), "true");
+  assert.equal(store.finished[0].retryKind, "infrastructure");
+});
+
+test("a service that does not speak ordered routing is the last route: its rejected draft is a content failure", async () => {
+  for (const legacyDraft of [true, false]) {
+    const store = makeStore();
+    store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 3 });
+    const draft = answer();
+    draft.emit[0].attrs.direction = "sideways";
+    const provider = createAiServiceProvider({
+      env,
+      fetchImpl: async () => legacyDraft
+        ? serviceJson({ ...usage, answer: draft })
+        : serviceJson({ error: { code: "invalid_provider_output" } }, { status: 502 }),
+    });
+    const result = await runWorkerCycle({ layoutStore: store, provider, config });
+    assert.equal(result.status, "failed");
+    assert.equal(store.finished[0].retryKind, "content");
+  }
+});
+
 test("worker holds mismatched models and incompatible service responses safely", async () => {
   for (const response of [
     serviceJson({ answer: answer(), ...usage, model: "bad model!" }),
@@ -148,7 +230,7 @@ test("a configured prompt version is sent and recorded for the matching service 
   assert.equal(store.attempts[0].promptVersion, customVersion);
 });
 
-test("worker rejects an invalid draft after one paid call (a retry would repeat the same request)", async () => {
+test("worker rejects an invalid draft after one paid call and books its tokens (a retry would repeat the same request)", async () => {
   const store = makeStore();
   let calls = 0;
   const invalid = answer();
@@ -157,7 +239,8 @@ test("worker rejects an invalid draft after one paid call (a retry would repeat 
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
   assert.equal(store.finished[0].code, "draft_validation_failed");
   assert.equal(calls, 1);
-  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["validation", null]]);
+  // The rejected draft was billed: its tokens are kept; the service owns the price, so the cost stays empty.
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.totalTokens, a.costUsd]), [["validation", 60, null]]);
 });
 
 test("worker accounts for billed invalid provider output", async () => {
@@ -167,7 +250,7 @@ test("worker accounts for billed invalid provider output", async () => {
     serviceJson({ error: { code: "invalid_provider_output" }, ...usage }, { status: 502 })) });
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "failed");
   assert.equal(calls, 1);
-  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.costUsd]), [["json_invalid", null]]);
+  assert.deepEqual(store.attempts.map((a) => [a.errorKind, a.totalTokens, a.costUsd]), [["json_invalid", 60, null]]);
 });
 
 test("unsafe sender and wording cannot cross the service boundary", async () => {

@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const full = require('../../../contracts/sms/v2/fixtures/valid/bundle/full.json');
-const { template, config, rule, answer } = require('./fixtures/template_draft');
+const { template, config, rule, answer, layoutHash } = require('./fixtures/template_draft');
 const { startLoopHarness, registerAllLoopAdminRoutes, skip, V3 } = require('./helpers/loop_harness');
 const { createPgWorkerStore, runTemplateWorkerOnce } = require('../../src/sms_v2/template_worker');
 const { importBundle } = require('../../src/sms_v2/rules_admin_route');
@@ -17,7 +17,7 @@ const V2 = 'sms-shared-learning-v2';
 
 // A second layout of the same sender that reads differently from the fixture one.
 const second = {
-  template_hash: 'b'.repeat(64),
+  template_hash: layoutHash('TESTBK', '<AMT> paid at <PARTY>.'),
   sender_brand: 'TESTBK',
   redacted_body: '<AMT> paid at <PARTY>.',
 };

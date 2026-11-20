@@ -240,3 +240,41 @@ test("S13 the request is small for every layout and stays under the token budget
   const sizes = log.map((c) => Math.round((c.systemBytes + c.userBytes) / 3.2));
   assert.ok(sizes.every((n) => n < 1800), `request sizes (tokens): ${sizes.join(", ")}`);
 });
+
+// INT-1: a draft that is well formed but wrong about the message (what the QA audit's S3-1 found) is refused by the
+// worker, so no phone receives it; the same layout with a correct draft is accepted.
+test("S14 a draft with the direction flipped, or the balance used as the amount, is refused twice and never delivered; the repair try can fix it", async (t) => {
+  const flipped = await rig(t, { layouts: [LAYOUTS[0]] });
+  await flipped.post("/_faults", [{ mode: "wrong", wrong: "direction", times: 2 }]);
+  await flipped.drain();
+  assert.equal(flipped.rows[0].ai_status, "failed");
+  assert.equal(flipped.rows[0].draft, null, "nothing to deliver");
+  assert.equal(flipped.rows[0].code, "draft_validation_failed");
+  assert.match(JSON.stringify(flipped.rows[0].detail), /direction/);
+
+  const balance = await rig(t, { layouts: [LAYOUTS[0]] });
+  await balance.post("/_faults", [{ mode: "wrong", wrong: "balance_amount", times: 2 }]);
+  await balance.drain();
+  assert.equal(balance.rows[0].ai_status, "failed");
+  assert.equal(balance.rows[0].draft, null);
+  assert.match(JSON.stringify(balance.rows[0].detail), /posted_amount_is_balance/);
+
+  // One wrong answer, then the model is told why and answers correctly: the second try is accepted.
+  const repaired = await rig(t, { layouts: [LAYOUTS[0]] });
+  await repaired.post("/_faults", [{ mode: "wrong", wrong: "balance_amount", times: 1 }]);
+  await repaired.drain();
+  assert.equal(repaired.rows[0].ai_status, "ready");
+  assert.deepEqual(validateDraft(repaired.rows[0].draft, repaired.rows[0], config.model), []);
+  assert.equal(repaired.attempts.length, 2);
+});
+
+test("S15 the same layout with a correct draft is accepted, and so is every other layout of the queue when one answer is wrong", async (t) => {
+  const r = await rig(t, { layouts: [LAYOUTS[0], LAYOUTS[3], LAYOUTS[2]] });
+  await r.post("/_faults", [{ mode: "wrong", wrong: "direction", times: 2 }]); // the first layout only
+  await r.drain();
+  assert.deepEqual(states(r.rows), ["failed", "ready", "ready"]);
+  const movement = (row) => row.draft.emit[0].attrs.direction;
+  assert.equal(movement(r.rows[1]), "credit");
+  assert.equal(movement(r.rows[2]), "debit");
+  for (const row of r.rows.slice(1)) assert.deepEqual(validateDraft(row.draft, row, config.model), []);
+});

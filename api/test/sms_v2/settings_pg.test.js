@@ -151,8 +151,8 @@ test('settings and per-user limits on a fully migrated Postgres', { skip: !url |
     } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   };
   const item = (n) => ({
-    templateHash: crypto.createHash('sha256').update(`t${n}`).digest('hex'), senderBrand: 'TESTBK',
-    redactedBody: '<AMT> paid to <PARTY>.', observedAt: new Date().toISOString(),
+    templateHash: crypto.createHash('sha256').update(`TESTBK\n<AMT> paid to <PARTY> t${n}.`).digest('hex'), senderBrand: 'TESTBK',
+    redactedBody: `<AMT> paid to <PARTY> t${n}.`, observedAt: new Date().toISOString(),
   });
   const submit = (...items) => withUser(profile, (client) => client.query(
     'SELECT * FROM pandapay.sms_v2_submit_templates($1::jsonb,true)', [JSON.stringify(items)]));

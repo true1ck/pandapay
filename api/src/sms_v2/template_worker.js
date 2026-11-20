@@ -6,6 +6,7 @@ const { lintPattern } = require("./rules_admin_route");
 const { redactionError, sampleError } = require("./ai_templates");
 const { readSettings, DEFAULT_AI_MODEL, envNumber } = require("./settings");
 const { LayoutError, FILLS, buildMatcher, slotValues, exampleBodies, fillWith, fillSynthetic, fillTags } = require("./layout_matcher");
+const { sanityErrors, isDoubtful, DOUBTFUL_CONFIDENCE } = require("./draft_sanity");
 const { PROMPT_VERSION, SMS_PLACEHOLDERS, SMS_DOMAIN_RULES, buildPrompt } = require("./ai_prompt");
 
 const path = require("node:path");
@@ -41,7 +42,7 @@ const isSet = (env, key) => env[key] !== undefined && env[key] !== "";
 // the same request is worth sending again later. This is NOT a bad draft, so it never costs the layout one of its
 // tries; the worker puts the layout back in the queue and waits.
 class ProviderBusyError extends Error {
-  constructor(reason, { retryAfterMs = 0, status = null, systemic = false } = {}) {
+  constructor(reason, { retryAfterMs = 0, status = null, systemic = false, configFault = false } = {}) {
     super(reason);
     this.name = "ProviderBusyError";
     this.retryAfterMs = retryAfterMs;
@@ -49,6 +50,9 @@ class ProviderBusyError extends Error {
     // The fault is ours or the account's (bad key, wrong model, billing), not the layout's: it says nothing about
     // the layout, so it never counts against it however often it repeats.
     this.systemic = systemic;
+    // The service answered but is wrong for this worker (token, prompt revision, model, routing): every layout gets
+    // the same answer until someone fixes it, so no layout's job attempt is spent on it and the worker rests.
+    this.configFault = configFault;
   }
 }
 // After this many separate provider failures for one layout (over many waits) it is given up on, so a layout the
@@ -192,6 +196,8 @@ function stampDraft(rule, template, model) {
   if (typeof stamped.confidence !== "number" || !Number.isFinite(stamped.confidence)) {
     stamped.confidence = 0.9;
   }
+  // A layout too thin to be sure of (no debit/credit word, unlabelled amounts) is read below the phone's confident line, so the person is asked.
+  if (isDoubtful(stamped, template.redacted_body)) stamped.confidence = Math.min(stamped.confidence, DOUBTFUL_CONFIDENCE);
   if (!stamped.updatedAt || typeof stamped.updatedAt !== "string") {
     stamped.updatedAt = new Date().toISOString();
   }
@@ -428,6 +434,7 @@ function validateDraft(rule, template, model, otherLayouts = []) {
     errors.push("movement_family_conflict");
   if (/\bblocked\b/i.test(words) && types.includes("movement"))
     errors.push("hold_cannot_emit_movement");
+  errors.push(...sanityErrors(rule, template.redacted_body));
   const bundle = {
     schema: "pandapay.sms.rules/2",
     bundleVersion: 0,
@@ -592,12 +599,55 @@ async function recordUsage(client, { jobId, attempt, usage }) {
   }
 }
 
+const NO_DRAFT_USAGE = { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: null };
+
+// In service mode the service owns cost and limits, so the worker books tokens but never a price.
+function draftUsage(response, config, layoutOnly) {
+  const tokens = (value) => Number.isSafeInteger(value) && value >= 0 ? value : 0;
+  const inputTokens = tokens(response?.inputTokens);
+  const outputTokens = tokens(response?.outputTokens);
+  const totalTokens = Math.max(tokens(response?.totalTokens), inputTokens + outputTokens);
+  const billedOutputTokens = Math.max(outputTokens, totalTokens - inputTokens);
+  const costUsd = layoutOnly || config.inputPrice === null || config.outputPrice === null || !Number.isSafeInteger(response?.totalTokens)
+    ? null
+    : (inputTokens * config.inputPrice + billedOutputTokens * config.outputPrice) / 1000000;
+  return { inputTokens, outputTokens: billedOutputTokens, totalTokens, costUsd };
+}
+
 // `transaction` (the production worker login, see ai_worker_store.js) or
 // `withAdminClient` + `adminId` (the private admin API login, used locally).
 // Both run every operation in one transaction. Submitter and consent rows are
 // never read directly: pandapay.sms_v2_ai_consent_people answers how many
 // consenting people submitted a layout, in either mode.
-function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
+const DRAFT_JOB_DEADLINE_MS = 90000;
+const DRAFT_JOB_LEASE_MS = 120000;
+const MAX_DRAFT_ROUTE_CALLS = 8; // Up to seven providers and one exhaustion response.
+// A job that ends with a rejected draft or the 90 s budget run out while "some route had trouble" is retried
+// (5 min, 30 min, 24 h) without counting against the layout. Three such exhausted cycles in a row (nine jobs) fail it
+// for good, so a layout that always times out cannot use the provider for ever.
+const INFRA_EXHAUSTION_CYCLES = 3;
+function infraExhaustionTerminal(template) {
+  return template.ai_job_attempts >= 3 && template.ai_counted_jobs + 1 >= INFRA_EXHAUSTION_CYCLES;
+}
+
+async function reapExpiredDraftJobs(client, draftingVersion) {
+  await client.query(
+    `WITH expired AS (
+       SELECT template_hash FROM sms_v2_unknown_templates
+        WHERE ai_status='working' AND lease_expires_at<=clock_timestamp()
+        ORDER BY lease_expires_at,template_hash LIMIT 50 FOR UPDATE SKIP LOCKED
+     )
+     UPDATE sms_v2_unknown_templates t SET ai_status='queued',lease_id=NULL,lease_expires_at=NULL,
+       ai_drafting_version=coalesce(t.ai_drafting_version,$1),ai_job_attempts=greatest(t.ai_job_attempts,1),
+       ai_run_after=clock_timestamp()+pandapay.sms_v2_draft_retry_delay(greatest(t.ai_job_attempts,1)),
+       failure_code=CASE WHEN t.ai_job_attempts=3 THEN 'draft_infrastructure_exhausted' ELSE 'worker_interrupted' END,
+       result_revision=nextval('sms_v2_template_revision')
+       FROM expired WHERE t.template_hash=expired.template_hash`,
+    [draftingVersion],
+  );
+}
+
+function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVersion }) {
   const tx = transaction
     ? (operation) => transaction(operation)
     : (operation) => withAdminClient(adminId, "learning.publish", operation);
@@ -624,17 +674,46 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
         await client.query(
           "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
         );
-        // A crashed call can have incurred provider cost. Never reissue it.
-        await client.query(
-          "UPDATE sms_v2_unknown_templates SET ai_status='failed',failure_code='worker_interrupted',result_revision=nextval('sms_v2_template_revision') WHERE ai_status='working' AND lease_expires_at<clock_timestamp()",
-        );
+        if (draftingVersion) {
+          await reapExpiredDraftJobs(client, draftingVersion);
+          await client.query(
+            `WITH capped AS (
+               SELECT template_hash FROM sms_v2_unknown_templates
+                WHERE ai_status='queued' AND coalesce((ai_counted_jobs_by_version->>$1)::int,0)>=5
+                ORDER BY queued_at,template_hash LIMIT 50 FOR UPDATE SKIP LOCKED
+             )
+             UPDATE sms_v2_unknown_templates t SET ai_status='failed',failure_code='draft_layout_cap',
+               ai_drafting_version=$1,ai_counted_jobs=5,result_revision=nextval('sms_v2_template_revision')
+               FROM capped WHERE t.template_hash=capped.template_hash`,
+            [draftingVersion],
+          );
+        } else {
+          await client.query(
+            "UPDATE sms_v2_unknown_templates SET ai_status='failed',failure_code='worker_interrupted',result_revision=nextval('sms_v2_template_revision') WHERE ai_status='working' AND lease_expires_at<clock_timestamp()",
+          );
+        }
         const row = (
           await client.query(`SELECT t.* FROM sms_v2_unknown_templates t WHERE t.ai_status='queued' AND ${currentConsent}
+          ${draftingVersion ? "AND t.ai_run_after<=clock_timestamp() AND coalesce((t.ai_counted_jobs_by_version->>$1)::int,0)<5" : ""}
           ORDER BY t.queued_at,t.template_hash
-          LIMIT 1 FOR UPDATE OF t SKIP LOCKED`)
+          LIMIT 1 FOR UPDATE OF t SKIP LOCKED`, draftingVersion ? [draftingVersion] : [])
         ).rows[0];
         if (!row) return null;
         const leaseId = crypto.randomUUID();
+        if (draftingVersion) {
+          const restart = row.ai_drafting_version !== draftingVersion || row.ai_job_attempts >= 3;
+          const updated = await client.query(
+            `UPDATE sms_v2_unknown_templates SET ai_status='working',lease_id=$2,
+              lease_expires_at=clock_timestamp()+($3*interval '1 millisecond'),
+              ai_drafting_version=$4,ai_job_attempts=$5,ai_counted_jobs=coalesce((ai_counted_jobs_by_version->>$4)::int,0),
+              ai_excluded_providers=CASE WHEN $6::boolean THEN '{}'::text[] ELSE ai_excluded_providers END,
+              failure_code=NULL,failure_detail=NULL,result_revision=nextval('sms_v2_template_revision')
+              WHERE template_hash=$1 RETURNING *`,
+            [row.template_hash, leaseId, DRAFT_JOB_LEASE_MS, draftingVersion,
+              restart ? 1 : row.ai_job_attempts + 1, restart],
+          );
+          return updated.rows[0];
+        }
         await client.query(
           "UPDATE sms_v2_unknown_templates SET ai_status='working',lease_id=$2,lease_expires_at=clock_timestamp()+interval '3 minutes',result_revision=nextval('sms_v2_template_revision') WHERE template_hash=$1",
           [row.template_hash, leaseId],
@@ -713,7 +792,12 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
     requeueFailed(promptVersion = null) {
       return tx(async (client) =>
         Number(
-          (await client.query("SELECT pandapay.sms_v2_ai_requeue_failed($1::text) AS n", [promptVersion])).rows[0].n,
+          (await client.query(
+            draftingVersion
+              ? "SELECT pandapay.sms_v2_ai_requeue_durable($1::text) AS n"
+              : "SELECT pandapay.sms_v2_ai_requeue_failed($1::text) AS n",
+            [draftingVersion ?? promptVersion],
+          )).rows[0].n,
         ),
       );
     },
@@ -721,7 +805,8 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
       return tx(async (client) => {
         const row = (
           await client.query(
-            `SELECT t.* FROM sms_v2_unknown_templates t WHERE t.template_hash=$1 AND t.lease_id=$2 AND t.ai_status='working' AND ${currentConsent} FOR UPDATE OF t`,
+            `SELECT t.* FROM sms_v2_unknown_templates t WHERE t.template_hash=$1 AND t.lease_id=$2 AND t.ai_status='working'
+              AND t.lease_expires_at>clock_timestamp() AND ${currentConsent} FOR UPDATE OF t`,
             [template.template_hash, template.lease_id],
           )
         ).rows[0];
@@ -742,27 +827,75 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction }) {
     },
     // `detail` is the list of failure codes (never text). The swapped-number sample is deleted once the answer is
     // final (ready, failed or covered); a layout going back in the queue keeps it.
-    finish(template, { rule = null, code = null, model, requeue = false, covered = null, detail = null }) {
+    // retryKind: "content" (the draft was bad), "infrastructure" (the provider was in trouble; the attempt stays spent),
+    // "capacity" or "refund" (nothing was learned about the layout: the attempt is handed back). `evidence` says an
+    // infrastructure retry came with a layout actually being drafted; `excluded` lists providers whose draft was rejected.
+    finish(template, { rule = null, code = null, model, requeue = false, covered = null, detail = null, retryKind = null, retryAfterMs = 0, acceptedAttempt = null, evidence = false, excluded = [] }) {
       return tx(async (client) => {
         await client.query(
           "SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))",
         );
-        await client.query(
-          `UPDATE sms_v2_unknown_templates SET ai_status=$3::text,ai_draft=$4::jsonb,failure_code=$5,ai_model=$6,covered_by=$7,
-          failure_detail=$8::text[],sample=CASE WHEN $3::text='queued' THEN sample ELSE NULL END,
-          lease_id=NULL,lease_expires_at=NULL,result_revision=nextval('sms_v2_template_revision')
-          WHERE template_hash=$1 AND lease_id=$2 AND ai_status='working'`,
-          [
-            template.template_hash,
-            template.lease_id,
-            covered ? "covered" : requeue ? "queued" : rule ? "ready" : "failed",
-            rule ? JSON.stringify(rule) : null,
-            code,
-            model,
-            covered,
-            detail,
-          ],
-        );
+        let result;
+        if (draftingVersion) {
+          const retriesRemain = template.ai_job_attempts < 3;
+          const exhaustedByInfra = evidence && retryKind === "infrastructure" && !retriesRemain;
+          const terminalInfra = exhaustedByInfra && infraExhaustionTerminal(template);
+          const retry = retryKind !== null && (retryKind !== "content" || retriesRemain) && !terminalInfra;
+          const countJob = !!rule || (retryKind === "content" && !retriesRemain) || exhaustedByInfra;
+          const failureCode = retryKind === "infrastructure" && !retriesRemain
+            ? "draft_infrastructure_exhausted"
+            : code;
+          const status = covered ? "covered" : retry ? "queued" : rule ? "ready" : "failed";
+          result = await client.query(
+            `UPDATE sms_v2_unknown_templates t SET ai_status=$3,ai_draft=$4::jsonb,failure_code=$5,ai_model=$6,
+              covered_by=$7,failure_detail=$8,sample=NULL,lease_id=NULL,lease_expires_at=NULL,
+              ai_counted_jobs=ai_counted_jobs+$9::int,
+              ai_counted_jobs_by_version=CASE WHEN $9::int=0 THEN ai_counted_jobs_by_version
+                ELSE jsonb_set(ai_counted_jobs_by_version,ARRAY[ai_drafting_version],to_jsonb(ai_counted_jobs+1)) END,
+              ai_job_attempts=ai_job_attempts-CASE WHEN $10::boolean THEN 1 ELSE 0 END,
+              ai_run_after=CASE
+                WHEN $10::boolean THEN clock_timestamp()+greatest(interval '1 minute',$11*interval '1 millisecond')
+                WHEN $3='queued' THEN clock_timestamp()+greatest(
+                  pandapay.sms_v2_draft_retry_delay(ai_job_attempts),$11*interval '1 millisecond')
+                ELSE ai_run_after END,
+              ai_excluded_providers=CASE WHEN $3='queued' THEN
+                ARRAY(SELECT DISTINCT e FROM unnest(ai_excluded_providers||$12::text[]) AS e ORDER BY e) ELSE '{}'::text[] END,
+              result_revision=nextval('sms_v2_template_revision')
+              WHERE template_hash=$1 AND lease_id=$2 AND ai_status='working'
+                AND lease_expires_at>clock_timestamp() AND ${currentConsent}`,
+            [template.template_hash, template.lease_id, status, rule ? JSON.stringify(rule) : null, failureCode, model,
+              covered, detail, Number(countJob), retryKind === "capacity" || retryKind === "refund", retryAfterMs, excluded],
+          );
+        } else {
+          result = await client.query(
+            `UPDATE sms_v2_unknown_templates t SET ai_status=$3::text,ai_draft=$4::jsonb,failure_code=$5,ai_model=$6,covered_by=$7,
+            failure_detail=$8::text[],sample=CASE WHEN $3::text='queued' THEN sample ELSE NULL END,
+            lease_id=NULL,lease_expires_at=NULL,result_revision=nextval('sms_v2_template_revision')
+            WHERE template_hash=$1 AND lease_id=$2 AND ai_status='working' AND lease_expires_at>clock_timestamp()
+            ${acceptedAttempt ? `AND ${currentConsent}` : ""}`,
+            [
+              template.template_hash,
+              template.lease_id,
+              covered ? "covered" : requeue ? "queued" : rule ? "ready" : "failed",
+              rule ? JSON.stringify(rule) : null,
+              code,
+              model,
+              covered,
+              detail,
+            ],
+          );
+        }
+        if (acceptedAttempt) {
+          const { attempt, usage } = acceptedAttempt;
+          await recordUsage(client, {
+            jobId: template.lease_id,
+            attempt,
+            usage: result.rowCount === 1 ? usage : {
+              ...usage, ...NO_DRAFT_USAGE, outcome: "discarded", errorKind: "consent_or_lease_lost",
+            },
+          });
+        }
+        return result.rowCount === 1;
       });
     },
   };
@@ -782,6 +915,8 @@ async function runTemplateWorkerOnce({
   provider,
   config: baseConfig = workerConfig(),
   clock = Date.now,
+  // Aborted when the process is told to stop: the in-flight provider call is cancelled and the attempt handed back.
+  shutdown = null,
 }) {
   const layoutOnly = typeof provider.generateLayout === "function";
   let config = baseConfig;
@@ -805,11 +940,20 @@ async function runTemplateWorkerOnce({
   if (layoutOnly) config = { ...config, rpm: Infinity, tpm: Infinity };
   // Seconds to rest after a call to the provider, so the queue drains gently (free keys have small limits).
   const gapSeconds = settings?.ai_min_gap_seconds ?? 0;
+  // Start before claiming so queue bookkeeping and the request to Render, including a cold start,
+  // share the same time budget. The lease leaves extra time for the final PostgreSQL write.
+  const attemptDeadline = performance.now() + DRAFT_JOB_DEADLINE_MS;
+  const deadline = AbortSignal.timeout(DRAFT_JOB_DEADLINE_MS);
+  const callSignal = shutdown ? AbortSignal.any([deadline, shutdown]) : deadline;
+  if (shutdown?.aborted) return { status: "shutdown" };
   const template = await store.claim();
   if (!template) return { status: "idle" };
+  const durable = layoutOnly && template.ai_job_attempts > 0 && !!template.ai_drafting_version;
+  const routing = durable ? { skipProviders: template.ai_excluded_providers } : null;
   let errors = [];
   let failure = null;
   let draft = null;
+  const rejectedProviders = new Set();
   try {
     const rules = typeof store.activeRules === "function" ? await store.activeRules(template) : [];
     // A layout the active rules already read is not worth a provider call.
@@ -849,17 +993,20 @@ async function runTemplateWorkerOnce({
         families: [...new Set(rules.map((rule) => rule.family).filter(Boolean))],
       };
     }
-    // The service gets only the layout, so a second try would repeat the same paid call: one attempt there.
-    for (let attempt = 1; attempt <= (layoutOnly ? 1 : 2); attempt++) {
+    // A durable job walks the service's routes (up to MAX_DRAFT_ROUTE_CALLS calls, each to a later route, so none repeats
+    // a paid request). Any other service call gets one attempt: the service only sees the layout, a retry would repeat it.
+    for (let attempt = 1; attempt <= (durable ? MAX_DRAFT_ROUTE_CALLS : layoutOnly ? 1 : 2); attempt++) {
       // In service mode this prompt is used locally for the capacity estimate only.
       const prompt = buildPrompt({ template, matcher, ...directContext, fix: layoutOnly ? [] : errors });
       const blocked = await store.beginAttempt(template, attempt, prompt.system + prompt.user, config);
       if (blocked) {
+        if (blocked === "consent_or_lease_lost") return { status: "lease_lost" };
         await store.finish(template, {
           model: config.model,
           code: blocked,
           // Waiting for capacity is never a reason to give up on a layout, on any try.
           requeue: blocked === "capacity",
+          ...(durable && blocked === "capacity" ? { retryKind: "capacity" } : {}),
         });
         return { status: blocked };
       }
@@ -871,7 +1018,13 @@ async function runTemplateWorkerOnce({
       let answeredModel = config.model;
       try {
         response = layoutOnly
-          ? await provider.generateLayout({ ...layout, model: config.model, maxOutputTokens: config.maxOutputTokens })
+          ? await provider.generateLayout({
+              ...layout, model: config.model, maxOutputTokens: config.maxOutputTokens,
+              ...(durable ? {
+                signal: callSignal,
+                routing: { ...routing, timeoutMs: Math.max(1, Math.floor(attemptDeadline - performance.now())) },
+              } : {}),
+            })
           : await provider.generate({
               system: prompt.system,
               prompt: prompt.user,
@@ -886,49 +1039,51 @@ async function runTemplateWorkerOnce({
         failure = errors.length ? { kind: "validation", codes: errors, status: null } : null;
         if (!errors.length) draft = rule;
       } catch (error) {
+        // An unrouted call that answered with unusable output still reports what it used.
         if (layoutOnly) response ??= error?.usage;
         failure = failureOf(error);
         errors = failure.codes;
         if (error instanceof ProviderBusyError) busy = error;
         if (layoutOnly && error instanceof LayoutError) layoutError = error.code;
+        if (durable && failure.kind === "provider_error") {
+          busy = new ProviderBusyError("draft_worker_unavailable", { systemic: true });
+          failure = failureOf(busy);
+          errors = failure.codes;
+        }
       }
-      const tokens = (value) =>
-        Number.isSafeInteger(value) && value >= 0 ? value : 0;
-      const inputTokens = tokens(response?.inputTokens),
-        outputTokens = tokens(response?.outputTokens);
-      const totalTokens = Math.max(
-        tokens(response?.totalTokens),
-        inputTokens + outputTokens,
-      );
-      const billedOutputTokens = Math.max(
-        outputTokens,
-        totalTokens - inputTokens,
-      );
-      await store.recordAttempt(template, attempt, {
-        inputTokens,
-        outputTokens: billedOutputTokens,
-        totalTokens,
+      const usage = {
+        // A rejected draft was still billed: keep its tokens (zero when no answer came back). The service owns the price.
+        ...draftUsage(response, config, layoutOnly),
         latencyMs: Math.max(0, clock() - started),
         promptVersion: provider.promptVersion ?? PROMPT_VERSION,
         outcome: busy?.systemic ? "provider_error" : errors.length ? "rejected" : "valid",
         errorKind: failure?.kind ?? null,
         errorCodes: failure?.codes ?? null,
         httpStatus: failure?.status ?? null,
-        costUsd:
-          layoutOnly ||
-          config.inputPrice === null ||
-          config.outputPrice === null ||
-          !Number.isSafeInteger(response?.totalTokens)
-            ? null
-            : (inputTokens * config.inputPrice +
-                billedOutputTokens * config.outputPrice) /
-              1000000,
-      });
+      };
+      if (!layoutOnly || errors.length) await store.recordAttempt(template, attempt, usage);
       if (layoutError) {
         await store.finish(template, { model: config.model, code: layoutError, detail: ["layout", layoutError] });
         return { status: "failed", templateHash: template.template_hash };
       }
       if (busy) {
+        if (durable) {
+          // Told to stop, or the service is misconfigured: nothing was learned about the layout, so hand the attempt
+          // back. A misconfigured service also makes the worker rest instead of walking the queue.
+          const interrupted = shutdown?.aborted === true;
+          const refund = interrupted || busy.configFault;
+          const saved = await store.finish(template, {
+            model: config.model, code: interrupted ? "worker_interrupted" : "provider_unavailable",
+            detail: [failure.kind, ...failure.codes],
+            retryKind: refund ? "refund" : "infrastructure", retryAfterMs: busy.retryAfterMs || 0,
+          });
+          if (saved === false) return { status: "lease_lost" };
+          if (interrupted) return { status: "shutdown" };
+          return {
+            status: "provider_busy", retryAfterMs: busy.retryAfterMs || SYSTEMIC_WAIT_MS,
+            providerStatus: busy.status, systemic: true, rescheduled: !refund, gapSeconds,
+          };
+        }
         // The provider failed, not the draft. Do not spend the layout's tries on it: put it back in the queue and
         // let the worker wait. Only a layout the provider has failed on many separate times is given up on.
         if (busy.systemic) {
@@ -952,21 +1107,41 @@ async function runTemplateWorkerOnce({
         return { status: "provider_busy", retryAfterMs: busy.retryAfterMs || 0, providerStatus: busy.status };
       }
       if (!errors.length) {
-        await store.finish(template, { rule: draft, model: answeredModel });
+        const saved = await store.finish(template, {
+          rule: draft,
+          model: answeredModel,
+          ...(layoutOnly ? { acceptedAttempt: { attempt, usage } } : {}),
+        });
+        if (saved === false) return { status: "lease_lost" };
         return { status: "ready", templateHash: template.template_hash, gapSeconds };
       }
+      if (durable) {
+        routing.hadInfrastructureFailure ||= response?.routeHadInfrastructureFailure === true;
+        if (response?.routeProvider) rejectedProviders.add(response.routeProvider);
+        if (!response?.routeProvider) break;
+        routing.afterProvider = response.routeProvider;
+      }
     }
-    await store.finish(template, {
+    const infrastructure = durable && (deadline.aborted || routing.hadInfrastructureFailure);
+    const saved = await store.finish(template, {
       model: config.model,
-      code: "draft_validation_failed",
+      code: infrastructure ? "provider_unavailable" : "draft_validation_failed",
       detail: [failure.kind, ...failure.codes],
+      ...(durable ? { retryKind: infrastructure ? "infrastructure" : "content", evidence: infrastructure, excluded: [...rejectedProviders] } : {}),
     });
+    if (saved === false) return { status: "lease_lost" };
+    if (durable && (infrastructure ? !infraExhaustionTerminal(template) : template.ai_job_attempts < 3)) return { status: "retry_scheduled", gapSeconds };
     return { status: "failed", templateHash: template.template_hash, gapSeconds };
   } catch {
-    await store.finish(template, {
+    const interrupted = durable && shutdown?.aborted === true;
+    const saved = await store.finish(template, {
       model: config.model,
-      code: "worker_failed",
+      code: interrupted ? "worker_interrupted" : "worker_failed",
+      ...(durable ? { retryKind: interrupted ? "refund" : "infrastructure" } : {}),
     });
+    if (saved === false) return { status: "lease_lost" };
+    if (interrupted) return { status: "shutdown" };
+    if (durable) return { status: "retry_scheduled", gapSeconds };
     return { status: "failed", templateHash: template.template_hash };
   }
 }

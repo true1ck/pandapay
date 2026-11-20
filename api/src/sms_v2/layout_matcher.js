@@ -26,7 +26,14 @@ const WILDCARD = String.raw`[\s\S]{1,60}?`;
 const WILDCARD_KINDS = new Set(["party", "w"]);
 // A tag this module does not know (a newer phone) is read as a name too, and counts as one.
 const isWild = (kind) => WILDCARD_KINDS.has(kind) || !SLOT_PATTERNS[kind];
-const MAX_WILDCARDS = 8; // a 7-slot pattern reads a 400-character message in ~9 ms, a near miss in ~2 ms
+// What a message that is NOT the layout costs grows about 30x per extra wildcard when the text repeats the words between
+// them (measured on 160 to 640 characters of "a a a ..." against "<PARTY> a <PARTY> a ...": 3 slots 3 ms, 4 slots 80 ms,
+// 5 slots 2.3 s, 6 slots over 4 s). A promoted rule runs on every message of its sender, so at most 4. Touching loose
+// slots are worse still (3 phone numbers in a row: 1.7 s on 800 characters), so at most 2 in a row. The phone merges
+// neighbouring names into one <PARTY>, so real layouts rarely touch.
+const MAX_WILDCARDS = 4;
+const MAX_ADJACENT_LOOSE = 2;
+const isLoose = (kind) => isWild(kind) || kind === "phone"; // a phone pattern ([\d -]{5,}) backtracks like a name
 const MAX_PATTERN = 1900; // the rule schema allows 2,000
 
 class LayoutError extends Error {
@@ -65,6 +72,12 @@ function buildMatcher(layout) {
   if (typeof layout !== "string" || !layout.trim()) throw new LayoutError("layout_empty");
   const { parts, slots } = parseLayout(layout.trim());
   if (slots.filter((s) => isWild(s.kind)).length > MAX_WILDCARDS) throw new LayoutError("layout_too_many_wildcards");
+  let run = 0;
+  for (const part of parts) {
+    if (part.slot) run = isLoose(part.slot.kind) ? run + 1 : 0;
+    else if (!part.space) run = 0;
+    if (run > MAX_ADJACENT_LOOSE) throw new LayoutError("layout_adjacent_wildcards");
+  }
   let pattern = "^\\s*";
   let indexed = "";
   for (const part of parts) {
@@ -135,6 +148,7 @@ function exampleBodies(layout) {
 module.exports = {
   LayoutError,
   MAX_WILDCARDS,
+  MAX_ADJACENT_LOOSE,
   SLOT_PATTERNS,
   FILLS,
   parseLayout,

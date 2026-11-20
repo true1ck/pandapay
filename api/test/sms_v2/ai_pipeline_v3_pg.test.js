@@ -13,10 +13,14 @@ const { startLoopHarness, registerAllLoopAdminRoutes, skip: loopSkip } = require
 
 const workerUrl = process.env.SMS_V2_TEST_AI_WORKER_DATABASE_URL;
 const skip = loopSkip || !workerUrl;
-const hash = (c) => c.repeat(64);
+// The server recomputes templateHash from the brand and body, so a layout's hash follows the body uploaded for it.
+const { layoutHash } = require("./fixtures/template_draft");
+const uploaded = {};
+const defaultBody = (c) => (c === "a" ? "<AMT> paid to <PARTY>." : `<AMT> paid to <PARTY> ${c}.`);
+const hash = (c) => layoutHash("TESTBK", uploaded[c] ?? defaultBody(c));
 const SAMPLE = "Rs.4821.50 paid to ZAZA SHOP.";
-const item = (c, body = "<AMT> paid to <PARTY>.", extra = {}) => ({
-  templateHash: hash(c),
+const item = (c, body = defaultBody(c), extra = {}) => ({
+  templateHash: layoutHash("TESTBK", (uploaded[c] = body)),
   senderBrand: "TESTBK",
   redactedBody: body,
   observedAt: new Date().toISOString(),
@@ -123,7 +127,7 @@ test("the queue is first in, first out; a busy answer keeps a layout's place; fa
 test("layouts that failed under an older prompt are tried again once, at the back of the queue; the current prompt's failures stay failed", { skip }, async (t) => {
   const { rig, worker } = await rigAndWorker(t, 2);
   const [p0] = rig.profiles;
-  for (const c of ["a", "b", "c", "d"]) await rig.asUser(p0).post("/sms/v2/unknown-templates", { items: [item(c, "<AMT> paid to <PARTY>.", { sample: SAMPLE })] });
+  for (const c of ["a", "b", "c", "d"]) await rig.asUser(p0).post("/sms/v2/unknown-templates", { items: [item(c, undefined, { sample: SAMPLE })] });
   const attempt = (c, version) =>
     rig.pool.query(
       "INSERT INTO sms_v2_template_attempts(template_hash,attempt,model,capacity_minute,reserved_tokens,job_id,outcome,total_tokens,prompt_version) VALUES($1,1,'m',date_trunc('minute',now()),1,gen_random_uuid(),'rejected',500,$2)",

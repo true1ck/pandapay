@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { template, config, rule, answer } = require("./fixtures/template_draft");
+const { template, config, rule, answer, layoutItem } = require("./fixtures/template_draft");
 const { createTemplateStore } = require("../../src/sms_v2/ai_templates");
 const {
   createPgWorkerStore,
@@ -133,9 +133,12 @@ test(
       [rig.admin],
     );
     clearSettingsCache();
-    const batch = Array.from({ length: 48 }, () => item);
+    // The cap counts distinct layouts a day: the one already sent earlier does not count again.
+    const batch = Array.from({ length: 48 }, (_, n) => layoutItem(n));
     assert.equal((await submit(profiles[0], true, batch)).status, 202);
-    assert.equal((await submit(profiles[0], true)).status, 429);
+    assert.equal((await submit(profiles[0], true, batch)).status, 202, "the same layouts again are not new");
+    assert.equal((await submit(profiles[0], true, [layoutItem(48)])).status, 202);
+    assert.equal((await submit(profiles[0], true, [layoutItem(49)])).status, 429);
     await pool.query("DELETE FROM sms_v2_settings WHERE key='templates_per_user_per_day'");
     clearSettingsCache();
     await consent(profiles[0], false);
@@ -159,8 +162,8 @@ test(
     assert.equal(metrics.ai[0].calls, 1);
     assert.equal(Number(metrics.ai[0].total_tokens), 250);
     // First in, first out (not most-submitted first), and a single queued job cannot be leased twice.
-    const unpopular = { ...item, templateHash: "b".repeat(64) };
-    const popular = { ...item, templateHash: "c".repeat(64) };
+    const unpopular = layoutItem(1001);
+    const popular = layoutItem(1002);
     await store.submit(profiles[3], [unpopular, popular], true);
     await store.submit(profiles[1], [popular], true);
     const claimed = await worker.claim();

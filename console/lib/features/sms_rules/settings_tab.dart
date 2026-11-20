@@ -9,6 +9,7 @@ const smsSettingLabels = <String, String>{
   'templates_per_user_per_day': 'Message layouts per person per day',
   'corrections_per_user_per_day': 'Fixes per person per day',
   'signals_per_user_per_day': 'Shop signals per person per day',
+  'draft_replacements_per_user_per_day': 'AI draft replacements one person can trigger per day',
   'signals_min_distinct_users': 'People needed before a shop or name is shown',
   'testers_count_without_attestation': 'Count testers\' phones without App Check',
   'members_count_without_attestation':

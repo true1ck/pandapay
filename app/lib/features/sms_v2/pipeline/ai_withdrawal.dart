@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
@@ -11,6 +12,7 @@ import '../storage/fact_store.dart';
 import '../storage/subscription_store.dart';
 import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
+import '../storage/sync_state_store.dart';
 
 /// Takes back what a private AI rule read, once the server says that rule was
 /// rejected (or could not be made). The spend it added leaves the ledger and
@@ -59,41 +61,146 @@ class AiWithdrawal {
     }
   }
 
-  bool _touchedByPerson(String source, FactStore facts, EventStore events) {
-    final sourceFacts = facts.forSource(source);
-    if (sourceFacts.any((fact) => fact.provenance.engine == Engine.user)) {
-      return true;
-    }
-    return events
-        .findByFactIds(sourceFacts.map((fact) => fact.factId))
-        .any((event) => event.status == EventStatus.userConfirmed);
-  }
+  /// Fact ids that are a leg of an event the person confirmed, read once per
+  /// instance through the status index. A per-source look-up through
+  /// [EventStore.findByFactIds] scanned the whole events table for every source
+  /// (R4); the recheck loops ask this once per candidate.
+  late final Set<String> _confirmedFactIds = {
+    for (final row in _db.select(
+      'SELECT payload FROM v2_events WHERE namespace=? AND status=?',
+      [namespace, EventStatus.userConfirmed.wire],
+    ))
+      for (final leg
+          in (jsonDecode(row['payload'] as String) as Map)['legs'] as List)
+        (leg as Map)['factId'] as String,
+  };
 
   /// True when the person has acted on [source] (edited it, or confirmed an
   /// event it made). Such a source is never withdrawn.
-  bool touchedByPerson(String source) => _touchedByPerson(
-    source,
-    FactStore(_db, namespace: namespace),
-    EventStore(_db, namespace: namespace),
-  );
+  bool touchedByPerson(String source) {
+    final sourceFacts = FactStore(_db, namespace: namespace).forSource(source);
+    return sourceFacts.any(
+      (fact) =>
+          fact.provenance.engine == Engine.user ||
+          _confirmedFactIds.contains(fact.factId),
+    );
+  }
+
+  /// Source keys whose reading still comes from a private rule of one of
+  /// [remoteHashes], by hash. One pass over the traces for all of them (a pass
+  /// per template was a whole-table read inside a loop, R4); the key range
+  /// uses the primary key, and only traces of AI rules are decoded in Dart.
+  Map<String, List<String>> sourcesReadBy(Set<String> remoteHashes) {
+    final out = <String, List<String>>{};
+    if (remoteHashes.isEmpty) return out;
+    for (final row in _db.select(
+      "SELECT key, rule_id FROM (SELECT key, CASE WHEN json_valid(value) THEN json_extract(value,'\$.ruleId') END AS rule_id "
+      "FROM v2_sync_state WHERE namespace=? AND key >= 'trace:' AND key < 'trace;') WHERE rule_id LIKE 'AI-%'",
+      [namespace],
+    )) {
+      final id = row['rule_id'];
+      if (id is! String) continue;
+      final cut = id.indexOf(':local:');
+      if (cut < 0) continue;
+      final hash = id.substring('AI-'.length, cut);
+      if (remoteHashes.contains(hash)) {
+        (out[hash] ??= []).add(
+          (row['key'] as String).substring('trace:'.length),
+        );
+      }
+    }
+    return out;
+  }
 
   /// Source keys whose reading still comes from this template's private rule.
-  List<String> sourcesRead(String remoteHash) => [
-    for (final row in _db.select(
-      "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'trace:%'",
-      [namespace],
-    ))
-      if (_readBy(row['value'] as String, remoteHash))
-        (row['key'] as String).substring('trace:'.length),
-  ];
+  List<String> sourcesRead(String remoteHash) =>
+      sourcesReadBy({remoteHash})[remoteHash] ?? const [];
 
-  static bool _readBy(String raw, String remoteHash) {
-    try {
-      final id = (jsonDecode(raw) as Map)['ruleId'];
-      return id is String && id.startsWith('AI-$remoteHash:local:');
-    } catch (_) {
-      return false;
+  /// Last draft offered per template: the hash of its rule. A different hash
+  /// is a new revision of the draft.
+  static const ruleMarker = 'aiw:rule:';
+
+  /// A rejection already taken back, so a sync does not look for it again.
+  static const doneMarker = 'aiw:done:';
+
+  /// The templates whose AI readings are to be taken back now, and what to
+  /// remember once that was done ([commit]).
+  ///
+  /// Three reasons, all cheap to test (a few `ai:` rows, no trace scan):
+  /// * the server rejected the draft (or this phone's own check did), once;
+  /// * the draft was taken back and a replacement is queued, so phones see
+  ///   "pending" where a draft they read with was: what it read must not keep
+  ///   counting until the replacement answers (the replacement reads it again);
+  /// * a new revision of the draft replaced the one that read (same rule id
+  ///   and version, another body): the old revision's readings are read again
+  ///   with the new one. A draft seen for the first time only records itself.
+  /// A draft the signed rule set already carries is never taken back.
+  ({Set<String> hashes, void Function() commit}) takeBackPlan(
+    RuleBundle shared,
+  ) {
+    final state = SyncStateStore(_db, namespace: namespace);
+    final rejected = rejectedTemplates().toSet();
+    final hashes = <String>{};
+    final writes = <String, String?>{};
+    for (final hash in rejected) {
+      if (state.get('$doneMarker$hash') == null) {
+        hashes.add(hash);
+        writes['$doneMarker$hash'] = '1';
+      }
+      if (state.get('$ruleMarker$hash') != null) {
+        writes['$ruleMarker$hash'] = null;
+      }
     }
+    for (final row in _db.select(
+      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'aiw:done:%'",
+      [namespace],
+    )) {
+      final hash = (row['key'] as String).substring(doneMarker.length);
+      if (!rejected.contains(hash)) writes[row['key'] as String] = null;
+    }
+    for (final row in _db.select(
+      "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%'",
+      [namespace],
+    )) {
+      final hash = (row['key'] as String).substring('ai:'.length);
+      if (rejected.contains(hash) ||
+          shared.rules.any((rule) => rule.id == 'AI-$hash')) {
+        continue;
+      }
+      final Map result;
+      try {
+        result = jsonDecode(row['value'] as String) as Map;
+      } catch (_) {
+        continue;
+      }
+      final marker = state.get('$ruleMarker$hash');
+      if (result['status'] == 'ready' && result['rule'] is Map) {
+        final fingerprint = sha256
+            .convert(utf8.encode(canonicalJson(result['rule'])))
+            .toString();
+        if (marker == fingerprint) continue;
+        if (marker != null) hashes.add(hash);
+        writes['$ruleMarker$hash'] = fingerprint;
+      } else if (result['status'] == 'pending' && marker != null) {
+        hashes.add(hash);
+        writes['$ruleMarker$hash'] = null;
+      }
+    }
+    return (
+      hashes: hashes,
+      commit: () {
+        writes.forEach((key, value) {
+          if (value == null) {
+            _db.execute(
+              'DELETE FROM v2_sync_state WHERE namespace=? AND key=?',
+              [namespace, key],
+            );
+          } else {
+            state.put(key, value);
+          }
+        });
+      },
+    );
   }
 
   /// Withdraws the readings of [sources] and returns the sources to read again.
@@ -140,6 +247,9 @@ class AiWithdrawal {
       try {
         final affected = <String, Event>{};
         final factIds = <String>{};
+        // The ledger rows of the withdrawn events: the queue holds them under
+        // `ledger:<entryId>` (a hash of the event id), not `ledger:<eventId>`.
+        var ledgerIdsOf = <String>{};
         for (final source in sources) {
           final sourceFacts = factsBySource[source] ?? const <Fact>[];
           factIds.addAll(sourceFacts.map((fact) => fact.factId));
@@ -153,9 +263,17 @@ class AiWithdrawal {
           }
         }
         if (affected.isNotEmpty) {
-          final allFacts = {
-            for (final fact in facts.since(DateTime.utc(1900)))
-              fact.factId: fact,
+          // The facts and instrument links of the affected events only: the
+          // whole fact history was read here (and again below) for each call.
+          final legFactIds = {
+            for (final event in affected.values)
+              for (final leg in event.legs) leg.factId,
+          };
+          final allFacts = facts.byIds({...legFactIds, ...affected.keys});
+          final instrumentIds = facts.instrumentIdsFor(legFactIds);
+          ledgerIdsOf = {
+            for (final entries in ledger.forEvents(affected.keys).values)
+              for (final row in entries) row.entryId,
           };
           final instruments = {
             for (final value in InstrumentStore(
@@ -175,7 +293,7 @@ class AiWithdrawal {
             instrumentsById: instruments,
             bundle: bundle,
             lockedCategories: const {},
-            instrumentIdByFactId: facts.instrumentIdsSince(DateTime.utc(1900)),
+            instrumentIdByFactId: instrumentIds,
             userRules: categories.userRules,
             confirmedHistory: categories.confirmedHistory,
           );
@@ -184,7 +302,7 @@ class AiWithdrawal {
             factsById: allFacts,
             instrumentsById: instruments,
             categoryIdBySlug: categoryIdBySlug,
-            instrumentIdByFactId: facts.instrumentIdsSince(DateTime.utc(1900)),
+            instrumentIdByFactId: instrumentIds,
           );
         }
         for (final source in sources) {
@@ -200,6 +318,11 @@ class AiWithdrawal {
             'DELETE FROM v2_facts WHERE namespace=? AND source_key=?',
             [namespace, source],
           );
+          // Its facts are gone: a queued copy of them must not reach the server.
+          _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
+            namespace,
+            'source:$source',
+          ]);
           _db.execute("DELETE FROM v2_sync_state WHERE namespace=? AND key=?", [
             namespace,
             'trace:$source',
@@ -216,10 +339,16 @@ class AiWithdrawal {
             'DELETE FROM v2_events WHERE namespace=? AND event_id=?',
             [namespace, eventId],
           );
-          _db.execute(
-            "DELETE FROM v2_outbox WHERE namespace=? AND id IN (?,?)",
-            [namespace, 'event:$eventId', 'ledger:$eventId'],
-          );
+          _db.execute("DELETE FROM v2_outbox WHERE namespace=? AND id=?", [
+            namespace,
+            'event:$eventId',
+          ]);
+        }
+        for (final entryId in ledgerIdsOf) {
+          _db.execute("DELETE FROM v2_outbox WHERE namespace=? AND id=?", [
+            namespace,
+            'ledger:$entryId',
+          ]);
         }
         // Withdrawn facts and events can have been part of a subscription.
         SubscriptionStore(_db, namespace: namespace).markDirty();

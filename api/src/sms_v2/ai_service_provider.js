@@ -13,6 +13,9 @@ const DEFAULT_TIMEOUT_MS = 100000;
 // Provider model ids: "openai/gpt-oss-20b", "clef:free", Cloudflare's "@cf/meta/llama-3.1-8b-instruct".
 const MODEL_ID = /^[@A-Za-z0-9][@A-Za-z0-9_.:+\/-]{0,127}$/;
 const POSTGRES_INTEGER_MAX = 2147483647;
+// The order the service tries its routes in. The worker only needs it to check that an answer to an
+// "after this provider" request really comes from a later route; any provider it does not know ends the job's route walk.
+const ROUTE_ORDER = ["gemini", "experiential", "groq", "cloudflare", "openrouter", "nvidia", "openai"];
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SERVICE_LAYOUT_UNSAFE = /[\x00-\x1f\x7f\p{Nd}@]/u;
 
@@ -64,6 +67,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   const token = env.SMS_V2_AI_SERVICE_TOKEN;
   if (!rawUrl && !token) return null;
   const endpoint = serviceEndpoint(rawUrl);
+  const orderedEndpoint = new URL("/v1/sms-rule-drafts/ordered", endpoint);
   if (typeof token !== "string" || !/^[A-Za-z0-9_-]{32,512}$/.test(token))
     throw new Error("SMS_V2_AI_SERVICE_TOKEN_invalid");
   const timeoutMs = Number(env.SMS_V2_AI_SERVICE_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
@@ -75,6 +79,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   if (pinnedVersion && !/^[a-zA-Z0-9_.-]{1,64}$/.test(pinnedVersion))
     throw new Error("SMS_V2_AI_SERVICE_PROMPT_VERSION_invalid");
   let seenVersion = null;
+  const seenRoutes = new Set();
   const versionOk = (response) => {
     const seen = response.headers.get("x-prompt-version");
     if (seen && /^[a-zA-Z0-9_.-]{1,64}$/.test(seen)) seenVersion = seen;
@@ -86,62 +91,96 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
     get promptVersion() {
       return pinnedVersion ?? seenVersion ?? DEFAULT_PROMPT_VERSION;
     },
-    async generateLayout({ senderBrand, redactedBody }) {
+    async generateLayout({ senderBrand, redactedBody, signal, routing }) {
       assertLayout({ senderBrand, redactedBody });
       const requestId = randomUUID();
       const started = performance.now();
       let response;
       let outcome = "ok";
-      const busy = (code, fallbackDelayMs) => new ProviderBusyError(code, {
+      const busy = (code, fallbackDelayMs, isConfigFault = false) => new ProviderBusyError(code, {
         status: response?.status,
         retryAfterMs: providerDelayMs("", response?.headers) || fallbackDelayMs,
         // A service/transport failure gives no evidence about a specific layout.
         systemic: true,
+        configFault: isConfigFault,
       });
+      // A wrong token, prompt revision, model or routing answer: the same for every layout until it is fixed.
+      const configFault = (code) => busy(code, 300000, true);
+      // The service owns which routes it has, so the worker learns them from its answers. A skip list that covers every
+      // route seen so far would leave nothing to call: then start again from the first.
+      const skipProviders = routing?.skipProviders?.length &&
+        !(seenRoutes.size && [...seenRoutes].every((route) => routing.skipProviders.includes(route)))
+        ? routing.skipProviders : [];
       try {
-        response = await fetchImpl(endpoint, {
+        const needsOrderedEndpoint = !!(routing?.afterProvider || skipProviders.length);
+        response = await fetchImpl(needsOrderedEndpoint ? orderedEndpoint : endpoint, {
           method: "POST",
           redirect: "error",
-          signal: AbortSignal.timeout(timeoutMs),
+          signal: signal ?? AbortSignal.timeout(timeoutMs),
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
             "X-Request-ID": requestId,
             // The same layout always carries the same key, so the service can recognise a retry of work it already did.
+            // A call that asks for a later route is different work, so it carries a different key.
             "X-Idempotency-Key": createHash("sha256").update(`${senderBrand}
-${redactedBody}`).digest("hex"),
+${redactedBody}${needsOrderedEndpoint ? `
+${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex"),
             ...(pinnedVersion ? { "X-Prompt-Version": pinnedVersion } : {}),
+            ...(routing ? {
+              "X-AI-Routing": "ordered-v1",
+              "X-AI-Timeout-Ms": String(routing.timeoutMs),
+              ...(routing.afterProvider ? { "X-AI-After-Provider": routing.afterProvider } : {}),
+              ...(skipProviders.length ? { "X-AI-Skip-Providers": skipProviders.join(",") } : {}),
+              ...(routing.hadInfrastructureFailure ? { "X-AI-Prior-Unavailable": "true" } : {}),
+            } : {}),
           },
           body: JSON.stringify({ senderBrand, redactedBody }),
         });
+        const orderedVersion = response.headers.get("x-ai-routing") === "ordered-v1";
+        if (needsOrderedEndpoint && [200, 502].includes(response.status) && !orderedVersion) {
+          await response.body?.cancel();
+          throw configFault("ai_service_routing_unavailable");
+        }
         if (!response.ok && ![422, 502].includes(response.status)) {
           await response.body?.cancel();
           // Any 5xx (a proxy gives 520-524 when the service is slow or restarting) is the service being unavailable, not a bad setup.
           if ([408, 425, 429].includes(response.status) || response.status >= 500)
             throw busy("ai_service_unavailable", 15000);
-          if (response.status === 409) throw busy("ai_service_prompt_version_mismatch", 300000);
-          if (response.status === 412) throw busy("ai_service_config_mismatch", 300000);
-          throw busy("ai_service_misconfigured", 300000);
+          if (response.status === 409) throw configFault("ai_service_prompt_version_mismatch");
+          if (response.status === 412) throw configFault("ai_service_config_mismatch");
+          throw configFault("ai_service_misconfigured");
         }
         const body = await readJson(response);
         const usage = readUsage(body);
         if (response.status === 422) {
           if (body?.error?.code === "invalid_layout") throw new LayoutError("ai_service_invalid_layout");
-          throw busy("ai_service_misconfigured", 300000);
+          throw configFault("ai_service_misconfigured");
         }
         if (response.status === 502) {
           if (body?.error?.code !== "invalid_provider_output") throw busy("ai_service_unavailable", 15000);
-          if (!versionOk(response)) throw busy("ai_service_prompt_version_mismatch", 300000);
+          if (!versionOk(response)) throw configFault("ai_service_prompt_version_mismatch");
           throw Object.assign(new SyntaxError("ai_service_invalid_provider_output"), {
-            usage: usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
+            // A routed call cannot tell which route's tokens these were, so only an unrouted call reports them.
+            usage: !routing && usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
           });
         }
-        if (!versionOk(response)) throw busy("ai_service_prompt_version_mismatch", 300000);
+        if (!versionOk(response)) throw configFault("ai_service_prompt_version_mismatch");
         if (!usage || typeof body?.model !== "string" || !body.answer || typeof body.answer !== "object" || Array.isArray(body.answer))
-          throw busy("ai_service_invalid_response", 300000);
+          throw configFault("ai_service_invalid_response");
         // A fallback AI may answer instead of the primary one: accept it and record which model it was.
-        if (!MODEL_ID.test(body.model)) throw busy("ai_service_invalid_response", 300000);
-        return { answer: body.answer, model: body.model, ...usage };
+        if (!MODEL_ID.test(body.model)) throw configFault("ai_service_invalid_response");
+        const known = ROUTE_ORDER.includes(body.provider) ? body.provider : undefined;
+        const ordered = !!routing && orderedVersion && typeof body.routeHadInfrastructureFailure === "boolean";
+        if (ordered && known && (ROUTE_ORDER.indexOf(known) <= ROUTE_ORDER.indexOf(routing.afterProvider) ||
+            skipProviders.includes(known)))
+          throw configFault("ai_service_route_mismatch");
+        if ((needsOrderedEndpoint || (routing && orderedVersion)) && !ordered)
+          throw configFault("ai_service_routing_unavailable");
+        if (known) seenRoutes.add(known);
+        // An older service gives no route: that answer is the last route the worker can ask.
+        const route = ordered ? { routeProvider: known, routeHadInfrastructureFailure: body.routeHadInfrastructureFailure } : {};
+        return { answer: body.answer, model: body.model, ...usage, ...route };
       } catch (error) {
         const known = error instanceof ProviderBusyError || error instanceof SyntaxError || error instanceof LayoutError;
         // A timeout is retried like any outage (the layout goes back in the queue); it is named apart so it can be counted.
