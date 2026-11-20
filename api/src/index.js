@@ -729,14 +729,19 @@ app.get('/user-categories', requireAuth, async (req, res) => {
  * the whole app — the client's own fetch failure handling already fails
  * open the same way.
  */
-app.get('/app-status', async (req, res) => {
-  try {
+const readAppStatus = require('./app_status_cache').createAppStatusReader({
+  readRow: async () => {
     const result = await withUserClient(null, (client) =>
       client.query(
         'SELECT min_supported_version, maintenance_mode, maintenance_message, sms_backup_import_enabled FROM app_status WHERE id = true'
       )
     );
-    const row = result.rows[0];
+    return result.rows[0];
+  },
+});
+app.get('/app-status', async (req, res) => {
+  try {
+    const row = await readAppStatus();
     res.json({
       minSupportedVersion: row?.min_supported_version ?? '1.0.0',
       maintenanceMode: row?.maintenance_mode ?? false,
