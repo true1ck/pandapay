@@ -6,6 +6,8 @@ const fs = require("node:fs");
 const {
   LayoutError,
   MAX_WILDCARDS,
+  MAX_ADJACENT_LOOSE,
+  SLOT_PATTERNS,
   FILLS,
   parseLayout,
   buildMatcher,
@@ -116,4 +118,73 @@ test("the rules built for the prompt's worked examples are the fixture the phone
   // After a change to the matcher or the examples: UPDATE_FIXTURES=1 node --test api/test/sms_v2/layout_matcher.test.js
   if (process.env.UPDATE_FIXTURES) fs.writeFileSync(file, JSON.stringify(built, null, 2) + "\n");
   assert.deepEqual(built, JSON.parse(fs.readFileSync(file, "utf8")), "run with UPDATE_FIXTURES=1 to refresh built_rules.json, then run the Dart built_rule_engine_test");
+});
+
+test("the phone's wildcard limit and count agree with the matcher (the phone skips such layouts before they use an upload slot)", () => {
+  const { wildcardLimit, adjacentLooseLimit, entries } = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_corpus.json"), "utf8"),
+  );
+  // packages/pandapay_domain/lib/src/sms_v2/template/skeleton.dart: smsMaxLayoutWildcards, smsLayoutWildcards.
+  // Lowering MAX_WILDCARDS here means changing wildcardLimit in the fixture and that constant on the phone.
+  assert.equal(wildcardLimit, MAX_WILDCARDS);
+  assert.equal(adjacentLooseLimit, MAX_ADJACENT_LOOSE);
+  for (const { layout, wildcards } of entries) {
+    const wild = parseLayout(layout).slots.filter((slot) => slot.kind === "party" || slot.kind === "w" || !SLOT_PATTERNS[slot.kind]);
+    assert.equal(wild.length, wildcards, layout);
+  }
+});
+
+// qa-bug-hunt S3-2: 8 name slots, or 3 in a row, let a message that is NOT the layout (a sender's other SMS, or a crafted
+// one) take seconds. The worst accepted layout must now turn such a message away within a small budget.
+test("a layout is either refused, or turns a hostile near-miss message away fast (the old limits took 2 to 4+ seconds)", async () => {
+  const { Worker } = require("node:worker_threads");
+  const source = path.join(__dirname, "../../src/sms_v2/layout_matcher.js");
+  const run = (layout, text, limitMs) =>
+    new Promise((resolve) => {
+      const worker = new Worker(
+        "const { workerData, parentPort } = require('node:worker_threads');" +
+          "const { buildMatcher } = require(workerData.source);" +
+          "(() => { let m; try { m = buildMatcher(workerData.layout); } catch (e) { parentPort.postMessage({ refused: e.code }); return; }" +
+          "const re = new RegExp(m.pattern, m.flags); const t = process.hrtime.bigint(); re.test(workerData.text);" +
+          "parentPort.postMessage({ ms: Number(process.hrtime.bigint() - t) / 1e6 }); })();",
+        { eval: true, workerData: { source, layout, text } },
+      );
+      const timer = setTimeout(() => (worker.terminate(), resolve({ ms: Infinity })), limitMs);
+      worker.on("message", (message) => (clearTimeout(timer), worker.terminate(), resolve(message)));
+    });
+  const repeat = (unit, length) => unit.repeat(Math.ceil(length / unit.length)).slice(0, length) + " nope";
+  const P = "<PARTY>";
+  const hostile = [
+    ["8 name slots joined by ' and '", Array(8).fill(P).join(" and ") + " ok.", "x and "],
+    ["6 name slots, the joining word repeated", Array(6).fill(P).join(" a ") + " ok.", "a "],
+    ["5 name slots, the joining word repeated", Array(5).fill(P).join(" a ") + " ok.", "a "],
+    ["8 name slots in a row", Array(8).fill(P).join(" ") + " ok.", "a "],
+    ["5 name slots in a row", Array(5).fill(P).join(" ") + " ok.", "a "],
+    ["3 phone numbers in a row", "Call <PHONE> <PHONE> <PHONE> now", "1 "],
+    ["4 name slots, the joining word repeated (the most that is accepted)", Array(MAX_WILDCARDS).fill(P).join(" a ") + " ok.", "a "],
+    ["2 pairs of touching name slots", `${P} ${P} a ${P} ${P} ok.`, "a "],
+  ];
+  const slow = [];
+  for (const [name, layout, unit] of hostile) {
+    const result = await run(layout, repeat(unit, 640), 3000);
+    if (!result.refused && !(result.ms < 400)) slow.push(`${name}: ${result.ms === Infinity ? "over 3000" : Math.round(result.ms)} ms`);
+  }
+  assert.deepEqual(slow, []);
+});
+
+test("touching loose slots (names, words, phone numbers) are refused beyond two in a row; a literal between them lifts that", () => {
+  throwsCode(() => buildMatcher("Call <PHONE> <PHONE> <PHONE> now"), "layout_adjacent_wildcards");
+  throwsCode(() => buildMatcher("<PARTY> <W> <PARTY> sent money"), "layout_adjacent_wildcards");
+  assert.doesNotThrow(() => buildMatcher("Call <PHONE> <PHONE> now"));
+  assert.doesNotThrow(() => buildMatcher("Call <PHONE> or <PHONE> or <PHONE> now"));
+  assert.doesNotThrow(() => buildMatcher("<PARTY> <W> paid <AMT> to <PARTY> <W> today"));
+  assert.ok(MAX_WILDCARDS <= 4, "raise the limit only with new near-miss timings (see the test above)");
+});
+
+test("a realistic bank layout (one name, one phone number) is read fast and far inside the limits", () => {
+  const layout = "Rs <AMT> debited from A/c <MASK> to <PARTY> on <DATE>. UPI Ref <REF>. If not you, call <PHONE>";
+  const matcher = buildMatcher(layout);
+  const started = Date.now();
+  assert.equal(reads(matcher, "Rs 1 debited from A/c xx12 to a on 1/1/26. ".repeat(40) + "end"), false);
+  assert.ok(Date.now() - started < 100, `took ${Date.now() - started} ms`);
 });

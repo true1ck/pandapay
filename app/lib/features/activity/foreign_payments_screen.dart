@@ -602,7 +602,7 @@ class _ForeignPaymentDetailScreenState
 
   Future<void> _category(ForeignPayment payment) async {
     try {
-      final categories = await ref.read(categoriesProvider.future);
+      final categories = await ref.read(spendCategoriesProvider.future);
       if (!mounted) return;
       final selected = await showCategoryBottomSheet(
         context,

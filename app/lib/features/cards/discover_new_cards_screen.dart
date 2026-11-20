@@ -44,7 +44,7 @@ class _DiscoverNewCardsScreenState extends ConsumerState<DiscoverNewCardsScreen>
   @override
   Widget build(BuildContext context) {
     final candidates = ref.watch(acquisitionCandidatesProvider);
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(spendCategoriesProvider);
 
     return Scaffold(
       backgroundColor: BambooInk.paper,

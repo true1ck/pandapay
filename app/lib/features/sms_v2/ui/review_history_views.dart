@@ -280,13 +280,20 @@ final aiUnreadCountProvider = FutureProvider<int>((ref) async {
   final cache = await ref.watch(app.responseCacheProvider.future);
   final db = cache.financialStore.database.db;
   SmsV2Schema.ensure(db);
+  return aiUnreadCountIn(db, namespace);
+});
+
+/// The count behind [aiUnreadCountProvider]. Only a stored AI answer is a JSON value: one key that is not (the old
+/// `ai:resend:at` held a bare date) made json_extract fail the whole query with "malformed JSON", and the count
+/// with it, for as long as the key existed.
+int aiUnreadCountIn(Database db, String namespace) {
   final row = db.select(
     "SELECT count(*) AS n FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%' "
-    "AND json_extract(value, '\$.status') IN ('failed', 'rejected')",
+    "AND CASE WHEN json_valid(value) THEN json_extract(value, '\$.status') END IN ('failed', 'rejected')",
     [namespace],
   );
   return (row.first['n'] as num).toInt();
-});
+}
 
 /// The AI auto-resolved and History tabs share this list.
 class SettledList extends ConsumerWidget {

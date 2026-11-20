@@ -776,7 +776,7 @@ class SmsV2Runtime {
     final previousRevision = _state.get('pipeline:revision');
     if (previousRevision != _revision(active.revision)) {
       await guarded(() async {
-        await _rereadUnknown();
+        await _rereadUnknown(_revision(active.revision));
         _state.put('pipeline:revision', _revision(active.revision));
       });
     }
@@ -945,16 +945,27 @@ class SmsV2Runtime {
   }
 
   /// Reads every message still marked "unknown" again with the rules now in
-  /// force, 200 at a time. Returns how many were read again.
-  Future<int> _rereadUnknown() async {
+  /// force ([revision], what the pipeline stamps on a decision), 200 at a time.
+  /// Returns how many were read again.
+  ///
+  /// Only the messages the pipeline will actually read: a message already read
+  /// under [revision], or one that is read (matched) and merely has an open
+  /// review item, is skipped by the pipeline's own gate, so handing it over
+  /// only inflated the count shown to the person and the worker traffic.
+  Future<int> _rereadUnknown(String revision) async {
     final intake = SmsIntakeRepository(financial.database);
     final unknown = financial.database.db.select(
       "SELECT DISTINCT source_key FROM ("
-      "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown' "
+      "SELECT source_key FROM sms_source_decisions WHERE namespace=? AND policy_version='v2' AND decision='unknown' AND parser_version IS NOT ? "
       "UNION "
-      "SELECT json_extract(payload, '\$.sourceKey') AS source_key FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open'"
+      // A source with an open review item is read again when it has no decision
+      // of this policy yet, or its unknown/ignored decision is of another revision.
+      "SELECT r.source_key FROM (SELECT json_extract(payload, '\$.sourceKey') AS source_key FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open') r "
+      "LEFT JOIN sms_source_decisions d ON d.namespace=? AND d.source_key=r.source_key "
+      "WHERE d.source_key IS NULL OR d.policy_version!='v2' "
+      "OR (d.decision IN ('unknown','ignored') AND d.parser_version IS NOT ?)"
       ") WHERE source_key IS NOT NULL",
-      [namespace, namespace],
+      [namespace, revision, namespace, namespace, revision],
     );
     var read = 0;
     for (var offset = 0; offset < unknown.length; offset += 200) {
@@ -1117,6 +1128,14 @@ class SmsV2Runtime {
   /// Once the server says a layout's AI rule was rejected (or could not be
   /// made), what that rule read leaves the ledger and the messages are read
   /// again without it, so they return to a plain Needs review item.
+  ///
+  /// The same for a draft the server took back (phones see "pending" where it
+  /// stood) and for a new revision of a draft that already read messages: what
+  /// the old one read is taken back and read again (see
+  /// [AiWithdrawal.takeBackPlan]). Nothing here costs more than a few state
+  /// rows unless there is something to take back, and what was done is
+  /// remembered, so a sync never scans the traces for a verdict it already
+  /// acted on.
   Future<void> _withdrawRejectedAiReadings() async {
     final withdrawal = AiWithdrawal(
       financial: financial,
@@ -1124,20 +1143,30 @@ class SmsV2Runtime {
       bundle: _bundle!,
       categoryIdBySlug: categoryIdBySlug,
     );
-    final sources = <String>[
-      for (final hash in withdrawal.rejectedTemplates())
-        ...withdrawal.sourcesRead(hash),
+    final plan = withdrawal.takeBackPlan(_bundle!);
+    final sources = [
+      for (final list in withdrawal.sourcesReadBy(plan.hashes).values) ...list,
     ];
-    if (sources.isEmpty) return;
-    _checkAccount();
-    withdrawal.withdraw(sources);
-    final intake = SmsIntakeRepository(financial.database);
-    final messages = <QueuedSms>[
-      for (final source in sources)
-        if (intake.capturedById(namespace, source) case final entry?)
-          entry.message,
-    ];
-    if (messages.isNotEmpty) await capture(messages, backfill: true);
+    if (sources.isNotEmpty) {
+      _checkAccount();
+      // Written BEFORE anything is withdrawn, like the other re-reads: a
+      // withdrawn message has no reading until it is read again.
+      _state.put(pendingRereadKey, jsonEncode(sources));
+      final intake = SmsIntakeRepository(financial.database);
+      for (var start = 0; start < sources.length; start += 200) {
+        final taken = withdrawal.withdraw(
+          sources.skip(start).take(200).toList(),
+        );
+        final messages = <QueuedSms>[
+          for (final source in taken)
+            if (intake.capturedById(namespace, source) case final entry?)
+              entry.message,
+        ];
+        if (messages.isNotEmpty) await capture(messages, backfill: true);
+      }
+      _state.put(pendingRereadKey, '');
+    }
+    plan.commit();
   }
 
   static String _categoryRevision(RuleBundle shared) => sha256
@@ -1396,7 +1425,7 @@ class SmsV2Runtime {
         // Same rules as the last read: reading again would find nothing new.
         rereadSkipped = true;
       } else {
-        reread = await _rereadUnknown();
+        reread = await _rereadUnknown(_revision(active.revision));
         _state.put('pipeline:revision', _revision(active.revision));
       }
     } catch (_) {

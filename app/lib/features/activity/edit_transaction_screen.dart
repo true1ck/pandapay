@@ -24,8 +24,11 @@ import '../../data/api_exception.dart';
 import '../../data/catalogue_repository.dart'
     show SpendCategory, categoryIdForServer, userCategoryIdForServer;
 import '../../data/merchant_category_rules_repository.dart';
+import '../../data/category_scope.dart';
+import '../../data/payment_route_rules.dart';
 import '../../data/user_cards_repository.dart';
 import '../../data/self_transfer.dart';
+import '../../data/server_clock.dart';
 import '../../data/local/financial_store.dart' show FinancialStore, canonicalBankSender;
 import '../../data/local/self_transfer_rules.dart';
 import '../../data/local/sms_intake_repository.dart';
@@ -195,20 +198,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     _instrument = entry.instrumentKnown ? entry.instrument : null;
     _paymentMethod = entry.paymentMethod;
     _rail = entry.rail;
-    if (entry.pipelineVersion == 2 && entry.eventId != null) {
-      try {
-        final cache = ref.read(responseCacheProvider).valueOrNull;
-        if (cache != null) {
-          final stored = EventStore(
-            cache.financialStore.database.db,
-            namespace: ref.read(cacheNamespaceProvider),
-          ).get(entry.eventId!)?.type;
-          _cardBill = _originalCardBill = stored == v2.EventType.cardBillPayment;
-        }
-      } catch (_) {
-        // Without it the choice just starts on "between my accounts".
-      }
-    }
+    _checkReading(entry);
     // The bottom action is built before the body's AsyncValue builder runs.
     // Request one safe rebuild after the first frame so Save is enabled for
     // the loaded row instead of remaining disabled until another provider
@@ -218,12 +208,62 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     });
   }
 
+  static const _staleRowCopy =
+      "This entry's SMS reading is no longer on this phone, so it can't be edited here. Pull to refresh Activity, or hide it and report the message from Needs review.";
+
+  /// The row is marked as read on this phone but its stored reading is gone.
+  bool _readingMissing = false;
+  bool _readingChecked = false;
+
+  /// Looks the stored reading up once the phone's database is available (it can
+  /// still be loading when the screen first opens from a tapped row).
+  void _checkReading(TransactionEntry entry) {
+    if (_readingChecked) return;
+    if (entry.pipelineVersion != 2) {
+      _readingChecked = true;
+      return;
+    }
+    if (entry.eventId == null || entry.sourceKey == null) {
+      _readingChecked = true;
+      _readingMissing = true;
+      return;
+    }
+    final cache = ref.read(responseCacheProvider).valueOrNull;
+    if (cache == null) return;
+    _readingChecked = true;
+    try {
+      final stored = EventStore(
+        cache.financialStore.database.db,
+        namespace: ref.read(cacheNamespaceProvider),
+      ).get(entry.eventId!)?.type;
+      _cardBill = _originalCardBill = stored == v2.EventType.cardBillPayment;
+      // The row says it was read on this phone, but that reading is gone (a
+      // server copy on a new phone, or a row left after a re-read). Corrections
+      // need the reading, so the save must not try them.
+      _readingMissing = stored == null;
+    } catch (_) {
+      // Without it the choice just starts on "between my accounts".
+    }
+  }
+
+  /// Edited through the on-phone SMS corrections (needs the stored reading).
+  bool _onPhone(TransactionEntry? o) => o?.pipelineVersion == 2 && !_readingMissing;
+
+  /// A leftover 'v2:' row exists only on this phone, so the server cannot take
+  /// the edit either: nothing can honestly save it.
+  bool get _staleLocalRow =>
+      _readingMissing && (_originalEntry?.id.startsWith('v2:') ?? false);
+
+  /// "1,250.50" and "₹ 1250" are what people type; plain tryParse rejects them.
+  static double? _parseAmount(String raw) =>
+      double.tryParse(raw.replaceAll(RegExp(r'[,\s₹]'), ''));
+
   /// The method to send: only when the person set one that differs from what
   /// is saved. An SMS-ledger row is edited through the ledger, which has no
   /// method field, so nothing is sent for it.
   String? get _methodToSend {
     final original = _originalEntry;
-    if (original == null || original.pipelineVersion == 2) return null;
+    if (original == null || _onPhone(original)) return null;
     final method = _paymentMethod;
     if (method == null || method == original.paymentMethod) return null;
     return paymentMethodByWire(method) == null ? null : method;
@@ -236,7 +276,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
     // person made, so changing the instrument never counts as clearing it
     // (the server keeps it, exactly as before this feature existed).
     return original != null &&
-        original.pipelineVersion != 2 &&
+        !_onPhone(original) &&
         original.paymentMethod != null &&
         original.paymentMethod != 'upi' &&
         _paymentMethod == null;
@@ -250,10 +290,22 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       ref.read(serverReachabilityProvider).serverReachable == false;
 
   Future<void> _save() async {
-    final amount = double.tryParse(_amountController.text.trim());
+    if (_staleLocalRow) {
+      setState(() => _error = _staleRowCopy);
+      return;
+    }
+    final amount = _parseAmount(_amountController.text);
     if (amount == null || !amount.isFinite || amount <= 0) {
       setState(() => _submitted = true);
       setState(() => _error = 'Enter a valid amount greater than zero.');
+      return;
+    }
+    // Switching an entry to a credit card needs the card. An older credit-card
+    // row without one is left as it was; only a new choice has to be complete.
+    if (_instrument == TxnInstrument.creditCard &&
+        _userCardId == null &&
+        _originalEntry?.instrument != TxnInstrument.creditCard) {
+      setState(() => _error = 'Choose which credit card was used.');
       return;
     }
     if (_isDraft) {
@@ -332,7 +384,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // a short time limit, and are skipped when the phone is offline or the
       // server cannot be reached.
       final runOffers =
-          categoryChanged && original.pipelineVersion != 2 && !_offlineNow();
+          categoryChanged && !_onPhone(original) && !_offlineNow();
       final offerContext = Navigator.of(context, rootNavigator: true).context;
       final offerContainer = ProviderScope.containerOf(context, listen: false);
       final offerCategoryId = _categoryId;
@@ -367,7 +419,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // was saved.
       final offline = ref.read(isOnlineProvider).valueOrNull == false;
       if (offline &&
-          original?.pipelineVersion != 2 &&
+          !_onPhone(original) &&
           _selfTransfer == null &&
           _clearedSelfTransfer == null &&
           !_methodChanged) {
@@ -513,7 +565,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   void _confirmSaved(TransactionEntry? original) {
     if (!mounted) return;
     final offline = ref.read(isOnlineProvider).valueOrNull == false;
-    final onPhone = original?.pipelineVersion == 2;
+    final onPhone = _onPhone(original);
     final text = onPhone
         ? (offline
               ? savedOfflineCopy
@@ -528,7 +580,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
 
   Future<void> _submitEdit(double amount) async {
     final original = _originalEntry;
-    if (original?.pipelineVersion == 2) {
+    if (_onPhone(original)) {
       final namespace = ref.read(cacheNamespaceProvider);
       final controller = await smsReviewController(ref);
       final instruments = await ref.read(instrumentsProvider.future);
@@ -701,6 +753,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       }
       final store = (await ref.read(responseCacheProvider.future)).financialStore;
       final namespace = ref.read(cacheNamespaceProvider);
+      // One edit time for the stored row and the queued command(s).
+      final editedAt = ServerClock.instance.now();
       if (typed.isNotEmpty) {
         await queueCommand(
           ref,
@@ -709,9 +763,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           payload: {
             'id': widget.transactionId,
             ...typed.map((k, v) => MapEntry(_typedWireKey(k), v)),
+            'editedAt': editedAt.toUtc().toIso8601String(),
           },
         );
-        store.patchTransaction(namespace, widget.transactionId, typed);
+        store.patchTransaction(
+          namespace,
+          widget.transactionId,
+          typed,
+          editedAt: editedAt,
+        );
       }
       if (_methodChanged) {
         final method = _methodToSend;
@@ -719,11 +779,15 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           ref,
           kind: PaymentMethodCommand.set,
           target: widget.transactionId,
-          payload: {'id': widget.transactionId, 'paymentMethod': method},
+          payload: {
+            'id': widget.transactionId,
+            'paymentMethod': method,
+            'editedAt': editedAt.toUtc().toIso8601String(),
+          },
         );
         store.patchTransaction(namespace, widget.transactionId, {
           'payment_method': method,
-        });
+        }, editedAt: editedAt);
       }
       if (fields.isNotEmpty) unawaited(ref.read(syncEngineProvider).sync());
       return;
@@ -1158,6 +1222,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         initialEntry: widget.initialEntry,
       )),
     );
+    ref.watch(responseCacheProvider);
     final cards = ref.watch(userCardsProvider).valueOrNull ?? const [];
     final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
 
@@ -1225,7 +1290,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
             ),
             // Never offer Save while the transaction itself failed to load;
             // the screenshot's blank form was allowing exactly that state.
-            onPressed: _saving || !_initialized ? null : _save,
+            onPressed: _saving || !_initialized || _staleLocalRow ? null : _save,
             child: _saving
                 ? const SizedBox(
                     width: 18,
@@ -1245,6 +1310,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           error: (err, _) => ErrorState(message: userFacingErrorMessage(err)),
           data: (entry) {
             _initFrom(entry);
+            _checkReading(entry);
             return SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpace.lg),
@@ -1302,6 +1368,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         if (value == null) return;
                         setState(() {
                           _entryKind = value;
+                          // Entertainment on an Investment makes no sense:
+                          // drop a category the new kind cannot use.
+                          if (!categoryFitsKind(categories, _categoryId, value)) {
+                            _categoryId = null;
+                          }
                           if (value != TxnEntryKind.transfer &&
                               _selfTransfer != null) {
                             _clearedSelfTransfer = _selfTransfer;
@@ -1325,8 +1396,24 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       },
                     ),
                     const SizedBox(height: AppSpace.lg),
+                    if (_staleLocalRow) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpace.md),
+                        decoration: BoxDecoration(
+                          color: BambooInk.glassFillOnPaper,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: BambooInk.hairlineOnPaper),
+                        ),
+                        child: Text(
+                          _staleRowCopy,
+                          style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpace.lg),
+                    ],
                     if (_entryKind == TxnEntryKind.transfer &&
-                        entry.pipelineVersion == 2) ...[
+                        _onPhone(entry)) ...[
                       DropdownButtonFormField<bool>(
                         key: ValueKey('transfer-type:$_cardBill'),
                         initialValue: _cardBill,
@@ -1412,7 +1499,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         cardSelected: _userCardId != null,
                         // An SMS-ledger row is edited through the ledger,
                         // which cannot store a method.
-                        methodsEnabled: entry.pipelineVersion != 2,
+                        methodsEnabled: !_onPhone(entry),
                         unknownHint: 'Unknown — choose a method',
                         onChanged: (next) => setState(() {
                           final instrumentChanged =
@@ -1423,6 +1510,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                           }
                           _instrument = next.instrument;
                           _paymentMethod = next.method;
+                          // Swipe on a cash payment is not a thing: drop a
+                          // route the new instrument cannot have.
+                          if (!railFitsInstrument(_rail, _instrument)) {
+                            _rail = TxnRail.unknown;
+                          }
                           // Tapping away and back to the saved instrument
                           // must not lose the saved method. Only an
                           // instrument tap restores it: clearing the method
@@ -1440,11 +1532,17 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ),
                     const SizedBox(height: AppSpace.lg),
                     DropdownButtonFormField<TxnRail>(
+                      key: ValueKey('rail-$_instrument'),
                       initialValue: _rail,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Payment route'),
                       items: [
-                        for (final rail in TxnRail.values)
+                        // A route an older entry already carries stays
+                        // listed so opening it does not change it.
+                        for (final rail in {
+                          ...railsForInstrument(_instrument),
+                          _rail,
+                        })
                           DropdownMenuItem(
                             value: rail,
                             child: Text(_railLabel(rail)),
@@ -1461,9 +1559,13 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Card'),
                         items: [
+                          // Only credit cards for a credit-card payment; a
+                          // card already chosen stays so it is not lost.
                           for (final c in cards)
-                            DropdownMenuItem(
-                              value: c.id,
+                            if (cardFitsInstrument(c.cardType, _instrument) ||
+                                c.id == _userCardId)
+                              DropdownMenuItem(
+                                value: c.id,
                               child: Text(
                                 c.nickname?.isNotEmpty == true
                                     ? c.nickname!
@@ -1476,6 +1578,8 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ],
                     const SizedBox(height: AppSpace.lg),
                     CategoryPickerField(
+                      key: ValueKey('category-$_entryKind'),
+                      entryKind: _entryKind,
                       categories: categories,
                       selectedId: _categoryId,
                       label: 'Category',

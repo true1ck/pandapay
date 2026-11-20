@@ -16,9 +16,12 @@ abstract final class PaymentMethodCommand {
   static const setTyped = 'transaction_typed_fields';
 }
 
+/// [onStale] is told the transaction id when the server kept a newer edit and
+/// this one changed nothing: the phone must then take the server's copy.
 Map<String, CommandHandler> paymentMethodCommandHandlers(
-  UserCardsRepository repo,
-) => {
+  UserCardsRepository repo, {
+  void Function(String id)? onStale,
+}) => {
   PaymentMethodCommand.setTyped: (p) {
     // Amount / category / card / rail are typed columns the legacy sync writer
     // refuses, so they travel here (the transaction's own PATCH route).
@@ -47,6 +50,8 @@ Map<String, CommandHandler> paymentMethodCommandHandlers(
       entryKind: p['entryKind'] == null
           ? null
           : TxnEntryKind.fromJson(p['entryKind'] as String),
+      editedAt: _editedAt(p),
+      onStale: () => onStale?.call(p['id'] as String),
     );
   },
   PaymentMethodCommand.set: (p) {
@@ -55,9 +60,14 @@ Map<String, CommandHandler> paymentMethodCommandHandlers(
       p['id'] as String,
       paymentMethod: method,
       clearPaymentMethod: method == null,
+      editedAt: _editedAt(p),
+      onStale: () => onStale?.call(p['id'] as String),
     );
   },
 };
+
+DateTime? _editedAt(Map<String, Object?> p) =>
+    p['editedAt'] is String ? DateTime.tryParse(p['editedAt'] as String) : null;
 
 String _railWire(TxnRail rail) => switch (rail) {
   TxnRail.upiQr => 'upi_qr',

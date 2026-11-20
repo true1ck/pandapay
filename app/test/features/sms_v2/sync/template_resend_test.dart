@@ -3,6 +3,7 @@ import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay/features/sms_v2/sync/ai_server_status.dart';
 import 'package:pandapay/features/sms_v2/sync/template_resend.dart';
+import 'package:pandapay/features/sms_v2/ui/review_history_views.dart' show aiUnreadCountIn;
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
@@ -64,6 +65,36 @@ void main() {
     );
   });
 
+  test('F-11: the resend mark is not an AI answer: the unread-AI count still works once it exists', () {
+    state.put('ai:bbb', '{"status":"rejected"}');
+    state.put('ai:ccc', '{"status":"failed"}');
+    state.put('ai:ddd', '{"status":"ready"}');
+    expect(aiUnreadCountIn(db, 'user:a'), 2);
+    expect(resendHeldTemplates(db, namespace: 'user:a', status: counted, now: t0), isTrue);
+    // json_extract over a bare date raised "malformed JSON" here, and the badge and the status bar lost the count.
+    expect(aiUnreadCountIn(db, 'user:a'), 2);
+    expect(
+      db.select("SELECT key FROM v2_sync_state WHERE namespace='user:a' AND key LIKE 'ai:%' AND json_valid(value)=0"),
+      isEmpty,
+      reason: 'nothing under ai: is anything but an answer',
+    );
+  });
+
+  test('F-11: a phone that already holds the old mark keeps honouring it, and moves it', () {
+    state.put('ai:resend:at', t0.toIso8601String());
+    // The count works even before the mark has been moved (a phone just updated).
+    expect(aiUnreadCountIn(db, 'user:a'), 0);
+    expect(
+      resendHeldTemplates(db, namespace: 'user:a', status: counted, now: t0.add(const Duration(hours: 1))),
+      isFalse,
+      reason: 'sent an hour ago under the old key: still inside the six hours',
+    );
+    expect(state.get('ai:resend:at'), isNull, reason: 'the old key is gone');
+    expect(state.get('template:resend:at'), t0.toIso8601String());
+    expect(resendHeldTemplates(db, namespace: 'user:a', status: counted, now: t0.add(const Duration(hours: 7))), isTrue);
+    expect(state.get('template:resend:at'), t0.add(const Duration(hours: 7)).toIso8601String());
+  });
+
   test('not counted, or nothing held: nothing is touched', () {
     expect(
       resendHeldTemplates(
@@ -92,7 +123,7 @@ void main() {
       isFalse,
     );
     expect(state.get('template:sent:aaa'), isNotNull);
-    expect(state.get('ai:resend:at'), isNull);
+    expect(state.get('template:resend:at'), isNull);
   });
 
   test('the background release asks the server at most every half hour and releases held layouts', () async {

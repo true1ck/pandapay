@@ -146,6 +146,30 @@ void main() {
     },
   );
 
+  test('a category the user chose does not stay on an event marked as a transfer', () {
+    final bundle = RuleBundle(
+      bundleVersion: 0,
+      createdAt: at,
+      expiresAt: at.add(const Duration(days: 1)),
+      minEngineVersion: '2.0.0',
+      taxonomyVersion: 1,
+    );
+    CategoryDecision? categoryAs(EventType type) {
+      final e = event(type, [debit], roles: [LegRole.original]);
+      return LedgerSnapshot.project(
+        events: [e],
+        factsById: facts([debit]),
+        instrumentsById: h.allInstruments,
+        bundle: bundle,
+        lockedCategories: {e.eventId: dining},
+      ).categoryByEvent[e.eventId];
+    }
+
+    expect(categoryAs(EventType.purchase)?.slug, 'dining');
+    expect(categoryAs(EventType.ownTransfer), isNull);
+    expect(categoryAs(EventType.income), isNull);
+  });
+
   test('each event type follows the contract totals classification', () {
     const spend = {
       EventType.purchase,

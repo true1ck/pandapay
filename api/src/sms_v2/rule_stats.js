@@ -87,6 +87,14 @@ async function pauseRuleVersion(s, { ruleId, version, reason, adminId, now }) {
   if (!row) return null;
   await s.pauseVersion(ruleId, version, reason, now.toISOString());
   await s.updateRule({ ...row, status: 'paused', body: { ...row.body, status: 'paused' } });
+  // Stores without template drafts (the in-memory one) have nothing to retract.
+  if (typeof s.retractTemplateDraft === 'function') {
+    // Only when no other version of the rule is still active in a live cohort (a rollback keeps the rule in the bundle).
+    const cohorts = await s.allCohorts();
+    const stillServed = (await s.ruleVersions(ruleId)).some((r) => r.status === 'active'
+      && cohorts.some((c) => c.ruleId === ruleId && c.version === r.version && !c.pausedAt));
+    if (!stillServed) await s.retractTemplateDraft(ruleId);
+  }
   await s.audit({ adminId, action: 'sms_v2_rule_pause', before: { ruleId, version, status: row.status }, after: { ruleId, version, status: 'paused' }, reason });
   return row;
 }

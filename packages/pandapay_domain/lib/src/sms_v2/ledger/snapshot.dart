@@ -38,6 +38,13 @@ class LedgerSnapshot {
     final list = events.toList();
     final resolver = DefaultCategoryResolver(aliases: bundle.merchantAliases);
     final categories = <String, CategoryDecision>{...lockedCategories};
+    // A category the user chose belongs to a spend. Once the event is no longer
+    // one (marked as a transfer or income), the old category must not stay.
+    for (final event in list) {
+      if (!categorisedEventTypes.contains(event.type)) {
+        categories.remove(event.eventId);
+      }
+    }
     final counterparties = <String, Counterparty?>{};
     final ownerByFact = <String, Event>{};
     for (final event in list) {

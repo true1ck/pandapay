@@ -1792,7 +1792,7 @@ class _RewardsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categories = ref.watch(spendCategoriesProvider).valueOrNull ?? const [];
     final reportState = ref.watch(
       spendReportProvider(const SpendReportQuery.preset(SpendPeriod.month)),
     );
@@ -2096,7 +2096,7 @@ class _CapsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider).valueOrNull ?? const [];
+    final categories = ref.watch(spendCategoriesProvider).valueOrNull ?? const [];
     String categoryName(String? id) {
       if (id == null) return 'All other spends';
       return categories

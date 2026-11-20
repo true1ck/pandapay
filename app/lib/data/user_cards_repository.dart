@@ -2126,6 +2126,8 @@ class UserCardsRepository {
     Map<String, dynamic>? selfTransfer,
     String? paymentMethod,
     bool clearPaymentMethod = false,
+    DateTime? editedAt,
+    void Function()? onStale,
   }) async {
     if (clearCategory && (categoryId != null || userCategoryId != null)) {
       throw ArgumentError(
@@ -2163,6 +2165,9 @@ class UserCardsRepository {
       // clearPaymentMethod sends null (the user removed it).
       if (clearPaymentMethod) 'paymentMethod': null,
       if (!clearPaymentMethod) 'paymentMethod': ?paymentMethod,
+      // When the person made the edit, so the server can tell it from a newer
+      // one (another device) and a late delivery cannot undo that newer edit.
+      if (editedAt != null) 'editedAt': editedAt.toUtc().toIso8601String(),
     };
     final response = await _client.patch(
       Uri.parse('$apiBaseUrl/transactions/$id'),
@@ -2173,6 +2178,11 @@ class UserCardsRepository {
       throw ApiException(
         'PATCH /transactions/:id failed: ${response.statusCode} ${response.body}',
       );
+    }
+    // 200 with stale: a newer edit was already stored; this one changed nothing.
+    if (onStale != null) {
+      final reply = jsonDecode(response.body);
+      if (reply is Map && reply['stale'] == true) onStale();
     }
   }
 
@@ -3029,6 +3039,11 @@ class TransactionEntry {
   /// Why it was left out: 'family' or 'other' (null when not asked).
   final String? excludeReason;
 
+  /// When the person last edited this row (server-adjusted clock). A copy with
+  /// an earlier time than the one stored never replaces it. Null = never edited
+  /// by the person, or an older server that does not send it.
+  final DateTime? editedAt;
+
   /// Whether this row is part of the person's spending: a spend row that they
   /// have not excluded. Use this wherever a spending total is built; use
   /// [entryKind] alone for card-side figures (dues, utilisation, rewards).
@@ -3075,6 +3090,7 @@ class TransactionEntry {
     this.rewardValue,
     this.excludeFromSpend = false,
     this.excludeReason,
+    this.editedAt,
     this.tags = const [],
   });
 
@@ -3128,6 +3144,7 @@ class TransactionEntry {
       'expected_value_inr': rewardValue?.rupees,
       if (excludeFromSpend) 'exclude_from_spend': true,
       if (excludeFromSpend && excludeReason != null) 'exclude_reason': excludeReason,
+      if (editedAt != null) 'edited_at': editedAt!.toUtc().toIso8601String(),
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
@@ -3179,6 +3196,7 @@ class TransactionEntry {
       excludeReason: (excludeFromSpend ?? this.excludeFromSpend)
           ? (excludeReason ?? this.excludeReason)
           : null,
+      editedAt: editedAt,
     );
   }
 
@@ -3275,6 +3293,9 @@ class TransactionEntry {
       // Absent on older servers and older stored rows: not excluded.
       excludeFromSpend: json['exclude_from_spend'] == true,
       excludeReason: json['exclude_reason'] as String?,
+      editedAt: json['edited_at'] is String
+          ? DateTime.tryParse(json['edited_at'] as String)
+          : null,
       tags: (json['tags'] as List? ?? const [])
           .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
           .toList(),

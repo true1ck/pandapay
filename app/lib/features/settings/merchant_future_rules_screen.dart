@@ -160,7 +160,7 @@ class _MerchantFutureRulesScreenState
   Future<void> _edit(MerchantCategoryRule rule) async {
     final repository = ref.read(merchantCategoryRulesRepositoryProvider);
     if (repository == null || _busyId != null) return;
-    final categories = ref.read(categoriesProvider).valueOrNull ?? const <SpendCategory>[];
+    final categories = ref.read(spendCategoriesProvider).valueOrNull ?? const <SpendCategory>[];
     if (categories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Categories are still loading. Try again.')),

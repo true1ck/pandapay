@@ -3,7 +3,7 @@ import 'package:pandapay_domain/shared_expenses.dart';
 import '../data/shared_commands.dart' show sharedUuid;
 import 'shared_amount_input.dart';
 
-enum SharedSplitMode { equal, exact, percentage, shares }
+enum SharedSplitMode { equal, exact, percentage }
 
 enum SharedEntryKind {
   unlinkedCash,
@@ -208,13 +208,11 @@ class SharedExpenseDraft {
       } else if (mode != SharedSplitMode.equal) {
         final parsed = SharedDecimalInput.parse(
           splitInputs[id] ?? '',
-          precision: mode == SharedSplitMode.percentage ? 2 : 0,
-          maxUnits: mode == SharedSplitMode.percentage ? 10000 : 1000000,
+          precision: 2,
+          maxUnits: 10000,
         );
         if (!parsed.isValid) {
-          errors['split:$id'] = mode == SharedSplitMode.percentage
-              ? 'Enter a percentage from 0 to 100.'
-              : 'Enter whole shares from 0 to 1000000.';
+          errors['split:$id'] = 'Enter a percentage from 0 to 100.';
         } else {
           row['weight'] = '${parsed.units}';
         }
@@ -308,9 +306,7 @@ class SharedExpenseDraft {
     } on SharedExpenseException {
       errors['splitTotal'] = mode == SharedSplitMode.exact
           ? 'Shares must add up to the shared amount.'
-          : mode == SharedSplitMode.percentage
-          ? 'Percentages must add up to 100%.'
-          : 'Enter at least one positive share.';
+          : 'Percentages must add up to 100%.';
       return SharedDraftEvaluation(errors, blockers, null);
     }
   }

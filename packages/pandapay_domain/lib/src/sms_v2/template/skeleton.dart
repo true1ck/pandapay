@@ -11,10 +11,52 @@ import 'package:crypto/crypto.dart';
 /// engine lands, and must agree with it.
 String smsTemplateBrand(String sender) {
   var s = sender.trim().toUpperCase();
-  s = s.replaceAll(RegExp(r'\s*\([^)]*\)\s*$'), '');
-  s = s.replaceFirst(RegExp(r'^[A-Z]{2}-'), '');
-  s = s.replaceFirst(RegExp(r'-[STPG]$'), '');
+  s = s.replaceAll(_iosTag, '');
+  s = s.replaceFirst(_operatorPrefix, '');
+  s = s.replaceFirst(_operatorSuffix, '');
   return s;
+}
+
+final RegExp _iosTag = RegExp(r'\s*\([^)]*\)\s*$');
+final RegExp _operatorPrefix = RegExp(r'^[A-Z]{2}-');
+final RegExp _operatorSuffix = RegExp(r'-[STPG]$');
+final RegExp _spaces = RegExp(r'\s+');
+final RegExp _anyDigit = RegExp(r'\d');
+
+/// The most name or removed-word slots (`<PARTY>`, `<W>`, or a tag this build does not know) a layout may hold.
+/// The server refuses a layout with more (`MAX_WILDCARDS` in api/src/sms_v2/layout_matcher.js, checked against the
+/// shared fixture `layout_corpus.json`), so the phone does not spend an upload slot on one.
+const int smsMaxLayoutWildcards = 4;
+
+/// The most loose slots (names, removed words, phone numbers, unknown tags) a layout may hold with only spaces between
+/// them (`MAX_ADJACENT_LOOSE`; the server refuses more as `layout_adjacent_wildcards`).
+const int smsMaxAdjacentLooseSlots = 2;
+
+final RegExp _layoutTag = RegExp(r'<([A-Z][A-Z_]*)>');
+const Set<String> _strictSlotKinds = {'AMT', 'DATE', 'MASK', 'REF', 'EMAIL', 'VPA', 'URL'};
+const Set<String> _fixedSlotKinds = {..._strictSlotKinds, 'PHONE'};
+
+/// How many wildcard slots [layout] has: every tag that is not one of the fixed value kinds. Same rule as the
+/// server's matcher, which reads an unknown tag as a name too.
+int smsLayoutWildcards(String layout) {
+  var count = 0;
+  for (final m in _layoutTag.allMatches(layout)) {
+    if (!_fixedSlotKinds.contains(m[1])) count++;
+  }
+  return count;
+}
+
+/// The longest run of loose slots in [layout] with nothing but spaces between them. A phone number counts as loose here
+/// (its pattern backtracks like a name), as in the server's matcher.
+int smsLayoutLooseRun(String layout) {
+  var best = 0, run = 0, end = 0;
+  for (final m in _layoutTag.allMatches(layout)) {
+    if (layout.substring(end, m.start).trim().isNotEmpty) run = 0;
+    run = _strictSlotKinds.contains(m[1]) ? 0 : run + 1;
+    if (run > best) best = run;
+    end = m.end;
+  }
+  return best;
 }
 
 final RegExp _url = RegExp(
@@ -56,7 +98,7 @@ final RegExp _wordRuns = RegExp(r'<W>(?:[ ]+<W>)+');
 /// `<VPA>`, URLs `<URL>`, digit runs of 6 or more `<REF>` and every other
 /// digit `#`. Placeholders already present (from redaction) are kept.
 String smsSkeleton(String body) {
-  var s = body.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+  var s = body.split(_spaces).where((w) => w.isNotEmpty).join(' ');
   // Emails first: `ab***@gmail.com` must not be left as `ab***@<URL>`, which still carries an address.
   s = s.replaceAll(_vpa, '<VPA>');
   s = s.replaceAll(_url, '<URL>');
@@ -69,7 +111,7 @@ String smsSkeleton(String body) {
   s = s.splitMapJoin(
     _placeholder,
     onMatch: (m) => m[0]!,
-    onNonMatch: (t) => t.replaceAll(RegExp(r'\d'), '#'),
+    onNonMatch: (t) => t.replaceAll(_anyDigit, '#'),
   );
   return s;
 }
@@ -96,7 +138,7 @@ final RegExp _wwwLink = RegExp(r'\bwww\.', caseSensitive: false);
 /// result, whatever it is part of; years are public, so dates are not looked at. This is a guard on [redactSms],
 /// which already changes every one of them: a mistake there sends the layout alone, never the wording.
 String? smsSample({required String original, required String redacted}) {
-  final text = redacted.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).join(' ');
+  final text = redacted.split(_spaces).where((w) => w.isNotEmpty).join(' ');
   if (text.isEmpty || text.length > 2000) return null;
   if (_addressOrLink.hasMatch(text) || _wwwLink.hasMatch(text) || _url.hasMatch(text)) return null;
   for (final run in _threeDigits.allMatches(original.replaceAll(_date, ' '))) {

@@ -224,6 +224,8 @@ class _CardDetailsSetupScreenState
                   decoration: const InputDecoration(labelText: 'Nickname'),
                 ),
                 const SizedBox(height: AppSpace.lg),
+                // A debit card has no limit, statement or due day.
+                if (card.cardType?.toLowerCase() != 'debit') ...[
                 TextField(
                   controller: _creditLimitController,
                   keyboardType: TextInputType.number,
@@ -267,6 +269,7 @@ class _CardDetailsSetupScreenState
                   ],
                 ),
                 const SizedBox(height: AppSpace.lg),
+                ],
                 TextField(
                   controller: _pointsBalanceController,
                   keyboardType: TextInputType.number,

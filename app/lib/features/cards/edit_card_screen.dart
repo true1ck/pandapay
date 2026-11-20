@@ -400,6 +400,8 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpace.lg),
+                // A debit card has no limit, statement or due day, or autopay.
+                if (userCard.cardType?.toLowerCase() != 'debit') ...[
                 TextField(
                   controller: _creditLimitController,
                   keyboardType: TextInputType.number,
@@ -463,6 +465,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     ),
                   ],
                 ),
+                ],
                 const SizedBox(height: AppSpace.lg),
                 TextField(
                   controller: _pointsBalanceController,
@@ -472,6 +475,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     helperText: "Starting point — we'll track from here",
                   ),
                 ),
+                if (userCard.cardType?.toLowerCase() != 'debit') ...[
                 const SizedBox(height: AppSpace.lg),
                 DropdownButtonFormField<AutopayMode>(
                   initialValue: _autopayMode,
@@ -492,6 +496,7 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     if (value != null) setState(() => _autopayMode = value);
                   },
                 ),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: AppSpace.md),
                   Text(

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'design/app_theme.dart';
 import 'providers.dart';
 import '../data/catalogue_repository.dart';
+import '../data/category_scope.dart';
+import '../data/user_cards_repository.dart' show TxnEntryKind;
 
 const addCategoryPickerValue = '__add_user_category__';
 
@@ -13,7 +15,13 @@ Future<String?> showAddCategoryDialog(
   WidgetRef ref,
   List<SpendCategory> categories, {
   String? initialParentId,
+  // A private top-level category carries no entry kind, so it would vanish
+  // from every kind but Spending. Other kinds add under an existing parent.
+  bool allowTopLevel = true,
 }) async {
+  if (!allowTopLevel && initialParentId == null) {
+    initialParentId = categories.where((c) => !c.isSubcategory).firstOrNull?.id;
+  }
   final controller = TextEditingController();
   final termsController = TextEditingController();
   String? parentId = initialParentId;
@@ -42,10 +50,11 @@ Future<String?> showAddCategoryDialog(
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Parent category'),
               items: [
-                const DropdownMenuItem<String>(
-                  value: '',
-                  child: Text('Top-level category'),
-                ),
+                if (allowTopLevel)
+                  const DropdownMenuItem<String>(
+                    value: '',
+                    child: Text('Top-level category'),
+                  ),
                 for (final category in categories.where(
                   (category) => !category.isSubcategory,
                 ))
@@ -134,6 +143,7 @@ Future<String?> showCategoryBottomSheet(
   List<SpendCategory> categories, {
   String? selectedId,
   String title = 'Choose a category',
+  bool allowTopLevel = true,
 }) {
   return showModalBottomSheet<String>(
     context: context,
@@ -153,7 +163,12 @@ Future<String?> showCategoryBottomSheet(
         scrollController: scrollController,
         onPick: (id) => Navigator.of(sheetContext).pop(id),
         onAdd: () async {
-          final id = await showAddCategoryDialog(sheetContext, ref, categories);
+          final id = await showAddCategoryDialog(
+            sheetContext,
+            ref,
+            categories,
+            allowTopLevel: allowTopLevel,
+          );
           if (id != null && sheetContext.mounted) {
             Navigator.of(sheetContext).pop(id);
           }
@@ -362,16 +377,21 @@ class CategoryPickerField extends ConsumerWidget {
   final ValueChanged<String?> onSelected;
   final String label;
 
+  /// Which kind of entry this is for. Only that kind's categories are shown.
+  final TxnEntryKind entryKind;
+
   const CategoryPickerField({
     super.key,
     required this.categories,
     required this.selectedId,
     required this.onSelected,
     this.label = 'Category',
+    this.entryKind = TxnEntryKind.spend,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final categories = categoriesForKind(this.categories, entryKind);
     final validSelectedId = categories.any((item) => item.id == selectedId)
         ? selectedId
         : null;
@@ -398,7 +418,12 @@ class CategoryPickerField extends ConsumerWidget {
           onSelected(value);
           return;
         }
-        final id = await showAddCategoryDialog(context, ref, categories);
+        final id = await showAddCategoryDialog(
+          context,
+          ref,
+          categories,
+          allowTopLevel: entryKind == TxnEntryKind.spend,
+        );
         if (id != null) onSelected(id);
       },
     );

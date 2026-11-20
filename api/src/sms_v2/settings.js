@@ -12,6 +12,8 @@ const SETTINGS = Object.freeze({
   templates_per_user_per_day: { type: 'int', default: 10000, min: 1, max: 10000, env: 'SMS_V2_UNKNOWN_TEMPLATES_PER_DAY' },
   corrections_per_user_per_day: { type: 'int', default: 200, min: 1, max: 2000, env: 'SMS_V2_CORRECTIONS_PER_DAY' },
   signals_per_user_per_day: { type: 'int', default: 500, min: 1, max: 5000, env: 'SMS_V2_LEARNING_SIGNALS_PER_DAY' },
+  // How many AI draft replacements one person's reports may trigger a day (a replacement costs AI drafts). Their other reports still hide the draft from them.
+  draft_replacements_per_user_per_day: { type: 'int', default: 5, min: 1, max: 100 },
   // 1 during the friends run (every tester has opted in); raise it before a public launch so one person cannot decide.
   signals_min_distinct_users: { type: 'int', default: 1, min: 1, max: 20 },
   // OFF by default. On: a phone in sms_v2_testers counts as eligible without App Check (free Apple accounts cannot attest).

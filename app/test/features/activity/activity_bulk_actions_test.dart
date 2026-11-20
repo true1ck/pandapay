@@ -43,6 +43,8 @@ class _FakeUserCardsRepository implements UserCardsRepository {
     Map<String, dynamic>? selfTransfer,
     String? paymentMethod,
     bool clearPaymentMethod = false,
+    DateTime? editedAt,
+    void Function()? onStale,
   }) async {
     editedIds.add(id);
   }

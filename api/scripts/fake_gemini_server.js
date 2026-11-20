@@ -11,6 +11,8 @@
  * Control (JSON over HTTP, local only):
  *   POST /_faults  [{ "status": 429, "retryDelaySeconds": 5, "times": 2, "key": "key-a", "model": "m", "quota": "day" }]
  *                  or { "mode": "incomplete" | "badjson" | "empty" | "slow", "times": 1, "delayMs": 3000 }
+ *                  or { "mode": "wrong", "wrong": "direction" | "balance_amount", "times": 1 }: a well-formed answer that is
+ *                  wrong about the message (direction flipped; the balance slot used as the amount)
  *                  A fault applies to the next `times` matching calls (key and model optional).
  *   POST /_reset   clears faults and the log
  *   GET  /_log     one row per call: time, key, model, status, layout, sizes (never the system prompt)
@@ -59,6 +61,18 @@ function answerFor(layout) {
   return { ...base, family: 'service_notice', emit: [{ factType: 'info', attrs: { category: 'service' } }] };
 }
 
+// A well-formed but wrong answer, what the model does when it misreads a layout.
+function makeWrong(answer, how) {
+  const movement = answer.emit.find((e) => e.factType === 'movement');
+  if (!movement) return answer;
+  if (how === 'direction') movement.attrs.direction = movement.attrs.direction === 'debit' ? 'credit' : 'debit';
+  if (how === 'balance_amount') {
+    const balance = answer.emit.find((e) => e.factType === 'balance_snapshot');
+    if (balance) movement.amounts[0].from = balance.amounts[0].from;
+  }
+  return answer;
+}
+
 function takeFault(faults, key, model) {
   const i = faults.findIndex((f) => (!f.key || f.key === key) && (!f.model || f.model === model));
   if (i < 0) return null;
@@ -98,6 +112,7 @@ function handle(req, res, body, { faults, log }) {
   const fault = takeFault(faults, key, model);
   const reply = () => {
     const answer = answerFor(asked.layout);
+    if (fault?.mode === 'wrong') makeWrong(answer, fault.wrong);
     const inputTokens = tokens(row.systemBytes + row.userBytes);
     const text = JSON.stringify(answer);
     if (fault?.mode === 'badjson') return done(200, { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"family": ' }] } }], usageMetadata: { promptTokenCount: inputTokens, candidatesTokenCount: 5, totalTokenCount: inputTokens + 5 } });

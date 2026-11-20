@@ -114,6 +114,8 @@ void main() {
     testWidgets('a money-in row opens the full transaction page', (tester) async {
       final model = await replay(tester, ['lanej_salary_two_months_same_payer']);
       await show(tester, SmsLedgerScreen.moneyIn, model);
+      await tester.tap(find.text('Salary')); // sections start closed
+      await tester.pumpAndSettle();
       await tester.tap(find.byType(ListTile).first);
       await tester.pumpAndSettle();
       expect(find.byType(TransactionDetailScreen), findsOneWidget);
@@ -250,6 +252,14 @@ void main() {
       expect(find.text('Dividends'), findsOneWidget);
       expect(find.text('Refunds'), findsOneWidget);
       expect(find.text('From people'), findsOneWidget);
+      // Sections start closed: the kind and its total, no rows.
+      expect(find.text('ACME TECHNOLOGIES'), findsNothing);
+      expect(find.byType(ListTile), findsNothing);
+      for (final title in ['Salary', 'Dividends', 'Refunds', 'From people']) {
+        await tester.ensureVisible(find.text(title));
+        await tester.tap(find.text(title));
+        await tester.pumpAndSettle();
+      }
       // Two salary credits from ACME TECHNOLOGIES, once each.
       expect(find.text('ACME TECHNOLOGIES'), findsNWidgets(2));
       expect(find.text('₹85,000.00'), findsNWidgets(2));

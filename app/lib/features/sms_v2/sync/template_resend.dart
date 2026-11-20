@@ -14,6 +14,21 @@ import 'ai_server_status.dart';
 /// the per-person daily cap. At most once per [every], so a layout the server
 /// keeps holding cannot make the phone send in a loop.
 ///
+/// When a re-send last ran. It was kept under `ai:resend:at`, which every query over the AI answers
+/// (`key LIKE 'ai:%'`, then json_extract) tripped on: its value is a bare date, not JSON. It lives under
+/// `template:` now; a phone that still holds the old key has the value moved over, so the six-hour wait carries on.
+const _resendKey = 'template:resend:at';
+const _legacyResendKey = 'ai:resend:at';
+
+DateTime? _lastResend(SyncStateStore state) {
+  final legacy = state.get(_legacyResendKey);
+  if (legacy != null) {
+    if (state.get(_resendKey) == null) state.put(_resendKey, legacy);
+    state.db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [state.namespace, _legacyResendKey]);
+  }
+  return DateTime.tryParse(state.get(_resendKey) ?? '');
+}
+
 /// Returns true when it reset the sent marks.
 bool resendHeldTemplates(
   Database db, {
@@ -24,13 +39,13 @@ bool resendHeldTemplates(
 }) {
   if (!status.countedNow || status.held <= 0) return false;
   final state = SyncStateStore(db, namespace: namespace);
-  final last = DateTime.tryParse(state.get('ai:resend:at') ?? '');
+  final last = _lastResend(state);
   if (last != null && now.difference(last).abs() < every) return false;
   db.execute(
     "DELETE FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:sent:%'",
     [namespace],
   );
-  state.put('ai:resend:at', now.toUtc().toIso8601String());
+  state.put(_resendKey, now.toUtc().toIso8601String());
   return true;
 }
 
@@ -50,6 +65,7 @@ Future<bool> releaseHeldTemplatesInBackground(
   Duration every = const Duration(minutes: 30),
 }) async {
   final state = SyncStateStore(db, namespace: namespace);
+  _lastResend(state); // moves a mark an earlier build left under ai:, even when nothing is released this time
   final last = DateTime.tryParse(state.get('template:heldcheck:at') ?? '');
   if (last != null && now.difference(last).abs() < every) return false;
   final status = await fetchStatus();

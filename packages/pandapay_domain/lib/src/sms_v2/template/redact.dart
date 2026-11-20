@@ -74,6 +74,17 @@ final RegExp _mixedId = RegExp(
 
 final RegExp _maskWord = RegExp(r'^[xX]{2,}\d*$');
 
+// Built once: redaction runs on every unknown message at every sync, so none of these may be constructed per call.
+final RegExp _oneDigit = RegExp(r'\d');
+final RegExp _digitRun4 = RegExp(r'\d{4,}');
+final RegExp _trailingDigits = RegExp(r'\d+$');
+final RegExp _singleSpace = RegExp(r'^ $');
+final RegExp _localSplit = RegExp(r'[._\-+]');
+final RegExp _isoDate = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(.*)$', dotAll: true);
+final RegExp _numericDate = RegExp(r'^(\d{1,2})([-/.])(\d{1,2})([-/.])(\d{2,4})$');
+final RegExp _dayMonthYear = RegExp(r'^(\d{1,2})([\s-]?)([A-Za-z]+)([\s,-]*)(\d{2,4})$');
+final RegExp _monthDayYear = RegExp(r'^([A-Za-z]+)(\.?\s+)(\d{1,2})(,?\s+)(\d{2,4})$');
+
 final RegExp _nameToken = RegExp(r"<[A-Z_]+>|[A-Za-z][A-Za-z0-9'&]*");
 
 const List<String> _monthAbbr = [
@@ -144,6 +155,40 @@ RedactedSms redactSms({
   required DateTime observedAt,
   required SmsRedactionOptions options,
 }) {
+  final pass = _redactNumbers(sender, body, observedAt, options);
+  return pass.finish(options.keepNames ? pass.text : _redactNames(pass.text, options));
+}
+
+/// The layout redaction and the wording-sample redaction of one message, from one pass over it.
+/// Same result as `redactSms` with `keepNames: false` (`layout`) and with `keepNames: true` (`sample`, whose body
+/// is all that is returned), minus the second pass over the numbers, dates and links that both share: the upload
+/// ran the whole redaction twice per message, on the UI isolate, for every message waiting at every sync.
+({RedactedSms layout, RedactedSms sample}) redactSmsPair({
+  required String sender,
+  required String body,
+  required DateTime observedAt,
+  required SmsRedactionOptions options,
+}) {
+  final pass = _redactNumbers(sender, body, observedAt, options);
+  return (layout: pass.finish(_redactNames(pass.text, options)), sample: pass.finish(pass.text));
+}
+
+class _NumbersRedacted {
+  _NumbersRedacted(this.text, this._sender, this._observedAt, this._shift);
+  final String text;
+  final String _sender;
+  final DateTime _observedAt;
+  final int _shift;
+
+  RedactedSms finish(String body) => RedactedSms(
+    sender: _oneDigit.allMatches(_sender).length >= 7 ? '<PHONE>' : _sender,
+    body: body,
+    observedAt: _observedAt.toUtc().add(Duration(days: _shift)),
+  );
+}
+
+/// Everything `redactSms` does before it looks at names: references, emails, links, dates, amounts, masks, numbers.
+_NumbersRedacted _redactNumbers(String sender, String body, DateTime observedAt, SmsRedactionOptions options) {
   final shift = options.shiftDays;
   final seed = _hashInt('${options.salt}|$sender|${observedAt.toIso8601String()}|$body');
   final ctx = _Ctx(Random(seed), shift, options);
@@ -151,15 +196,7 @@ RedactedSms redactSms({
   // An id like `mvtHfGfdjLvdwwKyVa7pF3` (letters of both cases and a digit) is a reference, not a word.
   var text = body.replaceAll(_mixedId, '<REF>');
   text = text.replaceAllMapped(_pass1, (m) => _replacePass1(m as RegExpMatch, ctx));
-  if (!options.keepNames) text = _redactNames(text, options);
-
-  final digitsInSender = RegExp(r'\d').allMatches(sender).length;
-  final outSender = digitsInSender >= 7 ? '<PHONE>' : sender;
-  return RedactedSms(
-    sender: outSender,
-    body: text,
-    observedAt: observedAt.toUtc().add(Duration(days: shift)),
-  );
+  return _NumbersRedacted(text, sender, observedAt, shift);
 }
 
 String _replacePass1(RegExpMatch m, _Ctx ctx) {
@@ -171,7 +208,7 @@ String _replacePass1(RegExpMatch m, _Ctx ctx) {
   }
   if (m.namedGroup('phone') != null) return '<PHONE>';
   if (m.namedGroup('amt') != null || m.namedGroup('mask') != null) {
-    final i = all.indexOf(RegExp(r'\d'));
+    final i = all.indexOf(_oneDigit);
     if (i < 0) return all;
     final isMask = m.namedGroup('mask') != null;
     final prefix = all.substring(0, i);
@@ -182,17 +219,17 @@ String _replacePass1(RegExpMatch m, _Ctx ctx) {
 }
 
 String _digitRuns(String text, _Ctx ctx) =>
-    text.replaceAllMapped(RegExp(r'\d{4,}'), (m) => ctx.synth(m[0]!));
+    text.replaceAllMapped(_digitRun4, (m) => ctx.synth(m[0]!));
 
 String _replaceEmailOrVpa(String text, SmsRedactionOptions o) {
   final at = text.indexOf('@');
   final local = text.substring(0, at);
   final domain = text.substring(at + 1);
   if (domain.contains('.')) return '<EMAIL>';
-  if (RegExp(r'\d').hasMatch(local)) return '<VPA>';
+  if (_oneDigit.hasMatch(local)) return '<VPA>';
   final parts = local
       .toLowerCase()
-      .split(RegExp(r'[._\-+]'))
+      .split(_localSplit)
       .where((p) => p.isNotEmpty)
       .toList();
   if (parts.isEmpty) return '<VPA>';
@@ -242,14 +279,14 @@ String? _shiftDate(String text, int shift) {
     return null;
   }
 
-  var m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(.*)$', dotAll: true).firstMatch(text);
+  var m = _isoDate.firstMatch(text);
   if (m != null) {
     final dt = valid(int.parse(m[1]!), int.parse(m[2]!), int.parse(m[3]!));
     if (dt == null) return null;
     final s = dt.add(Duration(days: shift));
     return '${s.year}-${pad2(s.month)}-${pad2(s.day)}${m[4]}';
   }
-  m = RegExp(r'^(\d{1,2})([-/.])(\d{1,2})([-/.])(\d{2,4})$').firstMatch(text);
+  m = _numericDate.firstMatch(text);
   if (m != null) {
     if (m[5]!.length == 3) return null;
     final dt = valid(fullYear(m[5]!), int.parse(m[3]!), int.parse(m[1]!));
@@ -258,7 +295,7 @@ String? _shiftDate(String text, int shift) {
     final mo = m[3]!.length >= 2 ? pad2(s.month) : s.month.toString();
     return '${dayOut(s, m[1]!)}${m[2]}$mo${m[4]}${yearOut(s, m[5]!)}';
   }
-  m = RegExp(r'^(\d{1,2})([\s-]?)([A-Za-z]+)([\s,-]*)(\d{2,4})$').firstMatch(text);
+  m = _dayMonthYear.firstMatch(text);
   if (m != null) {
     final mo = monthIndex(m[3]!);
     if (mo == null || m[5]!.length == 3) return null;
@@ -267,7 +304,7 @@ String? _shiftDate(String text, int shift) {
     final s = dt.add(Duration(days: shift));
     return '${dayOut(s, m[1]!)}${m[2]}${monthName(s, m[3]!)}${m[4]}${yearOut(s, m[5]!)}';
   }
-  m = RegExp(r'^([A-Za-z]+)(\.?\s+)(\d{1,2})(,?\s+)(\d{2,4})$').firstMatch(text);
+  m = _monthDayYear.firstMatch(text);
   if (m != null) {
     final mo = monthIndex(m[1]!);
     if (mo == null || m[5]!.length == 3) return null;
@@ -282,8 +319,8 @@ String? _shiftDate(String text, int shift) {
 class _Word {
   _Word(this.start, this.end, this.text)
     : lower = text.toLowerCase(),
-      key = text.toLowerCase().replaceFirst(RegExp(r'\d+$'), ''),
-      hasDigit = RegExp(r'\d').hasMatch(text),
+      key = text.toLowerCase().replaceFirst(_trailingDigits, ''),
+      hasDigit = _oneDigit.hasMatch(text),
       isCap = text[0] == text[0].toUpperCase(),
       isMask = _maskWord.hasMatch(text);
 
@@ -322,7 +359,7 @@ String _redactNames(String text, SmsRedactionOptions o) {
       if (i + len > words.length) continue;
       var ok = true;
       for (var k = 0; k < len - 1; k++) {
-        if (!RegExp(r'^ $').hasMatch(text.substring(words[i + k].end, words[i + k + 1].start))) {
+        if (!_singleSpace.hasMatch(text.substring(words[i + k].end, words[i + k + 1].start))) {
           ok = false;
           break;
         }

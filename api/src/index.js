@@ -53,6 +53,7 @@ const {
   isBankAccountMessage,
 } = require('./sms_parser');
 const importResolvers = require('./import_resolvers');
+const { categoryFitsEntryKind } = require('./category_kind');
 const { createSyncTransactionApplier } = require('./sync_transaction_state');
 const applyTransactionSync = createSyncTransactionApplier({
   loadUserCardForState,
@@ -698,7 +699,7 @@ const CARD_STATUS_TRANSITIONS = {
 app.get('/categories', async (req, res) => {
   try {
     const result = await withUserClient(null, (client) =>
-      client.query('SELECT id, slug, name FROM spend_categories ORDER BY sort_order')
+      client.query('SELECT id, slug, name, entry_kinds AS "entryKinds" FROM spend_categories ORDER BY sort_order')
     );
     res.json({ categories: result.rows });
   } catch (err) {
@@ -4619,6 +4620,9 @@ app.post('/transactions', requireAuth, async (req, res) => {
         }
         userCategoryParentId = category.rows[0].parent_category_id;
       }
+      if (!(await categoryFitsEntryKind(client, userCategoryId ? userCategoryParentId : categoryId, entryKind))) {
+        return { status: 400, error: 'category does not fit this kind of transaction' };
+      }
       // QR/manual payments often arrive with a merchant name but without an
       // explicit category selection. Reuse the same conservative resolver as
       // SMS import so a known merchant is categorized before rewards and
@@ -5132,7 +5136,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 ucat.parent_user_category_id AS parent_user_category_id,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                t.rail, t.payment_method, t.status, t.source, t.note,
+                t.rail, t.payment_method, t.status, t.source, t.note, t.edited_at,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr, t.exclude_from_spend,
                 (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
@@ -5227,7 +5231,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 ucat.parent_user_category_id AS parent_user_category_id,
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
-                t.rail, t.payment_method, t.status, t.source, t.note,
+                t.rail, t.payment_method, t.status, t.source, t.note, t.edited_at,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr, t.exclude_from_spend,
                 COALESCE(t.source_account_last4,
@@ -5509,7 +5513,7 @@ app.post('/duplicate-candidates/:id/resolve', requireAuth, async (req, res) => {
 app.patch('/transactions/:id', requireAuth, async (req, res) => {
   const {
     amountInr, occurredAt, categoryId, userCategoryId, rail, merchantName, userCardId,
-    instrument, entryKind, selfTransfer, paymentMethod,
+    instrument, entryKind, selfTransfer, paymentMethod, editedAt,
   } = req.body || {};
   const disablingSelfTransfer = selfTransfer?.action === 'disable';
   if (selfTransfer !== undefined && ((!disablingSelfTransfer && entryKind !== 'transfer')
@@ -5543,6 +5547,14 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
   )) {
     return res.status(400).json({ error: 'userCategoryId must be a valid UUID' });
   }
+  // When the person made this edit (the phone's server-adjusted clock). Never
+  // later than now: a wrong phone clock must not outrank every later edit.
+  let editTime = null;
+  if (editedAt !== undefined && editedAt !== null) {
+    const parsed = new Date(editedAt);
+    if (Number.isNaN(parsed.getTime())) return res.status(400).json({ error: 'editedAt is not a valid date' });
+    editTime = new Date(Math.min(parsed.getTime(), Date.now()));
+  }
 
   try {
     const result = await withUserClient(req.userId, async (client) => {
@@ -5559,7 +5571,7 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       // transaction, released on COMMIT/ROLLBACK by withUserClient.
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, user_category_id, rail, merchant_name, status,
-                instrument, entry_kind, state_applied, is_backfill, payment_method
+                instrument, entry_kind, state_applied, is_backfill, payment_method, edited_at
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -5567,6 +5579,12 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
       const old = existing.rows[0];
       if (old.status !== 'active') {
         return { status: 409, error: `cannot edit a transaction with status '${old.status}'` };
+      }
+      // A newer edit is already stored (another device, or this edit arriving
+      // late): the newer one stands. Answered before any state is reversed.
+      if (editTime && old.edited_at && editTime.getTime() < new Date(old.edited_at).getTime()) {
+        const { state_applied, is_backfill, ...current } = old;
+        return { status: 200, stale: true, transaction: current };
       }
       // Validated before any write or state reversal below: withUserClient
       // commits whatever the callback returns, so a 400 must come first.
@@ -5687,14 +5705,32 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         }
       }
 
+      // A category has to fit the kind. A category sent in this request that
+      // does not is refused; a stored one that stops fitting because the kind
+      // changed (an older app sends only the kind) is cleared, not kept.
+      const sentCategory = (categoryId !== undefined && categoryId !== null)
+        || (userCategoryId !== undefined && userCategoryId !== null);
+      const nextCategory = userCategoryId !== undefined && userCategoryId !== null
+        ? (categoryId || userCategoryParentId)
+        : categoryId !== undefined ? categoryId : old.category_id;
+      let clearStaleCategory = false;
+      if (sentCategory) {
+        if (!(await categoryFitsEntryKind(client, nextCategory, newEntryKind))) {
+          return { status: 400, error: 'category does not fit this kind of transaction' };
+        }
+      } else if (entryKind !== undefined && entryKind !== old.entry_kind
+        && categoryId === undefined && userCategoryId === undefined
+        && !(await categoryFitsEntryKind(client, old.category_id, newEntryKind))) {
+        clearStaleCategory = true;
+      }
+
       const newValues = {
         userCardId: newUserCardId,
         amount: amountInr !== undefined ? Number(amountInr) : Number(old.amount_inr),
         occurred: occurredAt !== undefined ? new Date(occurredAt) : old.occurred_at,
-        categoryId: userCategoryId !== undefined && userCategoryId !== null
-          ? (categoryId || userCategoryParentId)
-          : categoryId !== undefined ? categoryId : old.category_id,
-        userCategoryId: userCategoryId !== undefined ? userCategoryId : old.user_category_id,
+        categoryId: clearStaleCategory ? null : nextCategory,
+        userCategoryId: clearStaleCategory ? null
+          : userCategoryId !== undefined ? userCategoryId : old.user_category_id,
         rail: rail ?? old.rail,
         merchantName: selfTransferRule && !disablingSelfTransfer
           ? selfTransfers.selfTransferLabel(selfTransferRule.destination)
@@ -5714,14 +5750,15 @@ app.patch('/transactions/:id', requireAuth, async (req, res) => {
         `UPDATE transactions
             SET user_card_id = $1, amount_inr = $2, occurred_at = $3, category_id = $4,
                 user_category_id = $5, rail = $6,
-                merchant_name = $7, instrument = $8, entry_kind = $9, payment_method = $11
+                merchant_name = $7, instrument = $8, entry_kind = $9, payment_method = $11,
+                edited_at = COALESCE($12, now())
           WHERE id = $10
           RETURNING id, user_card_id, amount_inr, occurred_at, category_id, user_category_id,
-                    rail, merchant_name, instrument, entry_kind, status, payment_method`,
+                    rail, merchant_name, instrument, entry_kind, status, payment_method, edited_at`,
         [
           newValues.userCardId, newValues.amount, newValues.occurred, newValues.categoryId,
           newValues.userCategoryId, newValues.rail, newValues.merchantName,
-          newValues.instrument, newValues.entryKind, old.id, methodResolution.value,
+          newValues.instrument, newValues.entryKind, old.id, methodResolution.value, editTime,
         ]
       );
 

@@ -1092,6 +1092,17 @@ class MoneyInItem {
   final DateTime occurredAt;
 }
 
+/// The kinds [moneyIn] sorts incoming money into, in display order. Shared by
+/// the Money in screen's sections and Activity's Money in filter.
+const moneyInKindLabels = [
+  ('salary', 'Salary'),
+  ('dividend', 'Dividends'),
+  ('refund', 'Refunds'),
+  ('cashback', 'Cashback'),
+  ('person', 'From people'),
+  ('other', 'Other money in'),
+];
+
 const _unknownPayer = 'Unknown payer';
 const _salaryNoPayer = 'Salary received';
 const _cashbackNoPayer = 'Cashback received';

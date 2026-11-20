@@ -36,10 +36,11 @@ function createTemplateStore({ withUserClient }) {
     submit(profileId, items, eligible) {
       return withUserClient(profileId, async (client) => {
         const rows = await client.query(
-          "SELECT pandapay.sms_v2_submit_templates($1::jsonb,$2) AS hash",
+          "SELECT accepted_hash AS hash, fresh FROM pandapay.sms_v2_submit_templates_counted($1::jsonb,$2)",
           [JSON.stringify(items), eligible === true],
         );
-        return rows.rows.map((row) => row.hash);
+        // `fresh`: how many were new for this person today (the rate bucket is charged for those only).
+        return Object.assign(rows.rows.map((row) => row.hash), { fresh: rows.rows.filter((row) => row.fresh).length });
       });
     },
     // Counts of the person's own layouts by state (no text), for the status bar.
@@ -156,16 +157,22 @@ function createTemplateHandler({ store, security }) {
       }
       if (denied(await security.verifyAttestation(req)))
         return res.status(403).json({ error: "attestation_required" });
-      if (
-        items.length &&
-        denied(await security.checkRate(req, "unknown-templates", items.length))
-      )
+      // One unit buys the request. The rest of the batch is charged after it is accepted, and only for layouts
+      // new to this person today: a refused batch (400, 5xx) or a lost-response resend costs nothing more.
+      // ponytail: the bucket can pass its limit by one batch (at most 50) before the next request is refused.
+      if (items.length && denied(await security.checkRate(req, "unknown-templates", 1)))
         return res.status(429).json({ error: "rate_limited" });
       const accepted = await store.submit(
         req.userId,
         items,
         req.smsV2Security?.sharedLearningEligible === true,
       );
+      const more = (Number.isInteger(accepted.fresh) ? accepted.fresh : items.length) - 1;
+      if (more > 0) {
+        // The batch is stored already: a failed or refused charge must not turn it into an error.
+        await security.checkRate(req, "unknown-templates", more).catch(() => {});
+        res.removeHeader?.("Retry-After");
+      }
       return res.status(202).json({ accepted });
     } catch (error) {
       if (error.code === "42501")
@@ -412,7 +419,8 @@ function registerPrivateTemplateRoutes(api) {
           throw new HttpError(409, "template_not_requeueable");
         await client.query(
           `UPDATE sms_v2_unknown_templates SET ai_status='queued',failure_code=NULL,failure_detail=NULL,queued_at=clock_timestamp(),admin_decision=NULL,admin_reason=NULL,admin_note=NULL,
-             decided_by=NULL,decided_at=NULL,result_revision=nextval('sms_v2_template_revision')
+             decided_by=NULL,decided_at=NULL,ai_job_attempts=0,ai_retries=0,ai_run_after=clock_timestamp(),ai_counted_jobs=0,
+             ai_counted_jobs_by_version='{}',ai_user_replacements=0,result_revision=nextval('sms_v2_template_revision')
            WHERE template_hash=$1`,
           [req.params.hash],
         );

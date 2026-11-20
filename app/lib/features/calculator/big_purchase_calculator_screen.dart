@@ -63,7 +63,7 @@ class _BigPurchaseCalculatorScreenState
   Widget build(BuildContext context) {
     final catalogue = ref.watch(catalogueProvider);
     final userCards = ref.watch(userCardsProvider);
-    final categories = ref.watch(categoriesProvider);
+    final categories = ref.watch(spendCategoriesProvider);
     final engine = ref.watch(recommendationEngineProvider);
     final overrides = ref.watch(cardOverridesProvider);
 

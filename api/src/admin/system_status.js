@@ -87,7 +87,8 @@ const JOBS = Object.freeze([
     key: 'sms_v2_ai_drafts', name: 'SMS AI drafts', permission: 'learning.read', expectedEveryHours: 24,
     sql: `SELECT now() AS last_run_at,
                  CASE WHEN EXISTS (SELECT 1 FROM sms_v2_unknown_templates
-                                    WHERE ai_status = 'queued' AND first_seen < now() - interval '1 hour')
+                                    WHERE ai_status = 'queued' AND first_seen < now() - interval '1 hour'
+                                      AND ai_run_after <= now())
                       THEN 'backlog' ELSE 'ok' END AS last_status,
                  (SELECT max(started_at) FROM sms_v2_template_attempts WHERE outcome = 'valid') AS last_success_at`,
     ok: status => status === 'ok',
