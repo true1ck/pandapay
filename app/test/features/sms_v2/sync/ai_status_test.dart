@@ -157,4 +157,83 @@ void main() {
       isTrue,
     );
   });
+
+  group('what this phone holds (the "phone details" line)', () {
+    String h(String c) => c * 64;
+
+    void answer(String hash, String status, {bool rule = true}) => state.put(
+      'ai:$hash',
+      jsonEncode({
+        'templateHash': hash,
+        'status': status,
+        if (rule) 'rule': {'id': 'AI-$hash'},
+      }),
+    );
+
+    void link(String remoteHash) => state.put(
+      'template:origins:$remoteHash',
+      jsonEncode({'senderBrand': 'HDFCBK', 'localHashes': [h('f')]}),
+    );
+
+    void decision(String source, String decision, {bool text = false}) {
+      db.execute(
+        'CREATE TABLE IF NOT EXISTS sms_source_decisions (namespace TEXT, source_key TEXT, decision TEXT)',
+      );
+      db.execute(
+        'CREATE TABLE IF NOT EXISTS sms_captured_messages (namespace TEXT, id TEXT)',
+      );
+      db.execute('INSERT INTO sms_source_decisions VALUES (?,?,?)', ['user:1', source, decision]);
+      if (text) db.execute('INSERT INTO sms_captured_messages VALUES (?,?)', ['user:1', source]);
+    }
+
+    test('an empty phone reports zeros', () {
+      final d = AiStatusReader(state).diagnostics();
+      expect(
+        [d.answersReady, d.answersFailed, d.linksSaved, d.readyWithLink, d.unknownMessages, d.unknownWithText, d.readByAiRule],
+        everyElement(0),
+      );
+    });
+
+    test('counts answers, links, unknown messages and messages an AI rule read', () {
+      answer(h('1'), 'ready');
+      answer(h('2'), 'ready');
+      answer(h('3'), 'ready', rule: false); // no rule in it: not usable
+      answer(h('4'), 'failed', rule: false);
+      answer(h('5'), 'rejected', rule: false);
+      state.put('ai:resend:at', DateTime.utc(2026, 11, 20).toIso8601String()); // a timestamp, not an answer
+      link(h('1')); // only one of the usable answers has its link back to a local format
+      link(h('9')); // a link without an answer
+      decision('s1', 'unknown', text: true);
+      decision('s2', 'unknown');
+      decision('s3', 'matched', text: true);
+      state.put('trace:s3', jsonEncode({'ruleId': 'AI-${h('1')}:local:${h('f')}'}));
+      state.put('trace:s4', jsonEncode({'ruleId': 'HDFC-SPEND-01'}));
+      state.put('trace:s5', 'not json');
+
+      final d = AiStatusReader(state).diagnostics();
+      expect(d.answersReady, 2);
+      expect(d.answersFailed, 2);
+      expect(d.linksSaved, 2);
+      expect(d.readyWithLink, 1);
+      expect(d.unknownMessages, 2);
+      expect(d.unknownWithText, 1);
+      expect(d.readByAiRule, 1);
+    });
+
+    test('another account\'s state is not counted', () {
+      answer(h('1'), 'ready');
+      link(h('1'));
+      final d = AiStatusReader(SyncStateStore(db, namespace: 'user:2')).diagnostics();
+      expect(d.answersReady, 0);
+      expect(d.linksSaved, 0);
+    });
+
+    test('a database without the message tables still answers', () {
+      answer(h('1'), 'ready');
+      final d = AiStatusReader(state).diagnostics();
+      expect(d.answersReady, 1);
+      expect(d.unknownMessages, 0);
+      expect(d.unknownWithText, 0);
+    });
+  });
 }

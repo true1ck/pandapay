@@ -574,6 +574,9 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
   DateTime _lastAsked = DateTime.now();
   static const _keepLastFor = Duration(minutes: 10);
 
+  /// The "phone details" line is open.
+  bool _showDetails = false;
+
   @override
   void initState() {
     super.initState();
@@ -676,7 +679,49 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
               const SizedBox(height: 8),
               const LinearProgressIndicator(minHeight: 3),
             ],
+            const SizedBox(height: 6),
+            GestureDetector(
+              key: const Key('gemini-phone-details-toggle'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _showDetails = !_showDetails),
+              child: Text(
+                _showDetails ? 'Hide phone details' : 'Phone details',
+                style: BambooFonts.ui(
+                  12,
+                  weight: FontWeight.w700,
+                  color: warn ? BambooInk.clayInk : BambooInk.ink500,
+                ).copyWith(decoration: TextDecoration.underline),
+              ),
+            ),
+            if (_showDetails) const _PhoneDetails(),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What this phone holds about the AI check. Counts only.
+class _PhoneDetails extends ConsumerWidget {
+  const _PhoneDetails();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final style = BambooFonts.ui(12, color: BambooInk.ink700, height: 1.5);
+    final details = ref.watch(aiPhoneDiagnosticsProvider);
+    return Padding(
+      key: const Key('gemini-phone-details'),
+      padding: const EdgeInsets.only(top: 4),
+      child: details.when(
+        loading: () => Text('Reading this phone…', style: style),
+        error: (_, _) => Text('Could not read this phone.', style: style),
+        data: (d) => Text(
+          'AI answers saved here: ${d.answersReady} usable, ${d.answersFailed} failed\n'
+          'Usable answers with their link: ${d.readyWithLink} of ${d.answersReady}\n'
+          'AI rules in use now: ${d.activeAiRules}\n'
+          'Messages read by an AI rule: ${d.readByAiRule}\n'
+          'Unknown messages: ${d.unknownMessages}, text still here: ${d.unknownWithText}',
+          style: style,
         ),
       ),
     );

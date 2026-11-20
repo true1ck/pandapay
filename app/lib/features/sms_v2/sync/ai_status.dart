@@ -30,6 +30,57 @@ class AiResolution {
   final bool verified;
 }
 
+/// What this phone itself holds about the AI check, for the "phone details"
+/// line of the Needs review bar. Counts only, no message text.
+class AiPhoneDiagnostics {
+  const AiPhoneDiagnostics({
+    this.answersReady = 0,
+    this.answersFailed = 0,
+    this.linksSaved = 0,
+    this.readyWithLink = 0,
+    this.unknownMessages = 0,
+    this.unknownWithText = 0,
+    this.readByAiRule = 0,
+    this.activeAiRules = 0,
+  });
+
+  /// Answers the server sent that carry a usable rule.
+  final int answersReady;
+
+  /// Answers that say the AI could not draft the format, or it was rejected.
+  final int answersFailed;
+
+  /// Links from a shared format back to this phone's own message formats. An
+  /// answer is applied only through such a link.
+  final int linksSaved;
+
+  /// Ready answers that have their link: the only ones the phone can apply.
+  final int readyWithLink;
+
+  /// Messages the phone has marked unknown, and how many still have their text
+  /// on the phone (a message without its text cannot be read again).
+  final int unknownMessages;
+  final int unknownWithText;
+
+  /// Messages whose saved reading names an AI rule.
+  final int readByAiRule;
+
+  /// AI rules the engine is using right now (set by the caller, who has the
+  /// rule bundle).
+  final int activeAiRules;
+
+  AiPhoneDiagnostics withActiveAiRules(int count) => AiPhoneDiagnostics(
+    answersReady: answersReady,
+    answersFailed: answersFailed,
+    linksSaved: linksSaved,
+    readyWithLink: readyWithLink,
+    unknownMessages: unknownMessages,
+    unknownWithText: unknownWithText,
+    readByAiRule: readByAiRule,
+    activeAiRules: count,
+  );
+}
+
 /// Reads the AI check state kept in the local sync state. Read-only.
 class AiStatusReader {
   const AiStatusReader(
@@ -47,6 +98,74 @@ class AiStatusReader {
   final Duration checkingFor;
 
   static final _localSuffix = RegExp(r':local:[a-f0-9]{64}$');
+
+  /// Counts of what this phone holds, in a few small queries. Meant to be run
+  /// when the person asks to see them, not on every redraw.
+  AiPhoneDiagnostics diagnostics() {
+    final ns = state.namespace;
+    final linked = <String>{};
+    for (final row in state.db.select(
+      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:origins:%'",
+      [ns],
+    )) {
+      linked.add((row['key'] as String).substring('template:origins:'.length));
+    }
+    var ready = 0, failed = 0, readyWithLink = 0;
+    for (final row in state.db.select(
+      "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%'",
+      [ns],
+    )) {
+      try {
+        final value = jsonDecode(row['value'] as String);
+        if (value is! Map) continue;
+        final hash = (row['key'] as String).substring('ai:'.length);
+        final status = value['status'];
+        if (status == 'ready' && value['rule'] is Map) {
+          ready++;
+          if (linked.contains(hash)) readyWithLink++;
+        } else if (status == 'failed' || status == 'rejected') {
+          failed++;
+        }
+      } catch (_) {
+        continue; // not an answer (a timestamp or another marker)
+      }
+    }
+    var unknown = 0, unknownWithText = 0;
+    try {
+      unknown = state.db.select(
+        "SELECT count(*) AS n FROM sms_source_decisions WHERE namespace=? AND decision='unknown'",
+        [ns],
+      ).first['n'] as int;
+      unknownWithText = state.db.select(
+        "SELECT count(*) AS n FROM sms_source_decisions d WHERE d.namespace=? AND d.decision='unknown' "
+        'AND EXISTS (SELECT 1 FROM sms_captured_messages m WHERE m.namespace=d.namespace AND m.id=d.source_key)',
+        [ns],
+      ).first['n'] as int;
+    } catch (_) {
+      // The message tables are not there (a test database): nothing to count.
+    }
+    var readByAi = 0;
+    for (final row in state.db.select(
+      "SELECT value FROM v2_sync_state WHERE namespace=? AND key LIKE 'trace:%' AND value LIKE '%\"AI-%'",
+      [ns],
+    )) {
+      try {
+        final id = (jsonDecode(row['value'] as String) as Map)['ruleId'];
+        if (id is String && id.startsWith('AI-')) readByAi++;
+      } catch (_) {
+        continue;
+      }
+    }
+    return AiPhoneDiagnostics(
+      answersReady: ready,
+      answersFailed: failed,
+      linksSaved: linked.length,
+      readyWithLink: readyWithLink,
+      unknownMessages: unknown,
+      unknownWithText: unknownWithText,
+      readByAiRule: readByAi,
+    );
+  }
 
   /// State of the uploaded format that this message format (its local hash)
   /// belongs to.

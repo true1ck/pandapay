@@ -11,7 +11,7 @@ import 'package:pandapay/data/local/response_cache.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/providers/ai_status_provider.dart';
 import 'package:pandapay/features/sms_v2/sync/ai_server_status.dart';
-import 'package:pandapay/features/sms_v2/sync/ai_status.dart' show AiResolution;
+import 'package:pandapay/features/sms_v2/sync/ai_status.dart' show AiPhoneDiagnostics, AiResolution;
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
@@ -626,6 +626,64 @@ void main() {
       );
       expect(find.text('AI is working'), findsOneWidget);
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('the phone details line is closed at first and shows this '
+        "phone's own counts when opened", (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            geminiServerStatusProvider.overrideWith(
+              (ref) async => const AiServerStatus(
+                countedNow: true,
+                eligible: true,
+                total: 4,
+                ready: 4,
+              ),
+            ),
+            aiReviewStatusProvider.overrideWith(
+              (ref) async => const AiReviewStatus(),
+            ),
+            aiUnreadCountProvider.overrideWith((ref) async => 0),
+            aiPhoneDiagnosticsProvider.overrideWith(
+              (ref) async => const AiPhoneDiagnostics(
+                answersReady: 50,
+                answersFailed: 14,
+                linksSaved: 48,
+                readyWithLink: 46,
+                unknownMessages: 123,
+                unknownWithText: 120,
+                readByAiRule: 7,
+                activeAiRules: 46,
+              ),
+            ),
+            app.smsSharedLearningConsentProvider.overrideWith(
+              (ref) async => ConsentRecord(
+                purpose: 'sms_shared_learning',
+                granted: true,
+                grantedAt: DateTime(2026, 11, 1),
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: GeminiStatusBar(openItems: 2)),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('gemini-phone-details')), findsNothing);
+      await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('50 usable, 14 failed'), findsOneWidget);
+      expect(find.textContaining('46 of 50'), findsOneWidget);
+      expect(find.textContaining('AI rules in use now: 46'), findsOneWidget);
+      expect(find.textContaining('read by an AI rule: 7'), findsOneWidget);
+      expect(find.textContaining('Unknown messages: 123, text still here: 120'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
+      await tester.pump();
+      expect(find.byKey(const Key('gemini-phone-details')), findsNothing);
     });
   });
 }

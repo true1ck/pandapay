@@ -63,3 +63,25 @@ final aiReviewStatusProvider = FutureProvider<AiReviewStatus>((ref) async {
   }
   return AiReviewStatus(checkingTemplates: checking, resolved: resolved);
 });
+
+/// What this phone itself holds about the AI check (answers saved, links back
+/// to its own formats, AI rules in use, messages an AI rule read). Computed
+/// only while the person has the "phone details" line open, and dropped when
+/// it is closed.
+final aiPhoneDiagnosticsProvider = FutureProvider.autoDispose<AiPhoneDiagnostics>((
+  ref,
+) async {
+  final namespace = ref.watch(app.cacheNamespaceProvider);
+  final cache = await ref.watch(app.responseCacheProvider.future);
+  final db = cache.financialStore.database.db;
+  SmsV2Schema.ensure(db);
+  final reader = AiStatusReader(SyncStateStore(db, namespace: namespace));
+  final runtime = await ref.watch(smsV2RuntimeProvider.future);
+  final bundle = await runtime?.activeBundle();
+  // The engine's rules with a `:local:` suffix are the AI answers it is using.
+  final active = [
+    for (final rule in bundle?.rules ?? const <Rule>[])
+      if (rule.id.startsWith('AI-') && rule.id.contains(':local:')) rule,
+  ];
+  return reader.diagnostics().withActiveAiRules(active.length);
+});
