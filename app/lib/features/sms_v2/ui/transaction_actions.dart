@@ -13,11 +13,41 @@ class SmsTransactionActions {
   const SmsTransactionActions({required this.controller});
   final ReviewController controller;
   FinancialStore get financial => controller.financial;
-  LocalReviewItem _item(TransactionEntry original) {
+  static const missingReadingCopy =
+      "This entry's SMS reading is no longer on this phone, so it can't be changed here. Pull to refresh Activity, or report the message from Needs review.";
+
+  /// True when the phone still holds the stored reading that a correction to
+  /// [original] needs. A row can outlive it (a server copy on a new phone, or a
+  /// row left behind after a re-read).
+  bool hasReading(TransactionEntry original) {
     if (original.pipelineVersion != 2 ||
         original.sourceKey == null ||
-        original.eventId == null)
+        original.eventId == null) {
+      return false;
+    }
+    try {
+      return EventStore(
+            financial.database.db,
+            namespace: controller.namespace,
+          ).get(original.eventId!) !=
+          null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// True when a hide/restore of [original] belongs to this phone: it has its
+  /// reading, or it is a phone-only `v2:` row that nothing else knows about.
+  /// A server copy without a reading goes through the server path instead.
+  bool ownsRow(TransactionEntry original) =>
+      original.pipelineVersion == 2 &&
+      (hasReading(original) || original.id.startsWith('v2:'));
+
+  LocalReviewItem _item(TransactionEntry original) {
+    if (original.pipelineVersion != 2) {
       throw ArgumentError('A stored SMS entry is required');
+    }
+    if (!hasReading(original)) throw ArgumentError(missingReadingCopy);
     return LocalReviewItem(
       id: 'transaction:${original.id}',
       kind: 'event',
@@ -109,6 +139,8 @@ class SmsTransactionActions {
   );
 
   void hide(TransactionEntry original) {
+    // No stored reading means nothing to retire; the caller hides the row.
+    if (!hasReading(original)) return;
     final event = EventStore(
       financial.database.db,
       namespace: controller.namespace,
@@ -126,6 +158,7 @@ class SmsTransactionActions {
   }
 
   void restore(TransactionEntry original) {
+    if (!hasReading(original)) return;
     final raw = SyncStateStore(
       financial.database.db,
       namespace: controller.namespace,

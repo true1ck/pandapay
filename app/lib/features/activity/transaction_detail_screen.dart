@@ -740,19 +740,24 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         final namespace = ref.read(cacheNamespaceProvider);
         final controller = await smsReviewController(ref);
         if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
-        SmsTransactionActions(controller: controller).hide(widget.entry);
-        controller.financial.markInactive(
-          namespace,
-          widget.entry.id,
-          reason: deleting ? null : reason,
-        );
-        // Stay on this screen unless the person deleted it: a refund, reversal
-        // or report keeps the page open, badge and Restore button showing.
-        if (deleting) {
-          ref.invalidate(transactionDetailProvider(widget.entry.id));
-          if (mounted) context.pop(true);
+        final sms = SmsTransactionActions(controller: controller);
+        // A server copy whose reading is not on this phone falls through to
+        // the server path below.
+        if (sms.ownsRow(widget.entry)) {
+          sms.hide(widget.entry);
+          controller.financial.markInactive(
+            namespace,
+            widget.entry.id,
+            reason: deleting ? null : reason,
+          );
+          // Stay on this screen unless the person deleted it: a refund,
+          // reversal or report keeps the page open, badge and Restore showing.
+          if (deleting) {
+            ref.invalidate(transactionDetailProvider(widget.entry.id));
+            if (mounted) context.pop(true);
+          }
+          return;
         }
-        return;
       }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');
@@ -861,10 +866,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
         final namespace = ref.read(cacheNamespaceProvider);
         final controller = await smsReviewController(ref);
         if (!mounted || namespace != ref.read(cacheNamespaceProvider)) return;
-        SmsTransactionActions(controller: controller).restore(widget.entry);
-        controller.financial.markActive(namespace, widget.entry.id);
-        ref.invalidate(transactionDetailProvider(widget.entry.id));
-        return;
+        final sms = SmsTransactionActions(controller: controller);
+        if (sms.ownsRow(widget.entry)) {
+          sms.restore(widget.entry);
+          controller.financial.markActive(namespace, widget.entry.id);
+          ref.invalidate(transactionDetailProvider(widget.entry.id));
+          return;
+        }
       }
       final repo = ref.read(userCardsRepositoryProvider);
       if (repo == null) throw StateError('Account is unavailable.');

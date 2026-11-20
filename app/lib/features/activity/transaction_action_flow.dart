@@ -104,9 +104,12 @@ Future<void> ignoreEntry(
   if (entry.pipelineVersion == 2) {
     final controller = await smsReviewController(ref);
     if (namespace != ref.read(cacheNamespaceProvider)) return;
-    SmsTransactionActions(controller: controller).hide(entry);
-    controller.financial.markInactive(namespace, entry.id, reason: reason);
-    return;
+    final sms = SmsTransactionActions(controller: controller);
+    if (sms.ownsRow(entry)) {
+      sms.hide(entry);
+      controller.financial.markInactive(namespace, entry.id, reason: reason);
+      return;
+    }
   }
   final repo = ref.read(userCardsRepositoryProvider);
   if (repo == null) throw StateError('Account is unavailable.');
@@ -135,9 +138,12 @@ Future<void> restoreEntry(WidgetRef ref, TransactionEntry entry) async {
   if (entry.pipelineVersion == 2) {
     final controller = await smsReviewController(ref);
     if (namespace != ref.read(cacheNamespaceProvider)) return;
-    SmsTransactionActions(controller: controller).restore(entry);
-    controller.financial.markActive(namespace, entry.id);
-    return;
+    final sms = SmsTransactionActions(controller: controller);
+    if (sms.ownsRow(entry)) {
+      sms.restore(entry);
+      controller.financial.markActive(namespace, entry.id);
+      return;
+    }
   }
   final commands = await ref.read(commandOutboxProvider.future);
   commands.enqueue(
@@ -220,7 +226,8 @@ Future<TxnActionRecord> applyTxnAction(
       final controller = await smsReviewController(ref);
       final sms = SmsTransactionActions(controller: controller);
       final prev = <Map<String, Object?>>[];
-      for (final t in targets.where((t) => t.pipelineVersion == 2)) {
+      // A row whose stored reading is gone cannot be retyped; it is left alone.
+      for (final t in targets.where(sms.hasReading)) {
         prev.add({'entry': _snap(t), 'type': sms.storedType(t)?.wire});
         sms.markAs(t, v2.EventType.cardBillPayment);
         changed++;
@@ -302,7 +309,9 @@ Future<void> undoTxnAction(WidgetRef ref, TxnActionRecord record) async {
       for (final p in (u['prev'] as List).cast<Map>()) {
         final type = p['type'];
         if (type is! String) continue;
-        sms.markAs(_fromSnap(ref, p['entry']), v2.EventType.fromWire(type));
+        final row = _fromSnap(ref, p['entry']);
+        if (!sms.hasReading(row)) continue;
+        sms.markAs(row, v2.EventType.fromWire(type));
       }
     case 'exclude':
       await setSpendExclusion(ref, [

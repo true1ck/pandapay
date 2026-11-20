@@ -491,6 +491,9 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       smsHide: controller == null
           ? null
           : (row) => SmsTransactionActions(controller: controller).hide(row),
+      smsHasReading: controller == null
+          ? null
+          : (row) => SmsTransactionActions(controller: controller).hasReading(row),
     );
   }
 

@@ -12,6 +12,7 @@ import 'package:pandapay/features/sms_v2/storage/ledger_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_controller.dart';
 import 'package:pandapay/features/sms_v2/ui/transaction_actions.dart';
+import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -113,5 +114,48 @@ void main() {
       eventType: EventType.cardBillPayment,
     );
     expect(storedType(current()), EventType.cardBillPayment);
+  });
+
+  group('a row whose stored reading is gone', () {
+    TransactionEntry orphan(String id) => TransactionEntry(
+      id: id,
+      eventId: 'missing-event',
+      sourceKey: 'b' * 64,
+      pipelineVersion: 2,
+      amount: Money.fromRupees(10),
+      occurredAt: DateTime.utc(2026, 11, 7),
+      source: 'sms',
+      status: 'active',
+    );
+
+    test('changes explain themselves instead of failing on a missing event', () {
+      final row = orphan('v2:missing-event');
+      expect(actions.hasReading(row), isFalse);
+      expect(
+        () => actions.markAs(row, EventType.ownTransfer),
+        throwsA(
+          isA<ArgumentError>().having(
+            (e) => e.message,
+            'message',
+            SmsTransactionActions.missingReadingCopy,
+          ),
+        ),
+      );
+      expect(
+        () => actions.setCategory([row], 'dining'),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+
+    test('hide and restore do nothing, so the caller can still hide the row', () {
+      final row = orphan('v2:missing-event');
+      actions.hide(row);
+      actions.restore(row);
+    });
+
+    test('only a phone-only v2: row is owned; a server copy is not', () {
+      expect(actions.ownsRow(orphan('v2:missing-event')), isTrue);
+      expect(actions.ownsRow(orphan('server-id')), isFalse);
+    });
   });
 }
