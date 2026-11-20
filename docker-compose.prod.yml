@@ -337,6 +337,13 @@ services:
       # Must be absent/false everywhere reachable from the internet — it lets
       # OTP verification succeed without sending a real code.
       ALLOW_TEST_OTP: "false"
+      # Store-review login (auth/src/utils/reviewerOtp.js). All four must be set
+      # in the host .env for it to work; with any missing it is off. The code is
+      # a secret and must never be committed. REVIEWER_OTP_UNTIL is an ISO date.
+      REVIEWER_OTP_ENABLED: "${REVIEWER_OTP_ENABLED:-false}"
+      REVIEWER_OTP_IDENTIFIERS: "${REVIEWER_OTP_IDENTIFIERS:-}"
+      REVIEWER_OTP_CODE: "${REVIEWER_OTP_CODE:-}"
+      REVIEWER_OTP_UNTIL: "${REVIEWER_OTP_UNTIL:-}"
       ENCRYPTION_ENABLED: "${ENCRYPTION_ENABLED:-true}"
       # Preserve the original legacy AES key. Hosted auth refuses startup
       # if it is missing/invalid; optional read keys never replace it.
