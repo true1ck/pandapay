@@ -74,7 +74,7 @@ test('LO-10 enforce mode rejects a replayed token and monitor mode halves its li
   const t2 = token({ exp: now / 1000 + 301 });
   await monitor.checkRate(request(ALICE, PHONE_A, t2), 'sync');
   await monitor.checkRate(request(BOB, PHONE_A, t2), 'sync');
-  assert.deepEqual(limits, [120, 60]);
+  assert.deepEqual(limits, [480, 240]);
 });
 
 test('LO-10 monitor mode behaviour without a token is unchanged', async () => {

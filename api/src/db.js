@@ -22,6 +22,7 @@ const pool = new Pool({
   connectionString: databaseTls.connectionString,
   ssl: databaseTls.ssl,
   max: config.dbPoolMax,
+  min: config.dbPoolMin,
   idleTimeoutMillis: config.dbIdleTimeoutMs,
   connectionTimeoutMillis: config.dbConnectionTimeoutMs,
   // Detect a dead peer (network partition, frozen database host) instead of waiting for the OS default of hours.

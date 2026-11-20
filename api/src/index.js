@@ -85,6 +85,7 @@ const { creditRewardFacts, ISSUER_CREDIT_REASON, estimatedPointsTotal } = requir
 // Lets the wallet read skip a cap rebuild whose result would be identical (see card_state_read_gate.js).
 const cardStateGate = require('./card_state_read_gate');
 const userCardsReadGate = cardStateGate.createReadGate();
+const userCardsLanes = require('./request_coalescer').createRequestCoalescer();
 const { registerSplitRoutes } = require('./transaction_splits');
 const transactionTags = require('./transaction_tags');
 const { registerUserMerchantCategoryRuleRoutes } = require('./user_merchant_category_rules');
@@ -1887,9 +1888,12 @@ app.get('/user-cards', requireAuth, async (req, res) => {
   // an archived card, so the filter defaults to active-only exactly as
   // before — ?includeArchived=true is opt-in, used only by C1's own toggle.
   const includeArchived = req.query.includeArchived === 'true';
-  let gateMarks = null;
   try {
-    const result = await withUserClient(req.userId, async (client) => {
+    // Identical wallet reads that pile up (the app opens with two) share one follow-up run that starts after they
+    // arrived, so none gets data older than its request (request_coalescer.js).
+    const result = await userCardsLanes.run(`${req.userId}|${includeArchived}`, async () => {
+    let gateMarks = null;
+    const rows = await withUserClient(req.userId, async (client) => {
       // statement_day/opened_on added for Task 11 (E7 Billing Cycle Float —
       // the same two columns insertTransactionAndUpdateState below already
       // reads internally for period-bounds math, just never previously
@@ -1999,6 +2003,8 @@ app.get('/user-cards', requireAuth, async (req, res) => {
       return cards.rows;
     });
     if (gateMarks) userCardsReadGate.commit(req.userId, gateMarks);
+    return rows;
+    });
     res.json({ userCards: result });
   } catch (err) {
     console.error('GET /user-cards error', safeErrorCode(err));

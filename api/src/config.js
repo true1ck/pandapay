@@ -102,6 +102,13 @@ if (!jwtKeys[jwtActiveKeyId]) {
 
 const { loadImapKeyring } = require('./imap_credentials');
 
+const DB_POOL_MAX = Math.min(100, Math.max(1, Number(process.env.DB_POOL_MAX) || 10));
+
+function dbPoolMin(max) {
+  const n = Math.floor(Number(process.env.DB_POOL_MIN));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0;
+}
+
 module.exports = {
   ...securityFeatures,
   isProduction,
@@ -182,7 +189,11 @@ module.exports = {
     1000,
     Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 15000,
   ),
-  dbPoolMax: Math.min(100, Math.max(1, Number(process.env.DB_POOL_MAX) || 10)),
+  dbPoolMax: DB_POOL_MAX,
+  // Connections kept open between bursts. A new TLS connection to the pooler cost 150-225 ms on production (21 Nov
+  // 2026) against 20 ms for a query on an open one; with none kept, every app open reopened most of the pool. 0 here so
+  // code that shares this module (the rewards worker) holds nothing idle; compose sets 4 for the API.
+  dbPoolMin: dbPoolMin(DB_POOL_MAX),
   dbIdleTimeoutMs: Math.max(
     1000,
     Number(process.env.DB_IDLE_TIMEOUT_MS) || 10000,
