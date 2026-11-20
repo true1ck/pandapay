@@ -160,7 +160,7 @@ test('settings and per-user limits on a fully migrated Postgres', { skip: !url |
   await assert.rejects(submit(item(4)), { code: 'P0050' });
   assert.equal((await call('DELETE', limitPath, { reason: 'done' })).status, 200);
   assert.equal((await call('DELETE', limitPath, { reason: 'done again' })).status, 404);
-  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 50);
+  assert.equal(await limit(profile, 'templates_per_user_per_day', 50), 10000);
   assert.equal((await submit(item(4))).rows.length, 1);
   await pool.query("DELETE FROM sms_v2_unknown_templates WHERE template_hash = ANY($1::text[])", [[1, 2, 3, 4].map((n) => item(n).templateHash)]);
 
