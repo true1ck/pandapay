@@ -592,29 +592,42 @@ class SpendPeriodSelector extends ConsumerWidget {
   }
 
   Future<void> _choosePeriod(BuildContext context, WidgetRef ref) async {
-    final now = ref.read(clockProvider).now();
-    final choice = await showModalBottomSheet<_SpendDateRangeChoice>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      backgroundColor: BambooInk.paper,
-      clipBehavior: Clip.antiAlias,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (_) => _SpendDateRangeSheet(
-        selected: selected,
-        now: now,
-        note: rangeNote,
-      ),
+    final query = await _pickSpendRange(
+      context,
+      selected,
+      ref.read(clockProvider).now(),
+      note: rangeNote,
     );
-    if (choice == null || !context.mounted) return;
+    if (query == null || !context.mounted) return;
     if (onChanged != null) {
-      onChanged!(choice.query);
+      onChanged!(query);
     } else {
-      ref.read(selectedSpendQueryProvider.notifier).state = choice.query;
+      ref.read(selectedSpendQueryProvider.notifier).state = query;
     }
   }
+}
+
+/// The "Choose date range" sheet, shared by the top bar and the filter sheet
+/// so both pick a range the same way.
+Future<SpendReportQuery?> _pickSpendRange(
+  BuildContext context,
+  SpendReportQuery selected,
+  DateTime now, {
+  String note = 'For ranges over one month, spending is grouped by month.',
+}) async {
+  final choice = await showModalBottomSheet<_SpendDateRangeChoice>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: BambooInk.paper,
+    clipBehavior: Clip.antiAlias,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (_) =>
+        _SpendDateRangeSheet(selected: selected, now: now, note: note),
+  );
+  return choice?.query;
 }
 
 class _SpendDateRangeChoice {
@@ -1830,6 +1843,9 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         bankAccounts: _bankAccounts,
         tags: _allTags,
         tagsFor: _tagsFor,
+        query: widget.query,
+        now: ref.read(clockProvider).now(),
+        initialMonth: _monthFilter,
         totalForEntries: ref.read(smsV2ReportingEnabledProvider)
             ? ref
                   .read(smsV2LedgerReadModelProvider)
@@ -1854,8 +1870,15 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       _cardFilter = selection.card;
       _tagFilters = selection.tagIds;
       _untagged = selection.untagged;
+      _monthFilter = selection.month;
     });
+    // Save the filters first: a new range swaps this body for a spinner, and
+    // the next body starts from what was saved.
     _notifyFilters();
+    final query = selection.query;
+    if (query != null && query != widget.query) {
+      ref.read(selectedSpendQueryProvider.notifier).state = query;
+    }
   }
 
   void _showAllCategories() {
@@ -2586,6 +2609,12 @@ class _SpendFilterSelection {
   final Set<String> tagIds;
   final bool untagged;
 
+  /// A new date range chosen in the sheet; null when it was left alone.
+  final SpendReportQuery? query;
+
+  /// The month picked on the chart (first of that month), or null.
+  final DateTime? month;
+
   const _SpendFilterSelection({
     this.payment,
     this.categories = const <String>{},
@@ -2593,6 +2622,8 @@ class _SpendFilterSelection {
     this.card,
     this.tagIds = const {},
     this.untagged = false,
+    this.query,
+    this.month,
   });
 }
 
@@ -2608,6 +2639,11 @@ class _SpendFilterSheet extends StatefulWidget {
   final List<TransactionTag> Function(TransactionEntry) tagsFor;
   final _SpendFilterSelection initial;
 
+  /// The page's current date range, and the month picked on the chart.
+  final SpendReportQuery query;
+  final DateTime now;
+  final DateTime? initialMonth;
+
   const _SpendFilterSheet({
     required this.report,
     this.totalForEntries,
@@ -2619,6 +2655,9 @@ class _SpendFilterSheet extends StatefulWidget {
     required this.tags,
     required this.tagsFor,
     required this.initial,
+    required this.query,
+    required this.now,
+    this.initialMonth,
   });
 
   @override
@@ -2632,6 +2671,38 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
   late String? _card = widget.initial.card;
   late Set<String> _tagIds = {...widget.initial.tagIds};
   late bool _untagged = widget.initial.untagged;
+  late SpendReportQuery _query = widget.query;
+  late DateTime? _month = widget.initialMonth;
+
+  /// A new range was picked here; the rows below are still the old range's
+  /// until "Show results" loads the new one.
+  bool get _rangeChanged => _query != widget.query;
+
+  static const _paymentOptions = <(TxnInstrument?, String, IconData)>[
+    (null, 'All payment methods', Icons.apps_rounded),
+    (TxnInstrument.creditCard, 'Credit card', Icons.credit_card_rounded),
+    (TxnInstrument.debitCard, 'Debit card', Icons.payment_rounded),
+    (TxnInstrument.upiBank, 'UPI', Icons.qr_code_2_rounded),
+    (TxnInstrument.wallet, 'Wallet', Icons.account_balance_wallet_outlined),
+    (TxnInstrument.cash, 'Cash', Icons.payments_outlined),
+    (TxnInstrument.other, 'Unknown', Icons.help_outline_rounded),
+  ];
+
+  /// Calendar months the page's current range covers.
+  List<DateTime> get _rangeMonths {
+    final start = widget.report.periodStart.toLocal();
+    final end = widget.report.periodEnd
+        .subtract(const Duration(days: 1))
+        .toLocal();
+    return [
+      for (
+        var m = DateTime(start.year, start.month);
+        !m.isAfter(end);
+        m = DateTime(m.year, m.month + 1)
+      )
+        m,
+    ];
+  }
 
   List<TransactionEntry> get _matching {
     final selection = SpendingSelection(
@@ -2641,6 +2712,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       card: _card,
       tagIds: _tagIds,
       untagged: _untagged,
+      month: _month,
     );
     return widget.transactions
         .where(
@@ -2666,10 +2738,10 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
   Widget build(BuildContext context) {
     final footer = Container(
       padding: EdgeInsets.fromLTRB(
-        28,
+        AppSpace.lg,
         AppSpace.md,
-        28,
-        MediaQuery.viewInsetsOf(context).bottom + AppSpace.xs,
+        AppSpace.lg,
+        MediaQuery.viewInsetsOf(context).bottom + AppSpace.sm,
       ),
       decoration: const BoxDecoration(
         color: BambooInk.paper,
@@ -2678,59 +2750,73 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          RichText(
-            text: TextSpan(
-              style: BambooFonts.ui(14, color: BambooInk.ink900),
-              children: [
-                TextSpan(
-                  text:
-                      '${_matching.length} matching ${_matching.length == 1 ? 'transaction' : 'transactions'} · ',
-                ),
-                TextSpan(
-                  text: _total.format(hidePaise: true),
-                  style: BambooFonts.ui(
-                    14,
-                    weight: FontWeight.w700,
-                    color: BambooInk.ink900,
+          if (_rangeChanged)
+            Text(
+              'Totals update once you show results',
+              style: BambooFonts.ui(13.5, color: BambooInk.ink500),
+            )
+          else
+            RichText(
+              text: TextSpan(
+                style: BambooFonts.ui(14, color: BambooInk.ink900),
+                children: [
+                  TextSpan(
+                    text:
+                        '${_matching.length} matching ${_matching.length == 1 ? 'transaction' : 'transactions'} · ',
                   ),
-                ),
-              ],
+                  TextSpan(
+                    text: _total.format(hidePaise: true),
+                    style: BambooFonts.ui(
+                      14,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: AppSpace.md),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => Navigator.pop(
-                context,
-                _SpendFilterSelection(
-                  payment: _payment,
-                  categories: {..._categories},
-                  merchant: _merchant,
-                  card: _card,
-                  tagIds: {..._tagIds},
-                  untagged: _untagged,
+          Row(
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: BambooInk.jade,
+                  minimumSize: const Size(0, 52),
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpace.lg),
+                  textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
+                ),
+                child: const Text('Cancel'),
+              ),
+              const SizedBox(width: AppSpace.sm),
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(
+                    context,
+                    _SpendFilterSelection(
+                      payment: _payment,
+                      categories: {..._categories},
+                      merchant: _merchant,
+                      card: _card,
+                      tagIds: {..._tagIds},
+                      untagged: _untagged,
+                      query: _rangeChanged ? _query : null,
+                      month: _month,
+                    ),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: BambooInk.lime,
+                    foregroundColor: BambooInk.slate,
+                    minimumSize: const Size.fromHeight(52),
+                    textStyle: BambooFonts.ui(16, weight: FontWeight.w700),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                    ),
+                  ),
+                  child: const Text('Show results'),
                 ),
               ),
-              style: FilledButton.styleFrom(
-                backgroundColor: BambooInk.lime,
-                foregroundColor: BambooInk.slate,
-                minimumSize: const Size.fromHeight(52),
-                textStyle: BambooFonts.ui(16, weight: FontWeight.w700),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text('Show results'),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: BambooInk.jade,
-              textStyle: BambooFonts.ui(15, weight: FontWeight.w700),
-            ),
-            child: const Text('Cancel'),
+            ],
           ),
         ],
       ),
@@ -2746,7 +2832,12 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(28, 0, 28, AppSpace.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpace.lg,
+                  0,
+                  AppSpace.lg,
+                  AppSpace.lg,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2768,6 +2859,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                             _card = null;
                             _tagIds = {};
                             _untagged = false;
+                            _month = null;
                           }),
                           style: TextButton.styleFrom(
                             foregroundColor: BambooInk.jade,
@@ -2791,33 +2883,38 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                     _FilterLabel('Date range'),
                     _selectionField(
                       icon: Icons.calendar_today_outlined,
-                      label: _dateRangeLabel,
+                      label: SpendPeriodSelector._periodButtonLabel(
+                        _query,
+                        widget.now,
+                      ),
                       trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                      onTap: _chooseDate,
                     ),
+                    // Months only make sense for the range the rows below
+                    // belong to; a range picked here has no rows yet.
+                    if (!_rangeChanged && _rangeMonths.length > 1) ...[
+                      const SizedBox(height: AppSpace.xl),
+                      _FilterLabel('Month'),
+                      _selectionField(
+                        icon: Icons.event_outlined,
+                        label: _month == null
+                            ? 'All months'
+                            : _monthName(_month!),
+                        trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                        onTap: _chooseMonth,
+                      ),
+                    ],
                     const SizedBox(height: AppSpace.xl),
                     _FilterLabel('Payment method'),
-                    Wrap(
-                      spacing: AppSpace.sm,
-                      runSpacing: AppSpace.sm,
-                      children: [
-                        for (final option in <(TxnInstrument?, String)>[
-                          (null, 'All'),
-                          (TxnInstrument.creditCard, 'Credit card'),
-                          (TxnInstrument.debitCard, 'Debit card'),
-                          (TxnInstrument.upiBank, 'UPI'),
-                          (TxnInstrument.wallet, 'Wallet'),
-                          (TxnInstrument.cash, 'Cash'),
-                          (TxnInstrument.other, 'Unknown'),
-                        ])
-                          SizedBox(
-                            width: 100,
-                            child: _paymentButton(
-                              option.$2,
-                              _payment == option.$1,
-                              () => setState(() => _payment = option.$1),
-                            ),
-                          ),
-                      ],
+                    _selectionField(
+                      icon: _paymentOptions
+                          .firstWhere((o) => o.$1 == _payment)
+                          .$3,
+                      label: _paymentOptions
+                          .firstWhere((o) => o.$1 == _payment)
+                          .$2,
+                      trailing: const Icon(Icons.keyboard_arrow_down_rounded),
+                      onTap: _choosePayment,
                     ),
                     const SizedBox(height: AppSpace.xl),
                     _FilterLabel('Category'),
@@ -2928,30 +3025,52 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
     );
   }
 
-  String get _dateRangeLabel {
-    final start = widget.report.periodStart.toLocal();
-    final end = widget.report.periodEnd
-        .subtract(const Duration(days: 1))
-        .toLocal();
-    const months = <String>[
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    if (start.year == end.year && start.month == end.month) {
-      return '${months[start.month - 1]} ${start.year}';
-    }
-    return '${months[start.month - 1]} ${start.year} – '
-        '${months[end.month - 1]} ${end.year}';
+  String _monthName(DateTime month) => SpendPeriodSelector._periodButtonLabel(
+    SpendReportQuery.custom(from: month, to: month),
+    widget.now,
+  );
+
+  /// Picking a range here only changes the draft; the new range loads when
+  /// "Show results" is tapped. The month and any month-based rows belong to
+  /// the old range, so the month is dropped.
+  Future<void> _chooseDate() async {
+    final picked = await _pickSpendRange(context, _query, widget.now);
+    if (!mounted || picked == null) return;
+    setState(() {
+      _query = picked;
+      _month = null;
+    });
+  }
+
+  Future<void> _chooseMonth() async {
+    final months = _rangeMonths;
+    final value = await _chooseOption(
+      title: 'Month',
+      options: [for (final m in months) _monthName(m)],
+      clearLabel: 'All months',
+      selected: _month == null ? null : _monthName(_month!),
+    );
+    if (!mounted || value == null) return;
+    setState(() {
+      _month = value.isEmpty
+          ? null
+          : months.firstWhere((m) => _monthName(m) == value);
+    });
+  }
+
+  Future<void> _choosePayment() async {
+    final value = await _chooseOption(
+      title: 'Payment method',
+      options: [for (final o in _paymentOptions.skip(1)) o.$2],
+      clearLabel: _paymentOptions.first.$2,
+      selected: _paymentOptions.firstWhere((o) => o.$1 == _payment).$2,
+    );
+    if (!mounted || value == null) return;
+    setState(
+      () => _payment = _paymentOptions
+          .firstWhere((o) => value.isEmpty ? o.$1 == null : o.$2 == value)
+          .$1,
+    );
   }
 
   String _displayCategory(String key) => widget.categories[key] ?? key;
@@ -2964,13 +3083,13 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
     VoidCallback? onTap,
   }) => InkWell(
     onTap: onTap,
-    borderRadius: BorderRadius.circular(16),
+    borderRadius: BorderRadius.circular(AppRadius.md),
     child: Container(
       constraints: const BoxConstraints(minHeight: 52),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 7),
       decoration: BoxDecoration(
         color: BambooInk.paper,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         border: Border.all(color: BambooInk.hairlineOnPaper),
       ),
       child: Row(
@@ -2984,7 +3103,14 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
                 child ??
                 Text(
                   label ?? '',
-                  style: BambooFonts.ui(14.5, color: BambooInk.ink500),
+                  // A real pick reads as ink; "All …" is the quiet default.
+                  style: BambooFonts.ui(
+                    14.5,
+                    weight: FontWeight.w500,
+                    color: (label ?? '').startsWith('All')
+                        ? BambooInk.ink500
+                        : BambooInk.ink900,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
           ),
@@ -2994,84 +3120,65 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
     ),
   );
 
-  Widget _paymentButton(String label, bool selected, VoidCallback onTap) =>
-      InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          height: 52,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? BambooInk.lime : BambooInk.paper,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: selected ? BambooInk.lime : BambooInk.hairlineOnPaper,
-            ),
-          ),
-          child: Text(
-            label,
-            style: BambooFonts.ui(
-              14,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
-            ),
-          ),
-        ),
-      );
-
+  // Same chip the page uses for its active filters, so a value looks the
+  // same here and below.
   Widget _valueChip(String label, {required VoidCallback onRemove}) =>
-      Container(
-        padding: const EdgeInsets.only(left: 12, right: 5),
-        height: 38,
-        decoration: BoxDecoration(
-          color: BambooInk.rankBadgeBg,
-          borderRadius: BorderRadius.circular(20),
+      InputChip(label: Text(label), onDeleted: onRemove);
+
+  /// One row of a picker: ink text, a jade check when it is the current pick.
+  Widget _optionTile(String title, bool selected, VoidCallback onTap) =>
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(
+          title,
+          style: BambooFonts.ui(
+            15,
+            weight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: BambooInk.ink900,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: BambooFonts.ui(
-                  14,
-                  weight: FontWeight.w600,
-                  color: BambooInk.ink900,
-                ),
-              ),
-            ),
-            IconButton(
-              onPressed: onRemove,
-              icon: const Icon(Icons.close_rounded, size: 18),
-              color: BambooInk.ink900,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-              splashRadius: 16,
-            ),
-          ],
-        ),
+        trailing: selected
+            ? const Icon(Icons.check_rounded, color: BambooInk.jade)
+            : null,
+        onTap: onTap,
       );
 
   Future<void> _chooseCategory() async {
     final category = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
         child: ListView(
           shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(
+            AppSpace.lg,
+            0,
+            AppSpace.lg,
+            AppSpace.lg,
+          ),
           children: [
+            Text(
+              'Category',
+              style: BambooFonts.heading(20, color: BambooInk.ink900),
+            ),
             for (final category in widget.categories.entries)
-              ListTile(
-                title: Text(category.value),
-                onTap: () => Navigator.pop(context, category.key),
+              _optionTile(
+                category.value,
+                _categories.contains(category.key),
+                () => Navigator.pop(context, category.key),
               ),
           ],
         ),
       ),
     );
     if (!mounted || category == null) return;
-    setState(() => _categories.add(category));
+    // Tapping a ticked category unticks it.
+    setState(
+      () => _categories.contains(category)
+          ? _categories.remove(category)
+          : _categories.add(category),
+    );
   }
 
   Future<void> _chooseMerchant() async {
@@ -3079,6 +3186,7 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       title: 'Merchant',
       options: widget.merchants,
       clearLabel: 'All merchants',
+      selected: _merchant,
     );
     if (!mounted || value == null) return;
     setState(() => _merchant = value.isEmpty ? null : value);
@@ -3089,36 +3197,45 @@ class _SpendFilterSheetState extends State<_SpendFilterSheet> {
       title: 'Account',
       options: widget.cards,
       clearLabel: 'All accounts',
+      selected: _card,
     );
     if (!mounted || value == null) return;
     setState(() => _card = value.isEmpty ? null : value);
   }
 
+  /// A picker sheet. Returns the option, '' for [clearLabel], or null when
+  /// dismissed. [selected] (null = the clear row) gets the check.
   Future<String?> _chooseOption({
     required String title,
     required List<String> options,
     String? clearLabel,
+    String? selected,
   }) => showModalBottomSheet<String>(
     context: context,
-    backgroundColor: BambooInk.paper,
+    isScrollControlled: true,
     showDragHandle: true,
     builder: (context) => SafeArea(
       child: ListView(
         shrinkWrap: true,
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpace.lg,
+          0,
+          AppSpace.lg,
+          AppSpace.lg,
+        ),
         children: [
-          Text(title, style: BambooFonts.heading(20)),
+          Text(title, style: BambooFonts.heading(20, color: BambooInk.ink900)),
           if (clearLabel != null)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(clearLabel, style: BambooFonts.ui(15)),
-              onTap: () => Navigator.pop(context, ''),
+            _optionTile(
+              clearLabel,
+              selected == null || selected == clearLabel,
+              () => Navigator.pop(context, ''),
             ),
           for (final option in options)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(option, style: BambooFonts.ui(15)),
-              onTap: () => Navigator.pop(context, option),
+            _optionTile(
+              option,
+              option == selected,
+              () => Navigator.pop(context, option),
             ),
         ],
       ),
