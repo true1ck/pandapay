@@ -54,3 +54,14 @@ test('sync withholds a refund category from a client that does not declare suppo
   assert.deepEqual(ledgerForClient([refund, spend], req('other, Refund-Category')), [refund, spend]);
   assert.equal(refund.category, 'shopping', 'the stored row is not mutated');
 });
+
+test('sync withholds decidedAt from a client that does not declare support', () => {
+  const { instrumentsForClient } = require('../../src/sms_v2/sync_route');
+  const i = { ...h.instrument(), decidedAt: '2026-11-20T09:00:00Z' };
+  const req = (features) => ({ get: (name) => (name.toLowerCase() === 'x-sms-contract-features' ? features : undefined) });
+  const old = instrumentsForClient([i], req('refund-category'));
+  assert.equal('decidedAt' in old[0], false);
+  assert.equal(c.validateInstrument(old[0]).ok, true);
+  assert.deepEqual(instrumentsForClient([i], req('Instrument-Decided-At')), [i]);
+  assert.equal(i.decidedAt, '2026-11-20T09:00:00Z', 'the stored row is not mutated');
+});

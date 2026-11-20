@@ -51,6 +51,7 @@ final class Instrument extends JsonValue {
     required this.firstSeenAt,
     required this.lastSeenAt,
     required this.evidenceCount,
+    this.decidedAt,
   }) : aliases = aliases ?? InstrumentAliases();
 
   /// Parses and validates [json]; throws a [ContractException] on violations.
@@ -81,6 +82,7 @@ final class Instrument extends JsonValue {
       firstSeenAt: parseUtc(json['firstSeenAt'] as String),
       lastSeenAt: parseUtc(json['lastSeenAt'] as String),
       evidenceCount: (json['evidenceCount'] as num).toInt(),
+      decidedAt: t('decidedAt'),
     );
   }
 
@@ -112,6 +114,12 @@ final class Instrument extends JsonValue {
   final DateTime lastSeenAt;
   final int evidenceCount;
 
+  /// When the user last made an explicit choice about this instrument
+  /// (confirm, not mine, restore, archive), on the phone's server-adjusted
+  /// clock. Null for automatic changes and for choices made before this field
+  /// existed. The latest `decidedAt` wins when two devices disagree.
+  final DateTime? decidedAt;
+
   /// A copy with the given fields replaced. Pass `null` explicitly through the
   /// `clear*` flags to null a nullable field.
   Instrument copyWith({
@@ -132,6 +140,7 @@ final class Instrument extends JsonValue {
     DateTime? firstSeenAt,
     DateTime? lastSeenAt,
     int? evidenceCount,
+    DateTime? decidedAt,
   }) =>
       Instrument(
         instrumentId: instrumentId,
@@ -154,6 +163,7 @@ final class Instrument extends JsonValue {
         firstSeenAt: firstSeenAt ?? this.firstSeenAt,
         lastSeenAt: lastSeenAt ?? this.lastSeenAt,
         evidenceCount: evidenceCount ?? this.evidenceCount,
+        decidedAt: decidedAt ?? this.decidedAt,
       );
 
   @override
@@ -178,6 +188,9 @@ final class Instrument extends JsonValue {
         'firstSeenAt': formatUtc(firstSeenAt),
         'lastSeenAt': formatUtc(lastSeenAt),
         'evidenceCount': evidenceCount,
+        // Omitted when unset, so an instrument nobody has decided on is
+        // byte-identical to what older builds and the server already know.
+        if (decidedAt != null) 'decidedAt': formatUtc(decidedAt!),
       };
 
   /// Checks this instrument against the contract.

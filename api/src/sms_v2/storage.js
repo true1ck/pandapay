@@ -31,7 +31,7 @@ const INSTRUMENT_DOC = `jsonb_build_object(
   'creditLimitSource', credit_limit_source, 'creditLimitAt', ${ts('credit_limit_at')},
   'availableMinor', available_minor, 'availableAt', ${ts('available_at')}, 'pointsBalance', points_balance,
   'pointsAt', ${ts('points_at')}, 'firstSeenAt', ${ts('first_seen_at')}, 'lastSeenAt', ${ts('last_seen_at')},
-  'evidenceCount', evidence_count)`;
+  'evidenceCount', evidence_count, 'decidedAt', ${ts('decided_at')})`;
 
 const EVENT_DOC = `jsonb_build_object(
   'eventId', event_id, 'type', type, 'status', status, 'legs', legs, 'linkRuleId', link_rule_id,
@@ -74,11 +74,37 @@ function pickLatest(exVal, exAt, incVal, incAt) {
   return [incVal, incAt ?? null];
 }
 
-/** Merges an uploaded instrument into the stored one (same instrumentId). */
+// A phone's clock may run ahead; a decision stamped further ahead than this is
+// treated as made now, so one bad clock cannot win every later conflict.
+const DECIDED_SKEW_MS = 5 * 60 * 1000;
+function clampDecidedAt(v, now = Date.now()) {
+  if (v === null || v === undefined) return null;
+  return Date.parse(v) > now + DECIDED_SKEW_MS ? new Date(now + DECIDED_SKEW_MS).toISOString() : v;
+}
+
+/**
+ * Merges an uploaded instrument into the stored one (same instrumentId).
+ *
+ * `decidedAt` is the time of the user's last explicit choice on the phone. The
+ * later user choice wins, including undoing a "not mine"; a choice older than
+ * the stored one (a stale device) loses. Without a `decidedAt` (an older app,
+ * or an automatic change) the old rule applies: detection never undoes a
+ * decision.
+ */
 function mergeInstrument(ex, inc) {
   const m = { ...inc };
-  // Detection is automatic; confirmed/rejected are explicit user decisions.
-  if (inc.status === 'detected' && ex.status !== 'detected') m.status = ex.status;
+  const incAt = clampDecidedAt(inc.decidedAt);
+  const exAt = ex.decidedAt ?? null;
+  if (incAt && (!exAt || later(incAt, exAt))) {
+    m.decidedAt = incAt;
+  } else if (incAt) {
+    m.status = ex.status;
+    m.decidedAt = exAt;
+  } else {
+    // Detection is automatic; confirmed/rejected are explicit user decisions.
+    if (inc.status === 'detected' && ex.status !== 'detected') m.status = ex.status;
+    m.decidedAt = exAt;
+  }
   const exUser = ex.creditLimitSource === 'user';
   const incUser = inc.creditLimitSource === 'user';
   let limit;
@@ -156,12 +182,12 @@ const instrumentRow = (i) => ({
   display_name: i.displayName, status: i.status, user_card_id: i.userCardId, parent_instrument_id: i.parentInstrumentId,
   aliases: i.aliases, credit_limit_minor: i.creditLimitMinor, credit_limit_source: i.creditLimitSource, credit_limit_at: i.creditLimitAt,
   available_minor: i.availableMinor, available_at: i.availableAt, points_balance: i.pointsBalance, points_at: i.pointsAt,
-  first_seen_at: i.firstSeenAt, last_seen_at: i.lastSeenAt, evidence_count: i.evidenceCount,
+  first_seen_at: i.firstSeenAt, last_seen_at: i.lastSeenAt, evidence_count: i.evidenceCount, decided_at: i.decidedAt ?? null,
 });
 const INSTRUMENT_COLS = `instrument_id uuid, kind text, issuer_slug text, mask_digits text, mask_length int, display_name text,
   status text, user_card_id uuid, parent_instrument_id uuid, aliases jsonb, credit_limit_minor bigint, credit_limit_source text,
   credit_limit_at timestamptz, available_minor bigint, available_at timestamptz, points_balance bigint, points_at timestamptz,
-  first_seen_at timestamptz, last_seen_at timestamptz, evidence_count int`;
+  first_seen_at timestamptz, last_seen_at timestamptz, evidence_count int, decided_at timestamptz`;
 
 const eventRow = (e) => ({
   event_id: e.eventId, type: e.type, status: e.status, legs: e.legs, link_rule_id: e.linkRuleId, confidence: e.confidence,
@@ -276,7 +302,8 @@ async function upsertInstruments(client, profileId, instruments, results, linked
 
   const toInsert = [];
   const toUpdate = [];
-  for (const inst of live) {
+  for (const raw of live) {
+    const inst = raw.decidedAt ? { ...raw, decidedAt: clampDecidedAt(raw.decidedAt) } : raw;
     const ex = existing.get(inst.instrumentId);
     if (!ex) { toInsert.push(inst); continue; }
     const merged = mergeInstrument(ex, inst);
@@ -294,10 +321,10 @@ async function upsertInstruments(client, profileId, instruments, results, linked
       client,
       `INSERT INTO sms_v2_instruments (instrument_id, profile_id, kind, issuer_slug, mask_digits, mask_length, display_name, status,
          user_card_id, parent_instrument_id, aliases, credit_limit_minor, credit_limit_source, credit_limit_at, available_minor,
-         available_at, points_balance, points_at, first_seen_at, last_seen_at, evidence_count, updated_at)
+         available_at, points_balance, points_at, first_seen_at, last_seen_at, evidence_count, decided_at, updated_at)
        SELECT r.instrument_id, $1, r.kind, r.issuer_slug, r.mask_digits, r.mask_length, r.display_name, r.status, r.user_card_id,
               r.parent_instrument_id, r.aliases, r.credit_limit_minor, r.credit_limit_source, r.credit_limit_at, r.available_minor,
-              r.available_at, r.points_balance, r.points_at, r.first_seen_at, r.last_seen_at, r.evidence_count, clock_timestamp()
+              r.available_at, r.points_balance, r.points_at, r.first_seen_at, r.last_seen_at, r.evidence_count, r.decided_at, clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${INSTRUMENT_COLS})
        ON CONFLICT (instrument_id) DO NOTHING
        RETURNING instrument_id AS id`,
@@ -317,7 +344,7 @@ async function upsertInstruments(client, profileId, instruments, results, linked
               credit_limit_source = r.credit_limit_source, credit_limit_at = r.credit_limit_at,
               available_minor = r.available_minor, available_at = r.available_at, points_balance = r.points_balance,
               points_at = r.points_at, first_seen_at = r.first_seen_at, last_seen_at = r.last_seen_at,
-              evidence_count = r.evidence_count, updated_at = clock_timestamp()
+              evidence_count = r.evidence_count, decided_at = r.decided_at, updated_at = clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${INSTRUMENT_COLS})
         WHERE i.instrument_id = r.instrument_id AND i.profile_id = $1`,
       [profileId, J(toUpdate.map(instrumentRow))],
@@ -1280,7 +1307,7 @@ async function readChanges(client, profileId, cursor, hookCursors = {}, { limit 
 
 module.exports = {
   ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT, SYNC_PAGE_DEFAULT, syncPageSize,
-  mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
+  mergeInstrument, clampDecidedAt, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
   resolveUnknownInstruments, projectStaleInstrumentRows, followPrintedCards, printedCardRulesOut,
   projectRowsOfLinkedInstruments,
 };

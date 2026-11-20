@@ -173,6 +173,9 @@
       "type": "integer",
       "minimum": 0,
       "x-code": "instrument.evidence_count_invalid"
+    },
+    "decidedAt": {
+      "$ref": "common.schema.json#/$defs/utcTimeOrNull"
     }
   },
   "additionalProperties": false

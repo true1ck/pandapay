@@ -196,7 +196,10 @@ void main() {
         return response();
       });
       await puller(client: client).pull();
-      expect(sentFeatures, everyElement('refund-category,draft-feedback'));
+      expect(
+        sentFeatures,
+        everyElement('refund-category,draft-feedback,instrument-decided-at'),
+      );
       final ledger = LedgerStore(database.db, namespace: 'target');
       final refund = EventStore(database.db, namespace: 'target')
           .listSince(DateTime.utc(2026))
@@ -291,6 +294,94 @@ void main() {
       database.db.select("SELECT * FROM v2_facts WHERE namespace='target'"),
       isEmpty,
     );
+  });
+
+  group('the later user decision wins over an unsent local change', () {
+    Instrument instrument({
+      InstrumentStatus status = InstrumentStatus.confirmed,
+      DateTime? decidedAt,
+    }) => Instrument(
+      instrumentId: '11111111-1111-4111-8111-111111111111',
+      kind: InstrumentKind.bankAccount,
+      issuerSlug: 'hdfc',
+      maskDigits: '1234',
+      displayName: 'HDFC',
+      status: status,
+      firstSeenAt: DateTime.utc(2026, 11, 1),
+      lastSeenAt: DateTime.utc(2026, 11, 2),
+      evidenceCount: 1,
+      decidedAt: decidedAt,
+    );
+    final earlier = DateTime.utc(2026, 11, 20, 9);
+    final later = DateTime.utc(2026, 11, 20, 10);
+
+    test('by decidedAt, and by the old rule when a side has none', () {
+      bool beats(Instrument incoming, Instrument? local) =>
+          SyncPull.incomingDecisionBeatsLocalEdit(incoming, local);
+      final rejected = InstrumentStatus.rejected;
+      // Both dated: the later one wins.
+      expect(
+        beats(
+          instrument(status: rejected, decidedAt: earlier),
+          instrument(decidedAt: later),
+        ),
+        isFalse,
+      );
+      expect(
+        beats(
+          instrument(status: rejected, decidedAt: later),
+          instrument(decidedAt: earlier),
+        ),
+        isTrue,
+      );
+      // A dated server decision beats an undated automatic local change.
+      expect(
+        beats(instrument(decidedAt: earlier), instrument()),
+        isTrue,
+      );
+      // A local dated choice is kept against an undated server copy.
+      expect(
+        beats(instrument(status: rejected), instrument(decidedAt: earlier)),
+        isFalse,
+      );
+      // Neither side dated: only "not mine" overrides, as before decidedAt.
+      expect(beats(instrument(status: rejected), instrument()), isTrue);
+      expect(beats(instrument(), instrument()), isFalse);
+    });
+
+    test('a restore not yet sent survives an older "not mine" from the server',
+        () async {
+      final client = MockClient((_) async => response());
+      await puller(client: client).pull();
+      final incoming = (body['instruments'] as List).single as Map;
+      final id = incoming['instrumentId'] as String;
+      final store = InstrumentStore(database.db, namespace: 'target');
+      // The user restored it on this phone; the change is still waiting to send.
+      store.upsert(
+        store.get(id)!.copyWith(
+          status: InstrumentStatus.confirmed,
+          decidedAt: later,
+        ),
+      );
+      incoming['status'] = 'rejected';
+      incoming['decidedAt'] = '2026-11-20T09:00:00Z';
+      body['events'] = [];
+      body['ledger'] = [];
+      body['facts'] = [];
+      body['cursor'] = 'page-stale-reject';
+      (body['updatedAt'] as Map)['instruments'] = {id: '2026-11-21T08:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.status, InstrumentStatus.confirmed);
+      expect(store.dirty().map((i) => i.instrumentId), contains(id));
+
+      // A later decision from another device does replace it.
+      incoming['decidedAt'] = '2026-11-20T11:00:00Z';
+      body['cursor'] = 'page-newer-reject';
+      (body['updatedAt'] as Map)['instruments'] = {id: '2026-11-21T09:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.status, InstrumentStatus.rejected);
+      expect(store.dirty().map((i) => i.instrumentId), isNot(contains(id)));
+    });
   });
 
   test(

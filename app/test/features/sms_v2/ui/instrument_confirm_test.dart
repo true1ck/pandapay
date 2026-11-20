@@ -251,4 +251,48 @@ void main() {
     expect(saved.userCardId, _walletCardId);
     expect(queuedInstrumentJson().single['status'], 'confirmed');
   });
+
+  test('every explicit choice is stamped with when the user made it; renaming '
+      'and automatic writes are not', () {
+    var tick = DateTime.utc(2026, 11, 20, 9);
+    InstrumentActions stamped() => InstrumentActions(
+      financial: financial,
+      namespace: _namespace,
+      bundle: bundle,
+      catalogue: _catalogue,
+      clock: () => tick = tick.add(const Duration(minutes: 1)),
+    );
+    store.upsert(_instrument(_bankId, kind: InstrumentKind.bankAccount));
+    expect(store.get(_bankId)!.decidedAt, isNull);
+
+    stamped().rename(_bankId, 'My salary account');
+    expect(store.get(_bankId)!.decidedAt, isNull);
+
+    stamped().reject(_bankId);
+    final rejectedAt = store.get(_bankId)!.decidedAt!;
+    expect(rejectedAt, DateTime.utc(2026, 11, 20, 9, 1));
+
+    stamped().restore(_bankId);
+    final restored = store.get(_bankId)!;
+    expect(restored.status, InstrumentStatus.confirmed);
+    expect(restored.decidedAt!.isAfter(rejectedAt), isTrue);
+    // The stamp travels to the server inside the queued instrument.
+    expect(queuedInstrumentJson().last['decidedAt'], '2026-11-20T09:02:00Z');
+
+    stamped().archive(_bankId);
+    expect(store.get(_bankId)!.decidedAt, DateTime.utc(2026, 11, 20, 9, 3));
+  });
+
+  test('attaching a wallet card to a credit card is a dated choice too', () {
+    store.upsert(_instrument(_creditId));
+    final at = DateTime.utc(2026, 11, 20, 12);
+    InstrumentActions(
+      financial: financial,
+      namespace: _namespace,
+      bundle: bundle,
+      catalogue: _catalogue,
+      clock: () => at,
+    ).attachCard(_creditId, _walletCard());
+    expect(store.get(_creditId)!.decidedAt, at);
+  });
 }

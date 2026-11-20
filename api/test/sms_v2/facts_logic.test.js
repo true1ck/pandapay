@@ -237,6 +237,39 @@ test('automatic detection cannot undo an explicit instrument decision', () => {
   assert.equal(storage.mergeInstrument({ ...detected, status: 'rejected' }, { ...detected, status: 'confirmed' }).status, 'confirmed');
 });
 
+test('the later dated user decision wins, even undoing "not mine"', () => {
+  const base = h.instrument({ status: 'rejected' });
+  const stored = { ...base, decidedAt: '2026-11-20T09:00:00Z' };
+  // The user restored it afterwards, on this or another phone.
+  const restored = storage.mergeInstrument(stored, { ...base, status: 'confirmed', decidedAt: '2026-11-20T10:00:00Z' });
+  assert.equal(restored.status, 'confirmed');
+  assert.equal(restored.decidedAt, '2026-11-20T10:00:00Z');
+  // ...even back to "waiting", which the undated rule would refuse.
+  assert.equal(storage.mergeInstrument(stored, { ...base, status: 'detected', decidedAt: '2026-11-20T10:00:00Z' }).status, 'detected');
+  // A phone that decided earlier (stale device) does not undo the later choice.
+  const stale = storage.mergeInstrument(stored, { ...base, status: 'confirmed', decidedAt: '2026-11-20T08:00:00Z' });
+  assert.equal(stale.status, 'rejected');
+  assert.equal(stale.decidedAt, '2026-11-20T09:00:00Z');
+});
+
+test('an undated write keeps the old rule and never erases the stored decision time', () => {
+  const base = h.instrument({ status: 'detected' });
+  const stored = { ...base, status: 'rejected', decidedAt: '2026-11-20T09:00:00Z' };
+  const auto = storage.mergeInstrument(stored, base);
+  assert.equal(auto.status, 'rejected', 'detection cannot undo a decision');
+  assert.equal(auto.decidedAt, '2026-11-20T09:00:00Z');
+  // An older app confirming (no decidedAt) is still accepted, as before.
+  assert.equal(storage.mergeInstrument(stored, { ...base, status: 'confirmed' }).status, 'confirmed');
+  assert.equal(storage.mergeInstrument({ ...base, decidedAt: null }, base).decidedAt, null);
+});
+
+test('a decision time far in the future is treated as made now', () => {
+  const now = Date.parse('2026-11-20T10:00:00Z');
+  assert.equal(storage.clampDecidedAt('2026-11-20T10:04:00Z', now), '2026-11-20T10:04:00Z');
+  assert.equal(storage.clampDecidedAt('2027-01-01T00:00:00Z', now), '2026-11-20T10:05:00.000Z');
+  assert.equal(storage.clampDecidedAt(null, now), null);
+});
+
 // ---------- cursors ----------
 
 test('cursors round-trip and reject anything else', () => {
