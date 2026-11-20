@@ -9,6 +9,9 @@ class SpendingSelection {
   final String? card;
   final Set<String> tagIds;
   final bool untagged;
+
+  /// Calendar month (device time) to keep; only its year and month are used.
+  final DateTime? month;
   const SpendingSelection({
     this.payment,
     this.categories = const {},
@@ -16,6 +19,7 @@ class SpendingSelection {
     this.card,
     this.tagIds = const {},
     this.untagged = false,
+    this.month,
   });
 
   bool matches(
@@ -23,6 +27,12 @@ class SpendingSelection {
     Iterable<String> tags = const [],
     List<BankAccountSummary> bankAccounts = const [],
   }) {
+    if (month != null) {
+      final local = entry.occurredAt.toLocal();
+      if (local.year != month!.year || local.month != month!.month) {
+        return false;
+      }
+    }
     if (payment != null && effectiveInstrument(entry) != payment) return false;
     if (categories.isNotEmpty && !categoryKeys(entry).any(categories.contains))
       return false;
