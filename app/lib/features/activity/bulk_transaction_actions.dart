@@ -48,6 +48,7 @@ class BulkTransactionActions {
     required this.outbox,
     this.smsSetCategory,
     this.smsHide,
+    this.smsHasReading,
   });
 
   final String namespace;
@@ -58,7 +59,17 @@ class BulkTransactionActions {
   final void Function(List<TransactionEntry> rows, String slug)? smsSetCategory;
   final void Function(TransactionEntry row)? smsHide;
 
+  /// Whether the phone still holds an SMS row's stored reading. Without it
+  /// every SMS row is assumed to have one.
+  final bool Function(TransactionEntry row)? smsHasReading;
+
   static bool isSms(TransactionEntry e) => e.pipelineVersion == 2;
+  /// An SMS row this phone alone owns: it has its reading, or it is a `v2:` row
+  /// the server cannot know. A server copy whose reading is gone is an
+  /// ordinary server row.
+  bool _phoneOwned(TransactionEntry e) =>
+      isSms(e) && (e.id.startsWith('v2:') || (smsHasReading?.call(e) ?? true));
+
   static bool isQueued(TransactionEntry e) => e.id.startsWith(_localPrefix);
 
   Future<BulkOutcome> setCategory(
@@ -77,7 +88,14 @@ class BulkTransactionActions {
         .toList();
     failed.addAll(misfits.map((e) => e.id));
     selected = selected.where((e) => !misfits.contains(e)).toList();
-    final sms = selected.where(isSms).toList();
+    final phoneRows = selected.where(_phoneOwned).toList();
+    // A row whose reading is gone cannot take a category; one such row must
+    // not sink the rest, so it is reported on its own.
+    final sms = [
+      for (final e in phoneRows)
+        if (smsHasReading?.call(e) ?? true) e,
+    ];
+    failed.addAll(phoneRows.where((e) => !sms.contains(e)).map((e) => e.id));
     if (sms.isNotEmpty) {
       try {
         if (slug == null || smsSetCategory == null) {
@@ -93,7 +111,7 @@ class BulkTransactionActions {
       'category_id': categoryIdForServer(categoryId, categories),
       'user_category_id': userCategoryIdForServer(categoryId),
     };
-    for (final e in selected.where((e) => !isSms(e))) {
+    for (final e in selected.where((e) => !_phoneOwned(e))) {
       try {
         if (isQueued(e)) {
           if (!await outbox.editQueued(
@@ -154,7 +172,7 @@ class BulkTransactionActions {
     store.batch(() {
       for (final e in selected) {
         try {
-          if (isSms(e)) {
+          if (_phoneOwned(e)) {
             final hide = smsHide;
             if (hide == null) throw StateError('SMS actions unavailable');
             hide(e);

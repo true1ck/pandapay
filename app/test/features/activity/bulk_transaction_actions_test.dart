@@ -119,4 +119,57 @@ void main() {
     expect(commands.single['target'], 'srv-4');
     expect(jsonDecode(commands.single['payload_json'] as String)['reason'], 'manual');
   });
+
+  group('SMS rows whose stored reading is gone', () {
+    late BulkTransactionActions strict;
+    setUp(() {
+      strict = BulkTransactionActions(
+        namespace: ns,
+        store: store,
+        queue: SyncQueue(db, namespace: ns),
+        commands: CommandOutbox(db, namespace: ns),
+        outbox: outbox,
+        smsSetCategory: (rows, slug) =>
+            smsCategory.add('$slug:${rows.map((e) => e.id).join(',')}'),
+        smsHide: (row) => hidden.add(row.id),
+        smsHasReading: (row) => row.id != 'v2:stale' && row.id != 'srv-gone',
+      );
+    });
+
+    test('one such row does not sink the rest of a bulk category change', () async {
+      final r = await strict.setCategory(
+        [
+          _row('v2:ok', pipeline: 2),
+          _row('v2:stale', pipeline: 2),
+          _row('srv-1'),
+        ],
+        'dining',
+        slug: 'dining',
+      );
+      expect(smsCategory, ['dining:v2:ok']);
+      expect(r.done, 2);
+      expect(r.failed, ['v2:stale']);
+    });
+
+    test('a server copy with no reading is edited like any server row', () async {
+      final r = await strict.setCategory(
+        [_row('srv-gone', pipeline: 2)],
+        'dining',
+        slug: 'dining',
+      );
+      expect(r.done, 1);
+      expect(r.failed, isEmpty);
+      expect(smsCategory, isEmpty);
+      expect(pending().single['id'], 'srv-gone');
+    });
+
+    test('delete hides a leftover phone row and sends a server copy to the server', () async {
+      final r = await strict.delete([
+        _row('v2:stale', pipeline: 2),
+        _row('srv-gone', pipeline: 2),
+      ]);
+      expect(r.done, 2);
+      expect(hidden, ['v2:stale']);
+    });
+  });
 }

@@ -40,6 +40,14 @@ Future<bool> markTransactionKind({
     container.invalidate(categorySpendProvider);
   }
 
+  if (!SmsTransactionActions(controller: controller).hasReading(entry)) {
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text(SmsTransactionActions.missingReadingCopy)),
+      );
+    return false;
+  }
   final similar = SimilarChanges.forController(controller);
   final before = similar.snapshot(entry);
   SmsTransactionActions(controller: controller).markAs(entry, type);
