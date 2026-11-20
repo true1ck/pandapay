@@ -8,13 +8,14 @@ insert into user_consents(profile_id,purpose,policy_version,granted)
  values(:'p1','sms_shared_learning','sms-shared-learning-v3',true),(:'p2','sms_shared_learning','sms-shared-learning-v3',true);
 set local role app_user;
 select set_config('app.user_id',:'p1',true);
-select pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object('templateHash',repeat('e',64),'senderBrand','TESTBK',
+-- Since 20261125020000 a template's hash must be sha256(senderBrand || E'\n' || redactedBody), as phones compute it.
+select pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object('templateHash',encode(sha256(convert_to('TESTBK'||E'\n'||'<AMT> paid to <PARTY>.','UTF8')),'hex'),'senderBrand','TESTBK',
  'redactedBody','<AMT> paid to <PARTY>.','observedAt',now())),true);
 do $$ begin
  if (select count(*) from sms_v2_unknown_templates)<>0 then raise exception 'global template rows visible'; end if;
  if (select count(*) from pandapay.sms_v2_template_results(0))<>1 then raise exception 'owner result missing'; end if;
  begin
-  perform pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object('templateHash',repeat('f',64),'senderBrand','TESTBK',
+  perform pandapay.sms_v2_submit_templates(jsonb_build_array(jsonb_build_object('templateHash',encode(sha256(convert_to('TESTBK'||E'\n'||'Call 9876543210','UTF8')),'hex'),'senderBrand','TESTBK',
    'redactedBody','Call 9876543210','observedAt',now())),true);
   raise exception 'unredacted template accepted';
  exception when invalid_parameter_value then null; end;
