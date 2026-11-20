@@ -130,3 +130,17 @@ test('server, database setup, deploy scripts and env examples carry no legacy SM
   }
   assert.deepEqual(hits, []);
 });
+
+test('no container health check starts a Node process (wget or grep only)', () => {
+  // Measured 21 Nov 2026 on the 1 GB host: `node -e fetch(...)` every 30 s took 1.1-1.8 s and ~40 MB each time and kept
+  // the two admin containers at ~2% CPU all day while idle. The public API and auth already use wget.
+  const read = (file) => fs.readFileSync(path.join(repo, file), 'utf8');
+  for (const file of ['docker-compose.prod.yml', 'deploy/admin/compose.private.yml']) {
+    const tests = read(file).split('\n').filter((line) => /^\s+test:/.test(line));
+    assert.ok(tests.length > 0, `${file} has health checks`);
+    for (const line of tests) assert.doesNotMatch(line, /\bnode\b/, `${file}: ${line.trim()}`);
+  }
+  const admin = read('deploy/admin/compose.private.yml');
+  assert.match(admin, /wget -q -T 4 -O \/dev\/null http:\/\/127\.0\.0\.1:4321\/ready/);
+  assert.match(admin, /wget -q -T 4 -O \/dev\/null http:\/\/127\.0\.0\.1:4001\/ready/);
+});

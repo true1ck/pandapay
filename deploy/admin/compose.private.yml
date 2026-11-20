@@ -41,7 +41,8 @@ services:
       ADMIN_SMTP_PASSWORD: '${ADMIN_SMTP_PASSWORD:?}'
       ADMIN_SMTP_FROM: '${ADMIN_SMTP_FROM:?}'
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:4321/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # wget, not `node -e fetch`: a Node start every 30 s cost 1.1-1.8 s and ~40 MB on the 1 GB host (21 Nov 2026).
+      test: [CMD-SHELL, "wget -q -T 4 -O /dev/null http://127.0.0.1:4321/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -81,7 +82,8 @@ services:
       DB_SSL: 'true'
       DB_SSL_CA: '${DB_SSL_CA:-}'
     healthcheck:
-      test: [CMD, node, -e, "fetch('http://127.0.0.1:4001/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # wget, not `node -e fetch`: a Node start every 30 s cost 1.1-1.8 s and ~40 MB on the 1 GB host (21 Nov 2026).
+      test: [CMD-SHELL, "wget -q -T 4 -O /dev/null http://127.0.0.1:4001/ready || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
