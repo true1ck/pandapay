@@ -428,12 +428,17 @@ class BambooChoice<T> {
     required this.label,
     this.detail,
     this.icon,
+    this.group,
   });
 
   final T value;
   final String label;
   final String? detail;
   final IconData? icon;
+
+  /// A heading to list this option under. Options are shown in the order given,
+  /// and a heading appears wherever the group changes, so sort by group first.
+  final String? group;
 }
 
 /// A bottom sheet that asks the user to pick one option — the mobile
@@ -456,7 +461,28 @@ Future<T?> showBambooChoiceSheet<T>({
       children: [
         if (options.isEmpty && emptyMessage != null)
           BambooNote(emptyMessage, icon: Icons.info_outline),
-        for (final option in options)
+        for (var i = 0; i < options.length; i++) ...[
+          if (options[i].group != null &&
+              (i == 0 || options[i - 1].group != options[i].group))
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpace.xs),
+              child: Text(
+                options[i].group!,
+                style: BambooFonts.ui(
+                  12,
+                  weight: FontWeight.w700,
+                  color: BambooInk.ink500,
+                ).copyWith(letterSpacing: 0.4),
+              ),
+            ),
+          _choicePanel(sheetContext, options[i]),
+        ],
+      ],
+    ),
+  );
+}
+
+Widget _choicePanel<T>(BuildContext sheetContext, BambooChoice<T> option) =>
           BambooPanel(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             onTap: () => Navigator.pop(sheetContext, option.value),
@@ -495,11 +521,7 @@ Future<T?> showBambooChoiceSheet<T>({
                 ),
               ],
             ),
-          ),
-      ],
-    ),
-  );
-}
+          );
 
 /// Buttons laid out the same way everywhere a card offers more than one
 /// action: the primary action fills the row, secondary actions share the

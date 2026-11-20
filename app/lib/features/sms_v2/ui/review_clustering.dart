@@ -407,6 +407,14 @@ List<ReviewBundle> bundleReviewItems(
   return bundles;
 }
 
+/// How many questions the person has to answer for [items]: one per bundle,
+/// because a format shared by many messages is answered once. This is the
+/// number shown on Needs review, not the number of messages behind it.
+int reviewQuestionCount(
+  List<LocalReviewItem> items,
+  String Function(LocalReviewItem) kindOf,
+) => items.isEmpty ? 0 : bundleReviewItems(items, kindOf).length;
+
 /// "Oct 2026", "Aug – Oct 2026" or "Dec 2025 – Feb 2026".
 String formatBundleSpan(DateTime earliest, DateTime latest) {
   final e = earliest.toLocal();

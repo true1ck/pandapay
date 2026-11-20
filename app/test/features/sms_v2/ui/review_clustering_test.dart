@@ -485,15 +485,17 @@ void main() {
           item('c', 'AX-BAZ-S', 'Credit Alert! Rs.1 credited'),
         ], (_, _) {}),
       );
-      expect(find.text('All (5)'), findsOneWidget);
-      expect(find.text('Money out (3)'), findsOneWidget);
+      // Counts are questions, not messages: the three spends share one format,
+      // so they are one question.
+      expect(find.text('All (3)'), findsOneWidget);
+      expect(find.text('Money out (1)'), findsOneWidget);
       expect(find.text('Money in (1)'), findsOneWidget);
       expect(find.text('Declined & alerts (1)'), findsOneWidget);
       await tester.tap(find.text('Declined & alerts (1)'));
       await tester.pump();
       expect(find.textContaining('declined'), findsWidgets);
       expect(find.textContaining('Spent Rs.'), findsNothing);
-      await tester.tap(find.text('All (5)'));
+      await tester.tap(find.text('All (3)'));
       await tester.pump();
       expect(find.textContaining('Spent Rs.'), findsWidgets);
     });

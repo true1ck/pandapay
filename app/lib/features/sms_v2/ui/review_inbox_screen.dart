@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../app/assistant_action.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
@@ -70,6 +71,79 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     super.dispose();
   }
 
+  /// The confirmed credit cards, one per bank and number, listed by bank.
+  List<Instrument> _distinctCards(List<Instrument> all) {
+    final seen = <String>{};
+    final cards = [
+      for (final i in all)
+        if (i.kind == InstrumentKind.creditCard &&
+            i.status == InstrumentStatus.confirmed &&
+            seen.add('${i.issuerSlug}|${i.maskDigits ?? i.instrumentId}'))
+          i,
+    ]..sort((a, b) {
+        final byBank = defaultIssuerLabel(
+          a.issuerSlug,
+        ).compareTo(defaultIssuerLabel(b.issuerSlug));
+        return byBank != 0 ? byBank : a.displayName.compareTo(b.displayName);
+      });
+    return cards;
+  }
+
+  /// Edit the whole transaction a question is about, or, where no transaction
+  /// exists yet (a receipt, a message the app cannot read), add one with what
+  /// the question already knows.
+  Future<void> _edit(LocalReviewItem item, String namespace) async {
+    final eventId = item.payload['eventId'];
+    if (eventId is String) {
+      await context.push<bool>('/activity/v2:$eventId/edit');
+      if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+      // The edit may have settled the question (a card chosen, a category set).
+      ref.invalidate(reviewItemsProvider);
+      return;
+    }
+    final minor = reviewItemAmountMinor(item);
+    final merchant = (item.payload['app'] ?? item.payload['biller']) as String?;
+    await context.push<Object?>(
+      '/assistant/add-spend',
+      extra: AssistantRequest(
+        action: AssistantAction.addSpend,
+        amount: minor == null ? null : minor / 100,
+        merchant: merchant,
+      ),
+    );
+    if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+    if (isReceiptQuestion(item)) {
+      // The add screen does not say whether the person saved, so ask once.
+      final added = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Did you add the payment?'),
+          content: const Text(
+            'If you added it, this question is answered and goes away.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Not yet'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, I added it'),
+            ),
+          ],
+        ),
+      );
+      if (added == true && mounted) {
+        final reviews = await smsReceiptReviews(ref);
+        if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) {
+          return;
+        }
+        reviews.dismiss(reviewId: item.id);
+      }
+    }
+    ref.invalidate(reviewItemsProvider);
+  }
+
   Future<void> _act(List<LocalReviewItem> group, String action) async {
     if (_saving) return;
     final namespace = ref.read(app.cacheNamespaceProvider);
@@ -78,15 +152,50 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
       await _answerReceipt(group, action, namespace);
       return;
     }
+    if (action == 'edit') {
+      await _edit(group.first, namespace);
+      return;
+    }
     if (action == 'choose-card') {
-      final cards = (await ref.read(instrumentsProvider.future))
-          .where(
-            (i) =>
-                i.kind == InstrumentKind.creditCard &&
-                i.status == InstrumentStatus.confirmed,
-          )
-          .toList();
+      final cards = _distinctCards(await ref.read(instrumentsProvider.future));
       if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
+      // Step 1: what did this payment pay? A bill-pay app can be paying a card,
+      // a loan or something else; only a card bill needs a card.
+      final kind = await showBambooChoiceSheet<String>(
+        context: context,
+        title: 'What did this payment pay?',
+        subtitle: 'A payment is counted once, against what it paid.',
+        icon: Icons.help_outline_rounded,
+        options: [
+          BambooChoice(
+            value: 'card',
+            label: 'A credit card bill',
+            detail: cards.isEmpty
+                ? 'No confirmed credit cards yet'
+                : cards.length == 1
+                ? 'Your ${cards.single.displayName}'
+                : 'Choose which of your ${cards.length} cards',
+            icon: Icons.credit_card_rounded,
+          ),
+          if (group.length == 1)
+            const BambooChoice(
+              value: 'other',
+              label: 'Something else',
+              detail: 'Edit the payment: merchant, category, account',
+              icon: Icons.edit_outlined,
+            ),
+        ],
+      );
+      if (kind == null ||
+          !mounted ||
+          namespace != ref.read(app.cacheNamespaceProvider)) {
+        return;
+      }
+      if (kind == 'other') {
+        await _edit(group.first, namespace);
+        return;
+      }
+      // Step 2: which card, under its bank.
       final chosen = await showBambooChoiceSheet<String>(
         context: context,
         title: 'Which card did this pay?',
@@ -101,13 +210,15 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
               label: card.displayName,
               detail: '••${card.maskDigits ?? 'unknown'}',
               icon: Icons.credit_card_rounded,
+              group: defaultIssuerLabel(card.issuerSlug),
             ),
         ],
       );
       if (chosen == null ||
           !mounted ||
-          namespace != ref.read(app.cacheNamespaceProvider))
+          namespace != ref.read(app.cacheNamespaceProvider)) {
         return;
+      }
       edit = CorrectionEdit(CorrectionKind.wrongInstrument, {
         'targetInstrumentId': chosen,
       });
@@ -305,7 +416,13 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                     i.kind == InstrumentKind.wallet) &&
                 i.status == InstrumentStatus.confirmed,
           )
-          .toList();
+          .toList()
+        ..sort((a, b) {
+          final byKind = (a.kind == InstrumentKind.wallet ? 1 : 0).compareTo(
+            b.kind == InstrumentKind.wallet ? 1 : 0,
+          );
+          return byKind != 0 ? byKind : a.displayName.compareTo(b.displayName);
+        });
       if (!mounted || namespace != ref.read(app.cacheNamespaceProvider)) return;
       final chosen = await showBambooChoiceSheet<String>(
         context: context,
@@ -320,6 +437,9 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
               icon: account.kind == InstrumentKind.wallet
                   ? Icons.account_balance_wallet_outlined
                   : Icons.account_balance_outlined,
+              group: account.kind == InstrumentKind.wallet
+                  ? 'Wallets'
+                  : 'Bank accounts',
             ),
           BambooChoice(
             value: _anotherAccount,
@@ -374,6 +494,12 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
       for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
         if (ai.resolutionOf(item) != null) item,
     ];
+    // What the person still has to answer, as questions: a format shared by
+    // many messages is one question.
+    final openItems = [
+      for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
+        if (ai.resolutionOf(item) == null) item,
+    ];
     final settled = ref.watch(settledListsProvider).valueOrNull;
     return Scaffold(
       appBar: AppBar(
@@ -404,13 +530,15 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                     ButtonSegment(
                       value: 0,
                       label: Text(
-                        'Needs review${review.valueOrNull == null ? '' : ' (${review.valueOrNull!.length - aiItems.length})'}',
+                        'Needs review${review.valueOrNull == null ? '' : ' (${reviewQuestionCount(openItems, reviewKindOf)})'}',
                       ),
                     ),
                     if (aiItems.isNotEmpty)
                       ButtonSegment(
                         value: 2,
-                        label: Text('AI suggested (${aiItems.length})'),
+                        label: Text(
+                          'AI suggested (${reviewQuestionCount(aiItems, reviewKindOf)})',
+                        ),
                       ),
                     ButtonSegment(
                       value: 3,
@@ -564,10 +692,15 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
     final typeOf = {
       for (final item in items) item: reviewFilterOf(item, reviewKindOf),
     };
-    final typeCounts = <ReviewFilter, int>{};
-    for (final f in typeOf.values) {
-      typeCounts[f] = (typeCounts[f] ?? 0) + 1;
+    // Counts are questions (bundles), not messages.
+    final byType = <ReviewFilter, List<LocalReviewItem>>{};
+    for (final entry in typeOf.entries) {
+      (byType[entry.value] ??= []).add(entry.key);
     }
+    final typeCounts = {
+      for (final entry in byType.entries)
+        entry.key: reviewQuestionCount(entry.value, reviewKindOf),
+    };
     // A chip whose items were all dealt with falls back to All instead of
     // leaving an empty screen.
     final filter =
@@ -578,11 +711,15 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
       for (final item in items)
         if (filter == ReviewFilter.all || typeOf[item] == filter) item,
     ];
-    final monthCounts = <String, int>{};
+    final byMonth = <String, List<LocalReviewItem>>{};
     for (final item in ofType) {
       final key = reviewMonthKey(item);
-      if (key != null) monthCounts[key] = (monthCounts[key] ?? 0) + 1;
+      if (key != null) (byMonth[key] ??= []).add(item);
     }
+    final monthCounts = {
+      for (final entry in byMonth.entries)
+        entry.key: reviewQuestionCount(entry.value, reviewKindOf),
+    };
     final months = monthCounts.keys.toList()..sort((a, b) => b.compareTo(a));
     final month = _month != null && monthCounts.containsKey(_month)
         ? _month
@@ -645,7 +782,7 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
           _ChipRow(
             children: [
               _ReviewChip(
-                label: 'All (${items.length})',
+                label: 'All (${reviewQuestionCount(items, reviewKindOf)})',
                 selected: filter == ReviewFilter.all,
                 onTap: () => setState(() {
                   _filter = ReviewFilter.all;
@@ -857,6 +994,13 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
                   ],
                 ),
               ),
+              TextButton(
+                style: BambooButtons.quiet,
+                onPressed: widget.busy
+                    ? null
+                    : () => widget.onAction([item], 'edit'),
+                child: const Text('Edit'),
+              ),
               if (item.message != null)
                 TextButton(
                   style: BambooButtons.quiet,
@@ -883,6 +1027,24 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
     final aiResolution = widget.aiStatus.resolutionOf(first);
     final aiChecking =
         aiResolution == null && group.every(widget.aiStatus.isChecking);
+    // Every question can also be answered by editing the whole transaction. A
+    // group of several messages has no single transaction: each message has
+    // its own Edit in the expanded list.
+    final hasTransaction = first.payload['eventId'] is String;
+    final Widget? editWhole = group.length == 1
+        ? TextButton(
+            key: const Key('review-edit-transaction'),
+            style: BambooButtons.quiet,
+            onPressed: _on('edit'),
+            child: Text(
+              isReceipt
+                  ? 'Add the payment yourself'
+                  : hasTransaction
+                  ? 'Edit transaction'
+                  : 'Add as transaction',
+            ),
+          )
+        : null;
     final notFinancial = TextButton(
       style: BambooButtons.quiet,
       onPressed: _on('ignore'),
@@ -922,6 +1084,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
             onPressed: _on('receipt-unsure'),
             child: Text(text.notSure),
           ),
+          ?editWhole,
         ],
       );
     } else if (first.kind == 'bill_target') {
@@ -931,7 +1094,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
           onPressed: _on('choose-card'),
           child: const Text('Which card did this pay?'),
         ),
-        quiet: [if (allMessages) notFinancial],
+        quiet: [?editWhole, if (allMessages) notFinancial],
       );
     } else if (first.kind == 'link') {
       actions = BambooActionBar(
@@ -947,7 +1110,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
             child: const Text('Keep separate'),
           ),
         ],
-        quiet: [if (allMessages) notFinancial],
+        quiet: [?editWhole, if (allMessages) notFinancial],
       );
     } else if (bundle.kind == 'template' &&
         uniform &&
@@ -970,6 +1133,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
           }),
         ),
         secondary: [fix(false)],
+        quiet: [?editWhole],
       );
     } else if (!uniform) {
       // A Pay Later bundle spans several message formats. Teaching or
@@ -987,7 +1151,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
               )
             : fix(true),
         secondary: [if (hasReading) fix(false)],
-        quiet: [if (allMessages) notFinancial],
+        quiet: [?editWhole, if (allMessages) notFinancial],
       );
     }
 
