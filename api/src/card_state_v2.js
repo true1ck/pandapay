@@ -365,6 +365,7 @@ async function loadDirectoryCached(client, { now = Date.now() } = {}) {
 function clearDirectoryCache() {
   directoryCache = null;
   v1ShapeCache.clear();
+  v2ShapeCache.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +381,10 @@ const RULE_COLUMNS = `id, category_id, merchant_pattern, rail, unit, rate, min_t
 // rule/cap change) and rounding settings, so a v1 card costs one query here.
 const V1_SHAPE_CACHE_MAX = 5000;
 const v1ShapeCache = new Set();
+// The same knowledge for v2-shaped products: whether a card is v2 depends only on its product's rules, caps and
+// rounding (the shape key, which data_version moves on every rule change), so a read that only needs to know
+// "v1 or v2?" (the wallet's milestone rows) need not load every rule again (see isV2Card).
+const v2ShapeCache = new Set();
 
 function shapeKey(row) {
   return `${row.card_product_id}|${row.data_version}|${row.accrual_rounding ?? ''}|${row.cashback_rounding ?? ''}`;
@@ -437,6 +442,8 @@ async function loadV2Card(client, userCardId, { profileId = null } = {}) {
        FROM milestone_rules WHERE card_product_id = $1`,
     [userCard.card_product_id],
   );
+  if (v2ShapeCache.size >= V1_SHAPE_CACHE_MAX) v2ShapeCache.clear();
+  v2ShapeCache.add(shapeKey(userCard));
   return buildV2Card({ userCard, rules: rules.rows, caps: caps.rows, milestones: milestones.rows });
 }
 
@@ -1615,8 +1622,27 @@ async function currentCapStates(client, userCardId, { now = new Date() } = {}) {
  * v2-shaped card (C8 D23c) and CURRENT_DATE on a v1 card, as before; `v2`
  * may be passed when the caller already knows the card's shape.
  */
+/**
+ * Whether the user card is v2-shaped: the answer loadV2Card would give, from one small query once its product's
+ * shape (product, data_version, rounding) has been seen; otherwise it loads the card as before.
+ */
+async function isV2Card(client, userCardId) {
+  if (!userCardId) return false;
+  const r = await client.query(
+    `SELECT uc.card_product_id, cp.data_version, cp.accrual_rounding, cp.cashback_rounding
+       FROM user_cards uc JOIN card_products cp ON cp.id = uc.card_product_id WHERE uc.id = $1`,
+    [userCardId],
+  );
+  const row = r.rows[0];
+  if (!row) return false;
+  const key = shapeKey(row);
+  if (v1ShapeCache.has(key)) return false;
+  if (v2ShapeCache.has(key)) return true;
+  return Boolean(await loadV2Card(client, userCardId));
+}
+
 async function currentMilestoneStates(client, userCardId, { now = new Date(), v2 = null } = {}) {
-  const isV2 = v2 != null ? Boolean(v2) : Boolean(await loadV2Card(client, userCardId));
+  const isV2 = v2 != null ? Boolean(v2) : await isV2Card(client, userCardId);
   const result = await client.query(
     `SELECT milestone_rule_id, qualified_spend, period_end,
             to_char(period_start, 'YYYY-MM-DD') AS period_start, approximate_window
@@ -1639,6 +1665,7 @@ module.exports = {
   oldestUnpricedDay,
   currentCapStates,
   currentMilestoneStates,
+  isV2Card,
   // recording and rebuild
   loadV2Card,
   applyTransactionV2,

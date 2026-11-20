@@ -2,13 +2,14 @@
 
 // GET /sms/v2/sync?cursor=<opaque> (WP-08).
 //
-// Returns the profile's instruments, events and ledger entries changed since
-// the cursor (at most 1,000 rows per entity), plus AI results, correction
-// status and the latest bundle version from the hook object.
+// Returns the profile's instruments, events, ledger entries and facts changed
+// since the cursor (250 rows per entity by default; a phone may ask for 1 to
+// 1,000 with ?limit=), plus AI results, correction status and the latest
+// bundle version from the hook object.
 //
 // The sync response schema is frozen and has no `hasMore` field, so paging is
 // signalled by the response header `X-Sms-Sync-Has-More: 1|0`. A client can
-// equally keep calling while any entity list has exactly 1,000 rows.
+// equally keep calling while any entity list is full.
 //
 // Hook return shape: an array, or {items, cursor}. A string `cursor` is stored
 // in the sync cursor and passed back to the hook on the next call.
@@ -63,9 +64,10 @@ function createSyncHandler({ withUserClient, hooks }) {
       const ai = hookItems(await hooks.aiResultsSince(req.userId, cursor.a || null, { draftFeedback: supportsDraftFeedback(req) }));
       const corrections = hookItems(await hooks.correctionStatusSince(req.userId, cursor.c || null));
       const latestBundleVersion = Number(await hooks.latestBundleVersion(req.userId)) || 0;
+      const limit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
       const changes = await withUserClient(req.userId, (client) => storage.readChanges(client, req.userId, cursor, {
         a: ai.cursor || cursor.a || null, c: corrections.cursor || cursor.c || null,
-      }));
+      }, { limit }));
       res.set('X-Sms-Sync-Has-More', changes.hasMore ? '1' : '0');
       return res.status(200).json({
         cursor: changes.cursor,

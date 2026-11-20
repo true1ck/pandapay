@@ -527,6 +527,59 @@ test('the afterEventsStored hook runs inside the batch with the stored events', 
 
 // ---------- sync ----------
 
+test('a fact whose upload started first but committed last is still synced (no skipped rows)', { skip }, async () => {
+  // Two uploads for one profile run one at a time (the profile lock). The one that STARTED first can still get the
+  // lock second. Its facts must sort after everything a phone may already have read, or that phone skips them.
+  const p = await newProfile();
+  const early = await pool.connect();
+  try {
+    await early.query('BEGIN');
+    await early.query('SET LOCAL ROLE app_user');
+    await early.query("SELECT set_config('app.user_id', $1, true)", [p]);
+    await early.query('SELECT now()'); // this transaction's start time is now fixed
+    await new Promise((r) => setTimeout(r, 30));
+    const first = cardSpend({ sourceKey: 'race-first' });
+    await ingest(p, first.body); // started later, committed first
+    const read = (cursor) => withUserClient(p, (client) => storage.readChanges(client, p, storage.decodeCursor(cursor) || {}));
+    const seen = await read(undefined);
+    assert.deepEqual(seen.facts.map((f) => f.factId), [first.f.factId]);
+    const late = cardSpend({ sourceKey: 'race-late' });
+    await storage.ingestBatch(early, p, late.body, { backfill: false, categoryOnly: false, deps, hooks });
+    await early.query('COMMIT');
+    const after = await read(seen.cursor);
+    assert.deepEqual(after.facts.map((f) => f.factId), [late.f.factId], 'the late-committed fact is not skipped');
+  } finally { early.release(); }
+});
+
+test('pages hold 250 rows per entity unless the phone asks for another size (1 to 1,000)', { skip }, async () => {
+  const p = await newProfile();
+  await pool.query(
+    `INSERT INTO sms_v2_events (event_id, profile_id, type, status, legs, confidence, occurred_at, amount_minor)
+     SELECT encode(sha256(('page-' || g)::bytea), 'hex'), $1, 'purchase', 'complete',
+            jsonb_build_array(jsonb_build_object('factId', encode(sha256(('page-' || g)::bytea), 'hex'), 'role', 'debit_leg')),
+            0.9, now(), 100 + g
+       FROM generate_series(1, 600) g`, [p]);
+  const read = (cursor, opts) => withUserClient(p, (client) => storage.readChanges(client, p, storage.decodeCursor(cursor) || {}, {}, opts));
+  const sizes = [];
+  const ids = [];
+  let cursor;
+  for (;;) {
+    const page = await read(cursor);
+    sizes.push(page.events.length);
+    ids.push(...page.events.map((e) => e.eventId));
+    cursor = page.cursor;
+    if (!page.hasMore) break;
+  }
+  assert.deepEqual(sizes, [250, 250, 100]);
+  assert.equal(new Set(ids).size, 600, 'every row once, none skipped');
+  assert.equal((await read(undefined, { limit: 1000 })).events.length, 600);
+  assert.equal((await read(undefined, { limit: 40 })).events.length, 40);
+  for (const bad of [0, -5, 5000, 'x', null]) {
+    const n = (await read(undefined, { limit: bad })).events.length;
+    assert.ok(n === 250 || (bad === 5000 && n === 600), `limit ${bad} is clamped, not trusted (${n})`);
+  }
+});
+
 test('sync pages at 1,000 rows per entity, resumes from the cursor and sees later changes', { skip }, async () => {
   const p = await newProfile();
   await pool.query(
@@ -535,7 +588,7 @@ test('sync pages at 1,000 rows per entity, resumes from the cursor and sees late
             jsonb_build_array(jsonb_build_object('factId', encode(sha256(('sync-' || g)::bytea), 'hex'), 'role', 'debit_leg')),
             0.9, now(), 100 + g
        FROM generate_series(1, 1500) g`, [p]);
-  const read = (cursor) => withUserClient(p, (client) => storage.readChanges(client, p, storage.decodeCursor(cursor) || {}));
+  const read = (cursor) => withUserClient(p, (client) => storage.readChanges(client, p, storage.decodeCursor(cursor) || {}, {}, { limit: 1000 }));
   const first = await read(undefined);
   assert.equal(first.events.length, 1000);
   assert.equal(first.hasMore, true);

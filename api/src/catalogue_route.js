@@ -121,6 +121,37 @@ function createCatalogueHandler({ withUserClient, logger = console, limiter } = 
     failOpenWhenFull: true,
   });
 
+  // The finished, gzipped body of the catalogue version each feed last served (keyed by its ETag, which is the
+  // version). Building one is ~2-3 s of heavy view queries and ~0.4 s of gzip on production for a 10 MB body; every
+  // phone asking for the same version now gets the same bytes. The version (FINGERPRINT_SQL) is still read on every
+  // request, so a changed catalogue is built and served at once: an older body is never sent. Concurrent requests
+  // share one build; a failed build is dropped so the next request tries again. Only the newest version per feed is
+  // kept (about 2 MB in all).
+  const gzipBuilds = new Map();
+  const newestEtagByFeed = new Map();
+  const loadBody = (user, v2) => withUserClient(user, async (client) => {
+    if (v2) {
+      const cards = await client.query(V2_CARDS_SQL);
+      const merchants = await client.query(V2_MERCHANTS_SQL);
+      const platforms = await client.query(V2_PLATFORMS_SQL);
+      return { schema: 2, cards: cards.rows, merchants: merchants.rows, platforms: platforms.rows };
+    }
+    const result = await client.query(V1_SQL);
+    return { cards: result.rows };
+  });
+  const gzippedBody = (user, v2, etag) => {
+    let pending = gzipBuilds.get(etag);
+    if (pending) return pending;
+    pending = loadBody(user, v2).then((body) => gzip(Buffer.from(JSON.stringify(body), 'utf8')));
+    gzipBuilds.set(etag, pending);
+    const feed = v2 ? 2 : 1;
+    const older = newestEtagByFeed.get(feed);
+    if (older && older !== etag) gzipBuilds.delete(older);
+    newestEtagByFeed.set(feed, etag);
+    pending.catch(() => { if (gzipBuilds.get(etag) === pending) gzipBuilds.delete(etag); });
+    return pending;
+  };
+
   return async function catalogueHandler(req, res) {
     try {
       const identity = rateLimitIdentity(req.ip || (req.socket && req.socket.remoteAddress));
@@ -149,26 +180,14 @@ function createCatalogueHandler({ withUserClient, logger = console, limiter } = 
         return res.status(304).end();
       }
 
-      let body;
-      if (v2) {
-        body = await withUserClient(user, async (client) => {
-          const cards = await client.query(V2_CARDS_SQL);
-          const merchants = await client.query(V2_MERCHANTS_SQL);
-          const platforms = await client.query(V2_PLATFORMS_SQL);
-          return { schema: 2, cards: cards.rows, merchants: merchants.rows, platforms: platforms.rows };
-        });
-      } else {
-        const result = await withUserClient(user, (client) => client.query(V1_SQL));
-        body = { cards: result.rows };
-      }
-
       if (!useGzip) {
+        const body = await loadBody(user, v2);
         cacheHeaders();
         return res.json(body);
       }
       // Compress first: validators and Cache-Control are set only once a 200
       // body is certain, so a failure can never leave a cacheable 500 (D34d).
-      const compressed = await gzip(Buffer.from(JSON.stringify(body), 'utf8'));
+      const compressed = await gzippedBody(user, v2, etag);
       cacheHeaders();
       res.set('Content-Type', 'application/json; charset=utf-8');
       res.set('Content-Encoding', 'gzip');
