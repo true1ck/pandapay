@@ -585,28 +585,35 @@ class _ScanResultScreenState extends ConsumerState<ScanResultScreen> {
     // make the user affirm this is a business payment before handing off.
     if (widget.parsed.isLikelyP2P) {
       final payee = _merchantController.text.trim();
+      // true = business, false = a person (pay from bank, no card), null = cancel.
       final ok = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Is this a business payment?'),
           content: Text(
             'A RuPay credit card on UPI can only pay a business — not send money to a '
-            'person. Continue only if ${payee.isEmpty ? 'this payee' : payee} is a shop or merchant.',
+            'person. Continue only if ${payee.isEmpty ? 'this payee' : payee} is a shop or merchant.\n\n'
+            'Choose No to pay this person from your bank account instead.',
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
+              onPressed: () => Navigator.pop(ctx),
               child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('No'),
             ),
             FilledButton(
               style: BambooButtons.primary,
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Yes, continue'),
+              child: const Text('Yes'),
             ),
           ],
         ),
       );
-      if (ok != true || !mounted) return;
+      if (ok == null || !mounted) return;
+      if (!ok) return _continueWithoutCard();
     }
 
     await _handOff(rec: rec, wallet: wallet, categoryId: categoryId);
@@ -863,28 +870,16 @@ class _CategoryPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpace.xs,
-      runSpacing: AppSpace.xs,
-      children: [
+    return DropdownButtonFormField<String>(
+      key: ValueKey(selectedId),
+      initialValue: categories.any((c) => c.id == selectedId) ? selectedId : null,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Category'),
+      items: [
         for (final c in categories)
-          ChoiceChip(
-            label: Text(c.name),
-            labelStyle: BambooFonts.ui(
-              13,
-              weight: FontWeight.w600,
-              color: BambooInk.ink900,
-            ),
-            selected: selectedId == c.id,
-            selectedColor: BambooInk.lime.withValues(alpha: 0.55),
-            backgroundColor: BambooInk.paperMuted,
-            side: BorderSide.none,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(999),
-            ),
-            onSelected: (_) => onSelected(c.id),
-          ),
+          DropdownMenuItem(value: c.id, child: Text(c.name)),
       ],
+      onChanged: onSelected,
     );
   }
 }
