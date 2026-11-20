@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/required_field.dart';
 import '../ui/shared_components.dart';
+import 'shared_amount_input.dart';
 import 'shared_editor.dart';
 
 /// Sharing controls embedded in the existing Quick Add owner.
@@ -31,12 +33,16 @@ class SharedEditorFields extends StatelessWidget {
     ValueChanged<String> change, {
     String? suffix,
     String? errorKey,
+    List<TextInputFormatter>? formatters,
   }) => TextFormField(
     key: ValueKey('$label:${editor.contextId}:${editor.mode.name}'),
     initialValue: value,
     readOnly: editor.sealed || editor.isSealing,
     style: BambooFonts.ui(14),
-    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    keyboardType: formatters == null
+        ? const TextInputType.numberWithOptions(decimal: true)
+        : TextInputType.number,
+    inputFormatters: formatters,
     textInputAction: TextInputAction.done,
     onChanged: change,
     onFieldSubmitted: (_) {
@@ -46,6 +52,17 @@ class SharedEditorFields extends StatelessWidget {
     decoration: InputDecoration(
       label: requiredLabel(label),
       suffixText: suffix,
+      // Always shown, even before anything is typed (suffixText hides then).
+      suffixIcon: suffix == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(right: AppSpace.md),
+              child: Text(
+                suffix,
+                style: BambooFonts.ui(14, weight: FontWeight.w600),
+              ),
+            ),
+      suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
       errorText: submitted && errorKey != null
           ? editor.evaluation.errors[errorKey]
           : null,
@@ -295,6 +312,12 @@ class SharedEditorFields extends StatelessWidget {
                         editor.splitInputs[m.id] ?? '',
                         (value) => editor.setSplit(m.id, value),
                         errorKey: 'split:${m.id}',
+                        suffix: editor.mode == SharedSplitMode.percentage
+                            ? '%'
+                            : null,
+                        formatters: editor.mode == SharedSplitMode.percentage
+                            ? percentInputFormatters
+                            : null,
                       ),
                     ),
               if (preview != null) ...[

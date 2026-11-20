@@ -12,6 +12,7 @@ import '../../data/user_cards_repository.dart'
 import '../shared_expenses/storage/shared_store.dart' show SharedCommandState;
 import '../shared_expenses/composer/shared_draft.dart'
     show SharedDraftBlocker, SharedDraftPreview;
+import '../shared_expenses/composer/shared_amount_input.dart';
 import '../shared_expenses/composer/shared_editor.dart';
 import '../shared_expenses/composer/shared_source_seed.dart';
 import '../shared_expenses/runtime/shared_providers.dart';
@@ -739,9 +740,12 @@ class _SplitExpenseScreenState extends ConsumerState<SplitExpenseScreen> {
                 initialValue: editor.splitInputs[m.id] ?? '',
                 readOnly: editor.sealed || _busy,
                 textAlign: TextAlign.end,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
+                keyboardType: editor.mode == SharedSplitMode.percentage
+                    ? TextInputType.number
+                    : const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: editor.mode == SharedSplitMode.percentage
+                    ? percentInputFormatters
+                    : null,
                 style: BambooFonts.money(14, color: BambooInk.ink900),
                 decoration: InputDecoration(
                   isDense: true,
