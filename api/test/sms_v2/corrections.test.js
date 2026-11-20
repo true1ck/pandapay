@@ -73,6 +73,24 @@ test('status sync is owner scoped and advances an opaque sequence cursor', async
   assert.equal(result.items[0].caseId,'c');
 });
 
+// The sync contract requires decision and reason on every correction (null until an admin decides). They were left
+// out for open cases, so a phone that received one rejected the whole sync page, asked for the same page again on
+// every sync and never received any later page (the iPhone, 20 Nov: "response.sync.malformed at /corrections/0").
+test('every correction in a sync page matches the phone contract, open or decided', async () => {
+  const contracts = require('../../src/sms_v2/contracts');
+  const rows = [
+    {case_id:'open-1',source_key:'s1',status:'open',decision:null,reason:null,change_seq:1},
+    {case_id:'decided-1',source_key:'s2',status:'decided',decision:'data_fix',reason:'Rule updated',change_seq:2},
+    {case_id:'decided-2',source_key:'s3',status:'decided',decision:'not_a_bug',reason:'',change_seq:3},
+  ];
+  const result = await correctionStatusSince(async (_p, op) => op({ query: async () => ({ rows }) }), 'profile', null);
+  assert.deepEqual(result.items[0], { caseId: 'open-1', sourceKey: 's1', status: 'open', decision: null, reason: null });
+  assert.deepEqual(result.items[1], { caseId: 'decided-1', sourceKey: 's2', status: 'decided', decision: 'data_fix', reason: 'Rule updated' });
+  assert.equal(result.items[2].reason, '', 'an empty reason is kept as it was stored, not dropped');
+  const body = { cursor: 'c', instruments: [], events: [], ledger: [], facts: [], aiResults: [], corrections: result.items, latestBundleVersion: 0 };
+  assert.deepEqual(contracts.validateResponse('sync', body), { ok: true, errors: [] });
+});
+
 test('private synthetic example preparation is strict, audited and supports the frozen decision request', async () => {
   const {saveSyntheticExample,validateSyntheticExample,decideCase}=require('../../src/sms_v2/corrections_route');
   const id='00000000-0000-4000-8000-000000000001';

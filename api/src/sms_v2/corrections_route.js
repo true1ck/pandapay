@@ -120,10 +120,12 @@ async function correctionStatusSince(withUserClient, profileId, cursor) {
     const result = await client.query(
       `SELECT case_id,source_key,status,decision,reason,change_seq FROM sms_v2_correction_cases
        WHERE profile_id=$1 AND change_seq>$2 ORDER BY change_seq LIMIT 1000`, [profileId, seq]);
+    // decision and reason are required by the sync contract (null until an admin decides). Leaving them out made a
+    // phone reject the whole sync page, so it asked for the same page for ever and never got anything after it.
     return { items: result.rows.map(row => ({
       caseId: row.case_id, sourceKey: row.source_key, status: row.status,
-      ...(row.decision ? { decision: row.decision } : {}),
-      ...(row.reason ? { reason: row.reason } : {}),
+      decision: row.decision ?? null,
+      reason: row.reason ?? null,
     })), cursor: result.rows.length ? String(result.rows.at(-1).change_seq) : String(seq) };
   });
 }
