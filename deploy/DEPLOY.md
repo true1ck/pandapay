@@ -1,5 +1,34 @@
 # Deploying api/ and auth/
 
+## Deploying to production, fast or full (21 Nov 2026)
+
+A push to `prod` deploys the backend. Before it, the deploy runs tests in one of three modes:
+
+| Mode | How | Tests before the deploy starts |
+|---|---|---|
+| full (default) | `git push origin prod` | every check, ~20 min (the 8 Flutter app-test shards set the pace) |
+| server | tip commit message contains `[deploy-tests:server]` | every server check (API/auth, PostgreSQL, migration/backup recovery, smoke, contracts, rule bundle), ~6 min |
+| none | tip commit message contains `[deploy-tests:none]` | none; the deploy starts at once |
+
+A standing setting for every prod push until changed back (the tag in a commit still wins):
+
+```bash
+gh variable set DEPLOY_TESTS --body server
+```
+
+```bash
+gh variable delete DEPLOY_TESTS
+```
+
+Redeploy the current prod tip without the "this exact commit passed Build and test" check:
+
+```bash
+gh workflow run deploy-prod.yml --ref prod -f require_tested_commit=false
+```
+
+The server part (migrations, restart, health checks) takes ~26 min on the 1 GB host whatever the mode; see
+`docs/api-optimization-audit-2026-11-20.md` for why and what would cut it.
+
 ## Opt-in encrypted backups on the existing server
 
 Offhost storage remains the default and requires both `BACKUP_DESTINATION_A`

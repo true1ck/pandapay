@@ -20,7 +20,13 @@
 # Note `workflow_run` always runs the workflow file from the DEFAULT branch,
 # so edits to this file only take effect once merged to master.
 # Manual dispatch is also prod-only and verifies a successful Build and test
-# run for the exact commit through the Actions API before any SSH setup/deploy.
+# run for the exact commit through the Actions API before any SSH setup/deploy
+# (unless run with require_tested_commit=false).
+#
+# TEST MODES for a prod push (deploy/pick_deploy_tests.sh): full (default),
+# server (every server check; skips the 8 Flutter app-test shards, ~20 min ->
+# ~6 min) or none. Put [deploy-tests:server] or [deploy-tests:none] in the
+# pushed tip commit's message, or set the repository variable DEPLOY_TESTS.
 #
 # WHAT IT WILL NOT DO
 # -------------------
@@ -47,7 +53,14 @@ on:
   # Manual run, e.g. to redeploy the current commit after a server change, or
   # to ship prod: `gh workflow run deploy-prod.yml --ref prod`.
   # Only prod is accepted (see the first step below).
+  # Fast redeploy without the tested-commit check:
+  #   gh workflow run deploy-prod.yml --ref prod -f require_tested_commit=false
   workflow_dispatch:
+    inputs:
+      require_tested_commit:
+        description: "Require an earlier successful Build and test run of this exact commit"
+        type: boolean
+        default: true
 
 # Never let two deploys interleave: they would fight over the same working
 # tree and the same migration lock. Queue instead of cancelling — cancelling
@@ -63,13 +76,36 @@ permissions:
   packages: write
 
 jobs:
-  # Push to prod only: run the full test gate inside this workflow. On
-  # the other triggers the tests already ran (or are checked via the API
-  # below), so this job is skipped.
+  # Push to prod only: which tests this deploy runs (deploy/pick_deploy_tests.sh). A tag in the pushed tip commit's
+  # message ([deploy-tests:full|server|none]) wins, then the repository variable DEPLOY_TESTS, else full.
+  mode:
+    name: Choose deploy tests
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tests: ${{ steps.pick.outputs.tests }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy/pick_deploy_tests.sh
+          sparse-checkout-cone-mode: false
+      - id: pick
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
+          DEFAULT_TESTS: ${{ vars.DEPLOY_TESTS }}
+        run: |
+          choice="$(bash deploy/pick_deploy_tests.sh | tee /dev/stderr | tail -n 1)"
+          echo "tests=$choice" >> "$GITHUB_OUTPUT"
+
+  # Push to prod only: run the test gate inside this workflow (all of it, or the server checks only). On the other
+  # triggers the tests already ran (or are checked via the API below), so this job is skipped.
   test:
     name: Build and test (prod push)
-    if: github.event_name == 'push'
+    needs: [mode]
+    if: github.event_name == 'push' && needs.mode.outputs.tests != 'none'
     uses: ./.github/workflows/build-and-test.yml
+    with:
+      scope: ${{ needs.mode.outputs.tests }}
     secrets: inherit
     permissions:
       actions: read
@@ -79,15 +115,17 @@ jobs:
   deploy:
     name: Migrate and restart backend
     runs-on: ubuntu-latest
-    needs: [test]
+    needs: [mode, test]
     # `!cancelled()` so a skipped `test` job (every non-push trigger) does not
-    # skip the deploy. A push deploys only if its own test run succeeded;
-    # manual dispatch must find a successful exact-SHA Build and test run.
+    # skip the deploy. A push deploys only if its own test run succeeded, or
+    # when tests were switched off for it (mode none); manual dispatch must find
+    # a successful exact-SHA Build and test run unless require_tested_commit=false.
     if: >-
       ${{ !cancelled() && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
-        (github.event_name == 'push' && needs.test.result == 'success')
+        (github.event_name == 'push' && (needs.test.result == 'success' ||
+          (needs.mode.outputs.tests == 'none' && needs.test.result == 'skipped')))
       ) }}
     environment: production
     steps:
@@ -129,13 +167,21 @@ jobs:
           SHA: ${{ steps.sha.outputs.sha }}
           DEPLOY_BRANCH: ${{ steps.sha.outputs.branch }}
           UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id }}
+          TESTS_MODE: ${{ needs.mode.outputs.tests }}
+          REQUIRE_TESTED_COMMIT: ${{ github.event.inputs.require_tested_commit }}
         run: |
           set -euo pipefail
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             # Build and test ran as the `test` job of this very run (the
             # deploy job's `needs` + `if` already require it to have passed),
             # so it has no separate run for the API to find.
-            echo "Build and test passed in this run for $SHA on $DEPLOY_BRANCH."
+            if [ "$TESTS_MODE" = none ]; then
+              echo "::warning::Tests were switched off for this deploy ([deploy-tests:none] or DEPLOY_TESTS=none)."
+            else
+              echo "Build and test ($TESTS_MODE) passed in this run for $SHA on $DEPLOY_BRANCH."
+            fi
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$REQUIRE_TESTED_COMMIT" = false ]; then
+            echo "::warning::Manual deploy without the tested-commit check (require_tested_commit=false)."
           elif [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
             run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN_ID")"
             jq -e --arg sha "$SHA" --arg branch "$DEPLOY_BRANCH" '

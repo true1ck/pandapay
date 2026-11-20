@@ -23,6 +23,13 @@ on:
     branches: [main, master]
   pull_request:
   workflow_call:
+    inputs:
+      # full: every check. server: every server check; skips only the 8 Flutter app-test shards, which test the
+      # phone app, not the backend a prod deploy ships (they took ~20 min of a ~6 min server gate, 21 Nov 2026).
+      # Chosen by deploy-prod.yml (deploy/pick_deploy_tests.sh).
+      scope:
+        type: string
+        default: full
 
 # A new push to the same branch makes an in-flight run obsolete; cancelling it
 # keeps the queue honest rather than burning runners on a superseded commit.
@@ -253,6 +260,8 @@ jobs:
   # run at the same time, on different machines.
   app-test:
     name: App tests (shard ${{ matrix.shard }}/8)
+    # Skipped only when a prod deploy asks for server checks (see the scope input).
+    if: ${{ inputs.scope != 'server' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
