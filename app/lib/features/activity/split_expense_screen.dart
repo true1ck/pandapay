@@ -661,7 +661,6 @@ class _SplitExpenseScreenState extends ConsumerState<SplitExpenseScreen> {
       SharedSplitMode.equal => 'Equally',
       SharedSplitMode.exact => '₹ Exact',
       SharedSplitMode.percentage => '% Percent',
-      SharedSplitMode.shares => 'Shares',
     };
     return Wrap(
       spacing: 8,
@@ -699,7 +698,6 @@ class _SplitExpenseScreenState extends ConsumerState<SplitExpenseScreen> {
     final unit = switch (editor.mode) {
       SharedSplitMode.exact => '₹',
       SharedSplitMode.percentage => '%',
-      SharedSplitMode.shares => 'x',
       SharedSplitMode.equal => '',
     };
     return Padding(

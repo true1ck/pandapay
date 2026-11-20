@@ -267,7 +267,6 @@ class SharedEditorFields extends StatelessWidget {
                           SharedSplitMode.equal => 'Equally',
                           SharedSplitMode.exact => 'Exact ₹',
                           SharedSplitMode.percentage => '%',
-                          SharedSplitMode.shares => 'Shares',
                         },
                         style: BambooFonts.ui(
                           13,
@@ -292,11 +291,7 @@ class SharedEditorFields extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpace.sm),
                       child: _field(
-                        '${m.name} ${editor.mode == SharedSplitMode.percentage
-                            ? 'percent'
-                            : editor.mode == SharedSplitMode.shares
-                            ? 'shares'
-                            : 'amount'}',
+                        '${m.name} ${editor.mode == SharedSplitMode.percentage ? 'percent' : 'amount'}',
                         editor.splitInputs[m.id] ?? '',
                         (value) => editor.setSplit(m.id, value),
                         errorKey: 'split:${m.id}',

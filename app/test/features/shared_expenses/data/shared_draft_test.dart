@@ -206,23 +206,6 @@ void main() {
       );
     },
   );
-  test('weighted shares use whole positive units and reject zero total', () {
-    final result = draft(
-      mode: SharedSplitMode.shares,
-      inputs: {me: '1', rahul: '2', priya: '0'},
-    ).evaluate();
-    expect(result.preview!.shares[me]!.paise, 3333);
-    expect(result.preview!.shares[rahul]!.paise, 6667);
-    for (final input in ['0', '1.5', '1000001']) {
-      expect(
-        draft(
-          mode: SharedSplitMode.shares,
-          inputs: {me: input, rahul: '0', priya: '0'},
-        ).evaluate().isValid,
-        isFalse,
-      );
-    }
-  });
   test('each payer and both totals must reconcile separately', () {
     for (final payers in [
       {me: const SharedPayerInput(fullText: '99', sharedText: '100')},
