@@ -1,5 +1,6 @@
 // The three-tab Needs review screen: Needs review | AI auto-resolved | History. The AI suggested badge on a Needs
 // review card, Dismiss on the AI auto-resolved cards, Recover on History rows. All data is invented.
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -439,6 +440,73 @@ void main() {
       expect(rows.single['kind'], 'template');
       expect(rows.single['status'], 'open');
       expect(find.textContaining('back in Needs review'), findsOneWidget);
+    });
+
+    testWidgets('while a Dismiss is running its buttons are disabled, so a double tap cannot interleave', (tester) async {
+      final gate = Completer<ResponseCache>();
+      final slow = ProviderContainer(
+        overrides: [
+          app.cacheNamespaceProvider.overrideWithValue(ns),
+          app.responseCacheProvider.overrideWith((ref) => gate.future),
+        ],
+      );
+      addTearDown(slow.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: slow,
+          child: MaterialApp(
+            home: Scaffold(
+              body: AiReadCard(
+                item: AiReadItem(
+                  sourceKey: 'bill',
+                  occurredAt: DateTime(2026, 11, 3),
+                  summary: 'Bill due',
+                  unverified: true,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      TextButton dismiss() => tester.widget<TextButton>(find.byKey(const Key('dismiss-read-bill')));
+      OutlinedButton fix() => tester.widget<OutlinedButton>(find.byKey(const Key('fix-read-bill')));
+      expect(dismiss().onPressed, isNotNull);
+      await tester.tap(find.byKey(const Key('dismiss-read-bill')));
+      await tester.pump();
+      expect(dismiss().onPressed, isNull, reason: 'running: Dismiss is off');
+      expect(fix().onPressed, isNull, reason: 'and so is Fix');
+      await tester.tap(find.byKey(const Key('dismiss-read-bill')), warnIfMissed: false); // a second tap does nothing
+      gate.complete(cache);
+      await settle(tester);
+      expect(dismiss().onPressed, isNotNull, reason: 'done: back on');
+      expect(store().all(), hasLength(1), reason: 'one dismissal, not two');
+    });
+
+    testWidgets('a message that already has an open question is not asked about twice', (tester) async {
+      cache.financialStore.database.db.execute(
+        'INSERT INTO v2_review_items(namespace,review_id,kind,payload,status) VALUES(?,?,?,?,?)',
+        [ns, 'open:0', 'template', jsonEncode({'sourceKey': 'dup'}), 'open'],
+      );
+      final record = AutoDismissal(
+        sourceKey: 'dup',
+        kind: AutoDismissal.kindRead,
+        dismissedAt: DateTime.utc(2026, 11, 9),
+      );
+      store().put(record);
+      await host(
+        tester,
+        DismissedAutoCard(
+          item: DismissedAutoItem(record: record, title: 'A message the AI read', occurredAt: DateTime(2026, 11, 3)),
+        ),
+      );
+      await tester.tap(find.byKey(const Key('recover-dup')));
+      await settle(tester);
+      final rows = cache.financialStore.database.db.select(
+        "SELECT review_id FROM v2_review_items WHERE namespace=? AND status='open'",
+        [ns],
+      );
+      expect(rows.map((r) => r['review_id']), ['open:0'], reason: 'no second open item for the message');
     });
 
     testWidgets('a transaction that cannot be hidden is not dismissed, and says so', (tester) async {

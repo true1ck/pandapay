@@ -1526,6 +1526,32 @@ class FinancialStore {
     _notify(ns);
   }
 
+  /// Sets or clears the derived "AI" tag of a stored SMS row (see
+  /// [TransactionEntry.aiUnverified]) without touching anything else. Used when
+  /// a recovered transaction is read as AI auto-resolved again: the tag then
+  /// follows the same rule as the card.
+  void setAiUnverified(String ns, String id, bool tagged) {
+    final rows = database.db.select(
+      "SELECT payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND id=?",
+      [ns, id],
+    );
+    if (rows.isEmpty) return;
+    final body =
+        jsonDecode(rows.single['payload'] as String) as Map<String, dynamic>;
+    if ((body['ai_unverified'] == true) == tagged) return;
+    final next = {...body}..remove('ai_unverified');
+    if (tagged) next['ai_unverified'] = true;
+    _upsert(
+      ns,
+      'transactions',
+      id,
+      next,
+      DateTime.now().millisecondsSinceEpoch,
+      sourceKey: body['source_key'] as String?,
+    );
+    _notify(ns);
+  }
+
   /// Sets the "don't count in spending" choice on the stored row. Nothing else
   /// about the row changes: it stays active, visible and in Money out.
   void setExcludeFromSpend(String ns, String id, bool excluded, {String? reason}) {

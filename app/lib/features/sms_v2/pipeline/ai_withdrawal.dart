@@ -7,6 +7,7 @@ import 'package:pandapay_domain/sms_v2_ledger.dart';
 import '../../../data/local/financial_store.dart';
 import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
+import '../storage/dismissal_store.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/subscription_store.dart';
@@ -61,6 +62,13 @@ class AiWithdrawal {
     }
   }
 
+  /// Events a dismissed-then-recovered transaction was put back as (Recover
+  /// confirms the event only to undo the hide). Such an event is not something
+  /// the person decided: it is withdrawn like an untouched one.
+  late final Map<String, DateTime> _restoredMarks = DismissalStore(
+    SyncStateStore(_db, namespace: namespace),
+  ).restoredMarks();
+
   /// Fact ids that are a leg of an event the person confirmed, read once per
   /// instance through the status index. A per-source look-up through
   /// [EventStore.findByFactIds] scanned the whole events table for every source
@@ -70,10 +78,17 @@ class AiWithdrawal {
       'SELECT payload FROM v2_events WHERE namespace=? AND status=?',
       [namespace, EventStatus.userConfirmed.wire],
     ))
-      for (final leg
-          in (jsonDecode(row['payload'] as String) as Map)['legs'] as List)
-        (leg as Map)['factId'] as String,
+      if (!_restoreOnlyJson(jsonDecode(row['payload'] as String) as Map))
+        for (final leg
+            in (jsonDecode(row['payload'] as String) as Map)['legs'] as List)
+          (leg as Map)['factId'] as String,
   };
+
+  bool _restoreOnlyJson(Map payload) => isRestoreOnly(
+    _restoredMarks,
+    payload['eventId'] as String,
+    DateTime.tryParse(payload['decidedAt'] as String? ?? ''),
+  );
 
   /// True when the person has acted on [source] (edited it, or confirmed an
   /// event it made). Such a source is never withdrawn.
@@ -236,7 +251,11 @@ class AiWithdrawal {
         (factsBySource[source] ?? const <Fact>[]).any(
           (fact) => fact.provenance.engine == Engine.user,
         ) ||
-        eventsOf(source).any((e) => e.status == EventStatus.userConfirmed);
+        eventsOf(source).any(
+          (e) =>
+              e.status == EventStatus.userConfirmed &&
+              !isRestoreOnly(_restoredMarks, e.eventId, e.decidedAt),
+        );
     final sources = [
       for (final source in candidates)
         if (personChecked || !touched(source)) source,
@@ -258,7 +277,13 @@ class AiWithdrawal {
                 ? event
                 : events.upsert(
                     event.copyWith(type: EventType.unknown),
-                    fromUser: false,
+                    // A recovered transaction is stored as confirmed, which the
+                    // store would refuse to change otherwise.
+                    fromUser: isRestoreOnly(
+                      _restoredMarks,
+                      event.eventId,
+                      event.decidedAt,
+                    ),
                   );
           }
         }

@@ -259,6 +259,41 @@ void main() {
       expect(lists.autoTransactions, isEmpty);
     });
 
+    test('a message marked Not financial on Needs review is listed once (History), not here', () {
+      final lists = settledLists(
+        [_entry('t1', 'txn', DateTime(2026, 11, 6))],
+        sampleFacts(),
+        reviewDismissedSources: {'bill', 'txn'},
+      );
+      expect(lists.autoReads.map((r) => r.sourceKey), {'attempt', 'info'});
+      expect(lists.autoTransactions, isEmpty);
+    });
+
+    test('a dismissed read that a signed rule now reads, or that backs a counted transaction, drops out of History', () {
+      AutoDismissal read(String key) => AutoDismissal(
+        sourceKey: key,
+        kind: AutoDismissal.kindRead,
+        dismissedAt: DateTime.utc(2026, 11, 20),
+      );
+      final lists = settledLists(
+        [_entry('t1', 'txn', DateTime(2026, 11, 6))],
+        sampleFacts(),
+        dismissals: [read('bill'), read('rule-bill'), read('txn'), read('gone')],
+      );
+      // 'bill' is still an AI reading (kept, can be recovered); 'gone' has no facts left (kept: Recover goes to
+      // Needs review); 'rule-bill' is read by a signed rule and 'txn' backs a transaction (dropped).
+      expect(lists.dismissed.map((d) => d.sourceKey), unorderedEquals(['bill', 'gone']));
+    });
+
+    test('the other side of a transfer or refund (a leg counted under another message) shows no Dismiss card', () {
+      final lists = settledLists(
+        const [],
+        sampleFacts(),
+        eventLegSources: {'bill', 'attempt'},
+      );
+      expect(lists.autoReads.map((r) => r.sourceKey), {'info', 'txn'});
+    });
+
     test('a read the person dismissed leaves the list and is a History row; recovering returns it', () {
       final dismissal = AutoDismissal(
         sourceKey: 'bill',

@@ -292,10 +292,11 @@ void main() {
     financial.markInactive(_namespace, e.id, reason: 'wrong_transaction');
   }
 
-  Future<void> restore(TransactionEntry e) async {
+  Future<bool> restore(TransactionEntry e) async {
     final sms = await actions();
     sms.restore(e);
     financial.markActive(_namespace, e.id);
+    return true;
   }
 
   String? decidedAtOf(String eventId) => EventStore(
