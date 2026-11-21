@@ -520,3 +520,78 @@ test("a layout with an @handle is cleaned before the service sees it, and the fo
   assert.equal(rule.match.templateHash, template.template_hash, "the hash is still the original layout's");
   assert.ok(new RegExp(rule.match.pattern, rule.match.flags).test("Rs. 10 paid to RAHUL at @Shop_Name."));
 });
+
+// 21 Nov 2026: the validator's own codes carry an array index ("emit[0].instrument.maskFrom"), and the first version of the
+// filter did not allow brackets, so the most useful feedback (a slot of the wrong kind) was silently dropped before it was sent.
+test("the validator's real codes, brackets included, are sent as they are", async () => {
+  const { sanityErrors } = require("../../src/sms_v2/draft_sanity");
+  const emit = [{
+    factType: "movement", attrs: { direction: "debit", purpose: "unknown", rail: "unknown" },
+    amounts: [{ role: "posted", from: "amt1", unit: "INR" }],
+    instrument: { kind: "bank_account", maskFrom: "party1" }, counterparty: { nameFrom: "amt1" },
+  }];
+  const real = sanityErrors({ emit }, "<AMT> debited from A/c <PARTY> on <DATE>.");
+  assert.ok(real.length >= 2 && real.every((code) => code.includes("emit[0]")), real.join(" | "));
+  const bodies = [];
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return serviceJson({ answer: answer(), ...usage }, { headers: { "x-ai-features": "fix-v1" } });
+    },
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  await provider.generateLayout({ ...layout });
+  await provider.generateLayout({ ...layout, fix: real });
+  assert.deepEqual(bodies[1].fix, real);
+});
+
+// A route that answered with a draft the checker refused is asked AGAIN with the reasons (the service's `x-ai-rerun`),
+// but only a service that announced it can do that; otherwise the old rule stands: the cursor means a LATER route.
+test("a rerun is requested only of a service that announced it, and its same-route answer is accepted", async () => {
+  const sent = [];
+  let features = "fix-v1";
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => {
+      sent.push({ headers: options.headers, body: JSON.parse(options.body) });
+      return serviceJson({ answer: answer(), provider: "gemini", routeHadInfrastructureFailure: false, ...usage }, { headers: { "x-ai-routing": "ordered-v1", "x-ai-features": features } });
+    },
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  const routing = { afterProvider: "gemini", skipProviders: [], timeoutMs: 1000 };
+  const fix = ["amount_missing"];
+  // Not yet announced (and only fix-v1 is): a plain later-route call. The old service would answer a later route.
+  await assert.rejects(provider.generateLayout({ ...layout, fix, routing: { ...routing, rerun: true } }), { message: "ai_service_route_mismatch" });
+  assert.equal(sent[0].headers["X-AI-Rerun"], undefined);
+  features = "fix-v1,rerun-v1";
+  await provider.generateLayout({ ...layout }); // any answer teaches the worker what the service can do
+  const again = await provider.generateLayout({ ...layout, fix, routing: { ...routing, rerun: true } });
+  assert.equal(sent[2].headers["X-AI-Rerun"], "true");
+  assert.equal(again.routeProvider, "gemini", "the same route answered again: not a mismatch when a rerun was asked");
+  assert.notEqual(sent[2].headers["X-Idempotency-Key"], sent[0].headers["X-Idempotency-Key"]);
+  // Without a rerun the same answer is still a mismatch.
+  await assert.rejects(provider.generateLayout({ ...layout, fix, routing }), { message: "ai_service_route_mismatch" });
+  assert.equal(sent[3].headers["X-AI-Rerun"], undefined);
+  // No codes to send, nothing to re-ask with.
+  await assert.rejects(provider.generateLayout({ ...layout, routing: { ...routing, rerun: true } }), { message: "ai_service_route_mismatch" });
+  assert.equal(sent[4].headers["X-AI-Rerun"], undefined);
+});
+
+test("a service that names 'no route left' is believed, with or without usage", async () => {
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async () => serviceJson({ error: { code: "invalid_provider_output", reason: "no_route_left" }, ...usage }, { status: 502, headers: { "x-ai-routing": "ordered-v1" } }),
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  await assert.rejects(provider.generateLayout({ ...layout, routing: { afterProvider: "gemini", skipProviders: [], timeoutMs: 1000 } }), (error) => error.noRouteLeft === true);
+});
+
+test("a service that names a real bad answer is never taken for 'no route left'", async () => {
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async () => serviceJson({ error: { code: "invalid_provider_output", reason: "truncated" } }, { status: 502, headers: { "x-ai-routing": "ordered-v1" } }),
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  await assert.rejects(provider.generateLayout({ ...layout, routing: { afterProvider: "gemini", skipProviders: [], timeoutMs: 1000 } }), (error) => error.noRouteLeft === false && error.serviceReason === "truncated");
+});

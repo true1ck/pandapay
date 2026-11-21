@@ -92,7 +92,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   // Codes name a slot or a rule ("slot_not_in_layout: party1 (the layout has: amt1,date1)"), never message text; anything
   // else is dropped, at most 8 of 160 characters.
   // A code starts with a snake_case token (optionally a schema path), then an optional ": detail" of slot names and values.
-  const FIX_CODE = /^[a-z][a-z0-9_]*(?:\/[A-Za-z0-9_]+)*(?:: [A-Za-z0-9_:,.()#<>/ =|-]{1,120})?$/;
+  const FIX_CODE = /^[a-z][a-z0-9_]*(?:\/[A-Za-z0-9_]+)*(?:: [A-Za-z0-9_:,.()#<>/ =|\[\]-]{1,120})?$/;
   const fixCodes = (codes) => (Array.isArray(codes) ? codes.filter((code) => typeof code === "string" && code.length <= 160 && FIX_CODE.test(code)).slice(0, 8) : []);
   const seenRoutes = new Set();
   const versionOk = (response) => {
@@ -141,6 +141,10 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
         ? routing.skipProviders : [];
       try {
         const needsOrderedEndpoint = !!(routing?.afterProvider || skipProviders.length);
+        const feedback = features.has("fix-v1") ? fixCodes(fix) : [];
+        // Ask the route that answered again, now with the reasons it was refused. Only a service that announced `rerun-v1`
+        // does that (an older one would answer a LATER route, which this call would then take for a mismatch).
+        const rerun = !!(routing?.rerun && routing?.afterProvider && feedback.length && features.has("rerun-v1"));
         response = await fetchImpl(needsOrderedEndpoint ? orderedEndpoint : endpoint, {
           method: "POST",
           redirect: "error",
@@ -153,17 +157,18 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
             // A call that asks for a later route is different work, so it carries a different key.
             "X-Idempotency-Key": createHash("sha256").update(`${senderBrand}
 ${redactedBody}${needsOrderedEndpoint ? `
-${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex"),
+${routing.afterProvider ?? ""}|${skipProviders.join(",")}${rerun ? `|rerun|${feedback.join("~")}` : ""}` : ""}`).digest("hex"),
             ...(pinnedVersion ? { "X-Prompt-Version": pinnedVersion } : {}),
             ...(routing ? {
               "X-AI-Routing": "ordered-v1",
               "X-AI-Timeout-Ms": String(routing.timeoutMs),
               ...(routing.afterProvider ? { "X-AI-After-Provider": routing.afterProvider } : {}),
+              ...(rerun ? { "X-AI-Rerun": "true" } : {}),
               ...(skipProviders.length ? { "X-AI-Skip-Providers": skipProviders.join(",") } : {}),
               ...(routing.hadInfrastructureFailure ? { "X-AI-Prior-Unavailable": "true" } : {}),
             } : {}),
           },
-          body: JSON.stringify({ senderBrand, redactedBody, ...(features.has("fix-v1") && fixCodes(fix).length ? { fix: fixCodes(fix) } : {}) }),
+          body: JSON.stringify({ senderBrand, redactedBody, ...(feedback.length ? { fix: feedback } : {}) }),
         });
         noteFeatures(response);
         const orderedVersion = response.headers.get("x-ai-routing") === "ordered-v1";
@@ -192,10 +197,14 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
         if (response.status === 502) {
           if (body?.error?.code !== "invalid_provider_output") throw busy("ai_service_unavailable", 15000);
           if (!versionOk(response)) throw configFault("ai_service_prompt_version_mismatch");
+          // The service names why there was no usable answer (`error.reason`, a fixed list). An older one does not: then a
+          // routed call answered at once with nothing billed is taken to mean the same.
+          const serviceReason = typeof body?.error?.reason === "string" && /^[a-z_]{1,20}$/.test(body.error.reason) ? body.error.reason : null;
           throw Object.assign(new SyntaxError("ai_service_invalid_provider_output"), {
+            serviceReason,
             // A call that asked for a LATER route and was answered at once with nothing billed means the service has no
             // route left to try: no AI wrote anything, so it is not a bad answer (it used to be stored as answer_not_json).
-            noRouteLeft: needsOrderedEndpoint && !usage,
+            noRouteLeft: serviceReason ? serviceReason === "no_route_left" : needsOrderedEndpoint && !usage,
             // A routed call cannot tell which route's tokens these were, so only an unrouted call reports them.
             usage: !routing && usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
           });
@@ -207,7 +216,7 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
         if (!MODEL_ID.test(body.model)) throw configFault("ai_service_invalid_response");
         const known = ROUTE_ORDER.includes(body.provider) ? body.provider : undefined;
         const ordered = !!routing && orderedVersion && typeof body.routeHadInfrastructureFailure === "boolean";
-        if (ordered && known && (ROUTE_ORDER.indexOf(known) <= ROUTE_ORDER.indexOf(routing.afterProvider) ||
+        if (ordered && known && (ROUTE_ORDER.indexOf(known) < ROUTE_ORDER.indexOf(routing.afterProvider) + (rerun ? 0 : 1) ||
             skipProviders.includes(known)))
           throw configFault("ai_service_route_mismatch");
         if ((needsOrderedEndpoint || (routing && orderedVersion)) && !ordered)

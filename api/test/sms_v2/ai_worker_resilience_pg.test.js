@@ -302,3 +302,31 @@ test("S2-05: the worker process survives a lock timeout on the global results lo
     await release();
   }
 });
+
+// S2-09 (21 Nov 2026): a draft that is well formed but wrong is only fixed by the model that wrote it, and only if it is told
+// what was wrong. A route whose draft the checker refused is therefore asked ONCE more with the reasons (a service that
+// announced `rerun-v1`), before the later routes are tried.
+test("S2-09: a route whose draft was refused is asked again with the reasons, then accepted", { skip }, async (t) => {
+  const send = (response, status, body) => {
+    response.writeHead(status, { "content-type": "application/json", "x-prompt-version": promptVersion, "x-ai-routing": "ordered-v1", "x-ai-features": "fix-v1,rerun-v1" });
+    response.end(JSON.stringify(body));
+  };
+  const good = () => ({ answer: answer(), model: config.model, inputTokens: 27, outputTokens: 12, totalTokens: 39, provider: "gemini", routeHadInfrastructureFailure: false });
+  const bad = () => {
+    const wrong = answer();
+    wrong.emit[0].attrs.direction = "sideways";
+    return { ...good(), answer: wrong };
+  };
+  const { requests, row, makeDue, cycle } = await setup(t, ({ request, response }) =>
+    request.headers["x-ai-rerun"] === "true" ? send(response, 200, good()) : send(response, 200, bad()));
+  await makeDue();
+  // One job: the first answer is refused, the same route is asked again with the reasons and its second answer is accepted.
+  assert.equal((await cycle()).status, "ready");
+  assert.equal((await row()).ai_status, "ready");
+  assert.equal(requests.length, 2, requests.map((entry) => entry.headers["x-ai-rerun"] ?? "-").join(","));
+  const again = requests.find((entry) => entry.headers["x-ai-rerun"] === "true");
+  assert.ok(again, "the worker asked for a re-ask");
+  assert.equal(again.headers["x-ai-after-provider"], "gemini");
+  assert.ok(Array.isArray(again.body.fix) && again.body.fix.length > 0, JSON.stringify(again.body));
+  assert.ok(again.body.fix.every((code) => /^[a-z][a-z0-9_]*/.test(code)));
+});

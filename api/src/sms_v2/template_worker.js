@@ -631,7 +631,7 @@ function draftUsage(response, config, layoutOnly) {
 // consenting people submitted a layout, in either mode.
 const DRAFT_JOB_DEADLINE_MS = 90000;
 const DRAFT_JOB_LEASE_MS = 120000;
-const MAX_DRAFT_ROUTE_CALLS = 8; // Up to seven providers and one exhaustion response.
+const MAX_DRAFT_ROUTE_CALLS = 15; // Up to seven providers, one re-ask of each that answered wrongly, and one exhaustion response.
 // A job that ends with a rejected draft or the 90 s budget run out while "some route had trouble" is retried
 // (5 min, 30 min, 24 h) without counting against the layout. Three such exhausted cycles in a row (nine jobs) fail it
 // for good, so a layout that always times out cannot use the provider for ever.
@@ -1004,6 +1004,8 @@ async function runTemplateWorkerOnce({
   let failure = null;
   let draft = null;
   const rejectedProviders = new Set();
+  // The routes already asked a second time with the reasons their draft was refused (once each, then the later routes).
+  const rerunDone = new Set();
   try {
     const rules = typeof store.activeRules === "function" ? await store.activeRules(template) : [];
     // A layout the active rules already read is not worth a provider call.
@@ -1173,6 +1175,10 @@ async function runTemplateWorkerOnce({
         routing.hadInfrastructureFailure ||= response?.routeHadInfrastructureFailure === true;
         if (response?.routeProvider) rejectedProviders.add(response.routeProvider);
         if (!response?.routeProvider) break;
+        // A route whose draft was refused is asked once more, now with the reasons (a service that announced it; an older
+        // one answers the next route as before). After that the later routes follow.
+        routing.rerun = !rerunDone.has(response.routeProvider);
+        rerunDone.add(response.routeProvider);
         routing.afterProvider = response.routeProvider;
       }
     }
