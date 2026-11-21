@@ -16,8 +16,9 @@ const { parseLayout } = require("../layout_matcher");
 
 const EVERY_MS = 60 * 60_000;
 
-function createDraftAudit({ store, validate, now = Date.now, log = () => {}, everyMs = EVERY_MS }) {
-  const supported = typeof store?.readyDraftsForAudit === "function" && typeof store?.replaceReadyDraft === "function";
+// mode: "on" repairs, "dry" only counts what it would repair, "off" does nothing (SMS_V2_DRAFT_AUDIT in the worker).
+function createDraftAudit({ store, validate, now = Date.now, log = () => {}, everyMs = EVERY_MS, mode = "on" }) {
+  const supported = mode !== "off" && typeof store?.readyDraftsForAudit === "function" && typeof store?.replaceReadyDraft === "function";
   let lastRun = -Infinity;
   const parse = (value) => (typeof value === "string" ? JSON.parse(value) : value);
 
@@ -42,8 +43,15 @@ function createDraftAudit({ store, validate, now = Date.now, log = () => {}, eve
         result.unrepairable += 1;
         continue;
       }
-      if (await store.replaceReadyDraft(row.template_hash, rule, repaired)) result.repaired += 1;
-      else skipped += 1;
+      if (mode === "dry") {
+        result.wouldRepair = (result.wouldRepair ?? 0) + 1;
+        continue;
+      }
+      if (await store.replaceReadyDraft(row.template_hash, rule, repaired)) {
+        result.repaired += 1;
+        // What the draft meant before: enough to put it back by hand if a repair ever turns out wrong (no message text in it).
+        log({ event: "sms_v2_ai_draft_replaced", template_hash: row.template_hash, before_emit: rule.emit });
+      } else skipped += 1;
     }
     log({ event: "sms_v2_ai_draft_audit", ...result });
     return skipped ? { ...result, skipped } : result;

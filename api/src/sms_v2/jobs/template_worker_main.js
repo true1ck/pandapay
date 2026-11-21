@@ -145,7 +145,8 @@ async function main() {
   let lastCleanup = 0;
   let consecutiveBusy = 0;
   // Ready drafts are re-checked hourly with today's checks and repaired when they can be (draft_audit.js).
-  const audit = createDraftAudit({ store, validate: (rule, template, model) => validateDraftSafely(rule, template, model, []), log });
+  const audit = createDraftAudit({ store, validate: (rule, template, model) => validateDraftSafely(rule, template, model, []), log,
+    mode: ["off", "dry"].includes(process.env.SMS_V2_DRAFT_AUDIT) ? process.env.SMS_V2_DRAFT_AUDIT : "on" });
   // Layouts held back by an AI service outage are released as soon as the service answers again (not after 24 h).
   const recovery = createOutageRecovery({
     store,

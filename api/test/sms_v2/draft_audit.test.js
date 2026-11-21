@@ -94,3 +94,23 @@ test("check() runs at most once an hour, never throws, and does nothing for a st
   assert.equal(await broken.check(), null);
   assert.equal(await createDraftAudit({ store: {}, validate: async () => [], now: () => 0, log: () => {} }).check(), null);
 });
+
+test("every replaced draft logs its hash and the emit it had, so a bad repair can be put back by hand", async () => {
+  const { audit, lines } = rig([row("g", badEmit)]);
+  await audit.run();
+  const entry = lines.find((line) => line.event === "sms_v2_ai_draft_replaced");
+  assert.equal(entry.template_hash, "g".repeat(64));
+  assert.deepEqual(entry.before_emit, badEmit);
+});
+
+test("dry mode counts what it would repair and writes nothing; off mode does nothing at all", async () => {
+  const dryRows = [row("h", badEmit)];
+  const dry = createDraftAudit({
+    store: { readyDraftsForAudit: async () => dryRows, replaceReadyDraft: async () => assert.fail("dry mode must not write") },
+    validate: async (rule) => (JSON.stringify(rule.emit).includes('"maskFrom":"party1"') ? ["x"] : []),
+    now: () => 0, log: () => {}, mode: "dry",
+  });
+  assert.deepEqual(await dry.run(), { checked: 1, valid: 0, repaired: 0, unrepairable: 0, wouldRepair: 1 });
+  const off = createDraftAudit({ store: { readyDraftsForAudit: async () => assert.fail("off must not read"), replaceReadyDraft: async () => true }, validate: async () => [], now: () => 0, log: () => {}, mode: "off" });
+  assert.equal(await off.check(), null);
+});
