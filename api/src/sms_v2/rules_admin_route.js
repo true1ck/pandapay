@@ -137,12 +137,9 @@ function lintPattern(pattern, flags = '') {
       if (frames.length === 0) frames.push(newFrame(0));
       f.alts.push(pattern.slice(f.segStart, i));
       const ambiguous = !f.look && (f.ambiguous || altConflict(f.alts, flags));
-      // A lookaround consumes nothing, so a variable quantifier inside it (the `\s+` of a "stop before ` at`" check)
-      // does not make the group around it variable; the matcher's bounded name slots rely on that.
-      const varQuant = f.varQuant && !f.look;
-      lastAtomWasGroupWithVar = varQuant;
+      lastAtomWasGroupWithVar = f.varQuant;
       lastGroupAmbiguous = ambiguous;
-      if (varQuant) frames[frames.length - 1].varQuant = true;
+      if (f.varQuant) frames[frames.length - 1].varQuant = true;
       if (ambiguous) frames[frames.length - 1].ambiguous = true;
       continue;
     }

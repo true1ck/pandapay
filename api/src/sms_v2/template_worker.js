@@ -278,7 +278,15 @@ function buildRule(answer, template, matcher, model, { repair: repairFacts = tru
   });
   const types = emit.map((fact) => fact.factType);
   const sender = template.sender_brand;
-  const { positives, negatives } = exampleBodies(template.redacted_body);
+  // The examples that were checked against this pattern before the AI was asked (checkedExamples); the first and last fixed
+  // word, which exampleBodies takes, can leave a "negative" the pattern still reads, and every answer then fails example_mismatch.
+  let examples;
+  try {
+    examples = checkedExamples(template.redacted_body, matcher);
+  } catch {
+    examples = exampleBodies(template.redacted_body);
+  }
+  const { positives, negatives } = examples;
   const rule = stampDraft(
     {
       version: 1,

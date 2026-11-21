@@ -58,8 +58,12 @@ int smsLayoutUnanchoredWildcards(String layout) {
   var count = 0;
   for (final m in _layoutTag.allMatches(text)) {
     if (_fixedSlotKinds.contains(m[1])) continue;
-    final rest = text.substring(m.end).trimLeft();
-    if (rest.isEmpty || rest.startsWith('#') || _layoutTag.matchAsPrefix(rest) != null) count++;
+    // Scans forward over the blanks (no copy of the rest of the layout per slot).
+    var i = m.end;
+    while (i < text.length && String.fromCharCode(text.codeUnitAt(i)).trim().isEmpty) {
+      i++;
+    }
+    if (i >= text.length || text.codeUnitAt(i) == 0x23 || _layoutTag.matchAsPrefix(text, i) != null) count++;
   }
   return count;
 }

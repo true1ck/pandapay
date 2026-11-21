@@ -25,20 +25,26 @@ const SLOT_PATTERNS = Object.freeze({
 const WILDCARD = String.raw`[\s\S]{1,60}?`;
 const WILDCARD_KINDS = new Set(["party", "w"]);
 // A tag this module does not know (a newer phone) is read as a name too, and counts as one.
-const isWild = (kind) => WILDCARD_KINDS.has(kind) || !SLOT_PATTERNS[kind];
+const isWild = (kind) => WILDCARD_KINDS.has(kind) || !Object.hasOwn(SLOT_PATTERNS, kind);
 // What a message that is NOT the layout costs grows about 30x per extra wildcard when the text repeats the words between
 // them (measured on 160 to 640 characters of "a a a ..." against "<PARTY> a <PARTY> a ...": 3 slots 3 ms, 4 slots 80 ms,
 // 5 slots 2.3 s, 6 slots over 4 s). A promoted rule runs on every message of its sender, so at most 4. Touching loose
 // slots are worse still (3 phone numbers in a row: 1.7 s on 800 characters), so at most 2 in a row. The phone merges
 // neighbouring names into one <PARTY>, so real layouts rarely touch.
 const MAX_WILDCARDS = 4;
-// A wildcard followed by fixed text stops where that text begins (see `stopsAt`), so it can only end in one place and
-// the cost does not multiply per wildcard. Those are counted apart and allowed in far greater number: real bank texts
-// print many names and words as <PARTY> around fixed words (21 Nov 2026: 17 layouts, 3 of them seen 12 times, were
-// refused before any AI saw them).
+// A layout with MORE than MAX_WILDCARDS name slots (refused before 22 Nov 2026) may have up to MAX_ANCHORED_WILDCARDS,
+// provided at most MAX_WILDCARDS of them have no fixed text after them. A slot that is followed by fixed text stops
+// where that text begins (see `stopsAt`), so it can only end in one place and the cost does not multiply per slot. Real
+// bank texts print many names and words as <PARTY> around fixed words (21 Nov 2026: 17 layouts, 3 of them seen 12
+// times, were refused before any AI saw them). A layout with MAX_WILDCARDS or fewer keeps the lazy pattern it always
+// had, byte for byte: the stop is stricter than the lazy form (a name that contains the next fixed word, "M.G. Stores"
+// before a ".", cannot be read), and no layout that was readable may lose that.
 const MAX_ANCHORED_WILDCARDS = 12;
 const MAX_ADJACENT_LOOSE = 2;
-const ANCHOR_CHARS = 16;
+const ANCHOR_CHARS = 40; // the fixed text after a slot that ends it, counted in characters of the layout
+// One to three blanks, written without a variable quantifier: the phone's regex lint (lint.dart) and the server's
+// (lintPattern) both refuse a quantified group that holds a variable quantifier, even inside a lookahead.
+const GAP = String.raw`\s\s?\s?`;
 const isLoose = (kind) => isWild(kind) || kind === "phone"; // a phone pattern ([\d -]{5,}) backtracks like a name
 const MAX_PATTERN = 1900; // the rule schema allows 2,000
 
@@ -53,6 +59,39 @@ class LayoutError extends Error {
 // Up to 60 characters, none of them the start of what comes next: the wildcard ends where the fixed text begins and is
 // never tried at another length (the lazy form is tried at every length on a message that does not fit).
 const stopsAt = (next) => String.raw`(?:(?!${next})[\s\S]){1,60}`;
+
+// The fixed run that follows the slot at parts[i] (blanks and text up to the next slot or digit mark, at most
+// ANCHOR_CHARS of text, always its first word), as a pattern for a lookahead; null when a slot, a digit mark or the end
+// of the layout follows directly (the slot is then not anchored). A run that reaches the end of the layout is closed
+// with the end, so a name that merely contains the first word does not stop early.
+function stopAfter(parts, i) {
+  let j = i + 1;
+  let gap = false;
+  let chars = 0;
+  let out = "";
+  let last = "";
+  let whole = true;
+  for (; j < parts.length; j++) {
+    const part = parts[j];
+    if (part.space) {
+      gap = true;
+      continue;
+    }
+    if (!part.text) break;
+    const letters = Array.from(part.text); // by character, so an emoji is never cut in half
+    if (out && chars + letters.length > ANCHOR_CHARS) break;
+    last = letters.slice(0, ANCHOR_CHARS).join("");
+    whole = letters.length <= ANCHOR_CHARS;
+    out += (gap ? GAP : "") + escapeText(last);
+    chars += letters.length;
+    gap = false;
+  }
+  if (!out) return null;
+  if (j >= parts.length) out += String.raw`\s?\s?\s?$`; // the run ends the layout (blanks allowed first)
+  // A word-like stop that a blank follows must end at the end of a word, so "s" does not stop a name inside "STORE".
+  else if (gap && whole && /[A-Za-z0-9_]$/.test(last)) out += String.raw`\b`;
+  return out;
+}
 const escapeText = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Splits a layout into text, spaces, digits and slots. Slots are numbered per kind: <AMT> twice gives
@@ -80,21 +119,18 @@ function parseLayout(layout) {
 function buildMatcher(layout) {
   if (typeof layout !== "string" || !layout.trim()) throw new LayoutError("layout_empty");
   const { parts, slots } = parseLayout(layout.trim());
-  // Which wildcards are followed by fixed text, and the text that ends each of them.
-  const stops = new Map();
-  parts.forEach((part, i) => {
-    if (!part.slot || !isWild(part.slot.kind)) return;
-    let j = i + 1;
-    let spaced = false;
-    while (parts[j]?.space) {
-      spaced = true;
-      j++;
-    }
-    const next = parts[j];
-    if (next?.text) stops.set(part.slot.name, `${spaced ? "\\s+" : ""}${escapeText(next.text.slice(0, ANCHOR_CHARS))}`);
-  });
   const wild = slots.filter((s) => isWild(s.kind));
-  if (wild.length > MAX_ANCHORED_WILDCARDS || wild.filter((s) => !stops.has(s.name)).length > MAX_WILDCARDS)
+  // Which name slots are followed by fixed text, and the text (the whole fixed run after it, up to ANCHOR_CHARS) that
+  // ends each of them. Only a layout over the old limit uses them; see MAX_ANCHORED_WILDCARDS.
+  const stops = new Map();
+  if (wild.length > MAX_WILDCARDS) {
+    parts.forEach((part, i) => {
+      if (!part.slot || !isWild(part.slot.kind)) return;
+      const stop = stopAfter(parts, i);
+      if (stop) stops.set(part.slot.name, stop);
+    });
+  }
+  if (wild.length > MAX_ANCHORED_WILDCARDS || wild.filter((s) => !stops.has(s.name)).length > Math.min(wild.length, MAX_WILDCARDS))
     throw new LayoutError("layout_too_many_wildcards");
   let run = 0;
   for (const part of parts) {
@@ -107,7 +143,12 @@ function buildMatcher(layout) {
   for (const part of parts) {
     if (part.slot) {
       const { name, kind } = part.slot;
-      pattern += `(?<${name}>${isWild(kind) ? (stops.has(name) ? stopsAt(stops.get(name)) : WILDCARD) : SLOT_PATTERNS[kind]})`;
+      // In a layout over the old limit a name never starts with a blank: the blanks belong to the `\s+` before it, and
+      // without this each slot could take one to k of them (k to the power of the slots; 12 slots and 5 blanks ran 2+ s).
+      // Nor does it end with one: a name that could end anywhere in a run of blanks gives k ends per slot, the same blow-up.
+      const noBlankFirst = wild.length > MAX_WILDCARDS ? String.raw`(?!\s)` : "";
+      const noBlankLast = wild.length > MAX_WILDCARDS ? String.raw`(?<!\s)` : "";
+      pattern += `(?<${name}>${isWild(kind) ? noBlankFirst + (stops.has(name) ? stopsAt(stops.get(name)) : WILDCARD) + noBlankLast : SLOT_PATTERNS[kind]})`;
       indexed += `<${name}>`;
     } else if (part.digit) {
       pattern += "\\d";

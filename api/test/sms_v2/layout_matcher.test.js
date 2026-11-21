@@ -178,6 +178,12 @@ test("a layout is either refused, or turns a hostile near-miss message away fast
     ["12 name slots each ended by fixed text, the text repeated (the most that is accepted)", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" a ") + " ok.", "a "],
     ["12 name slots each ended by fixed text, a longer word repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" and ") + " ok.", "and "],
     ["12 name slots joined by punctuation, the text repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(", ") + " ok.", ", "],
+    // 22 Nov 2026 review: runs of blanks after each stop. Without `(?!s)` at the start of a name each slot could take 1..k of
+    // them and the work was k to the power of the slots (12 slots, 5 blanks: 2 to 22 s; the old tests used single blanks).
+    ["12 name slots, ' to ' with a run of 5 blanks repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" to ") + " end", "to     "],
+    ["12 name slots, ' to ' with a run of 20 blanks repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" to ") + " end", "to" + " ".repeat(20)],
+    ["12 name slots joined by a comma, a run of 6 blanks repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(", ") + " end", ",      "],
+    ["6 name slots around a value slot, blanks repeated", Array(6).fill(P + " to <AMT> at").join(" ") + " end", "to     "],
     ["2 pairs of touching name slots", `${P} ${P} a ${P} ${P} ok.`, "a "],
   ];
   const slow = [];
@@ -272,4 +278,65 @@ test("examples use any fixed word that breaks the pattern, not only the first an
     try { checkedExamples(layout, buildMatcher(layout)); return true; } catch { return false; }
   });
   assert.ok(rescued.length >= 1, "at least one of the previously refused layouts now gets sound examples");
+});
+
+// 22 Nov 2026 review: the first version of the anchored slots (a stop at the next word) was applied to EVERY layout, and
+// stopped a name at the first "." / "," / " on" it contained: "M.S. DHONI", "Aaron Oneil", "Ravi, Kumar & Co" were no longer
+// read by layouts that had read them before. A layout at the old limit keeps the lazy pattern byte for byte.
+test("a layout with 4 or fewer name slots keeps the lazy pattern, so names that contain the next fixed word are still read", () => {
+  const names = ["ACME TRADERS PVT. LTD.", "M.S. DHONI", "Dr. A. P. Rao", "Pay.Tm Mall", "St. Mary's School", "Aaron Oneil",
+    "Mr Onkar Singh", "Shree On Line Mart", "Ravi, Kumar & Co", "Fruits for Life", "Big Bazaar (Mumbai) (West)", "Joes Bakery"];
+  const layouts = [
+    ["<AMT> paid to <PARTY>.", (n) => `Rs 5 paid to ${n}.`],
+    ["Paid <AMT> to <PARTY> on <DATE>.", (n) => `Paid Rs 5 to ${n} on 2026-11-20.`],
+    ["Dear <PARTY>, your a/c is credited", (n) => `Dear ${n}, your a/c is credited`],
+    ["<AMT> debited to <PARTY> for rent.", (n) => `Rs 5 debited to ${n} for rent.`],
+    ["Txn at <PARTY> (<W>) done", (n) => `Txn at ${n} (Mumbai) done`],
+  ];
+  for (const [layout, write] of layouts) {
+    const matcher = buildMatcher(layout);
+    assert.ok(!matcher.pattern.includes("(?!"), `no stop in ${layout}`);
+    for (const name of names) assert.ok(reads(matcher, write(name)), `${layout} <= ${write(name)}`);
+  }
+});
+
+test("a layout over the old limit reads its realistic messages, and its stop is the whole fixed run that follows the slot", () => {
+  const layout = "Dear <PARTY>, request no <PARTY> for <PARTY> was <PARTY> on <PARTY>. Notice for <PARTY> of funds. <PARTY> Team";
+  const matcher = buildMatcher(layout);
+  assert.ok(matcher.pattern.includes("(?!"));
+  assert.ok(reads(matcher, "Dear Asha, request no AB12 for Acme Ltd was accepted on 12 Nov. Notice for release of funds. Sample Team"));
+  // A name that holds a word of the layout is still read when it does not hold the whole run that ends it.
+  assert.ok(reads(matcher, "Dear Asha, request no AB12 for Acme for Life was accepted on 12 Nov. Notice for release of funds. Sample Team"));
+  assert.equal(reads(matcher, "Something else entirely."), false);
+});
+
+test("every pattern the matcher builds passes the server lint, here and for the phone (layout_patterns.json is linted by Dart too)", () => {
+  const file = path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_patterns.json");
+  const { anchoredCases } = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_corpus.json"), "utf8"));
+  const layouts = [
+    ...corpus.map((entry) => entry.layout),
+    ...anchoredCases.filter((c) => c.accepted).map((c) => c.layout),
+    "DEAR <PARTY>,APPLICATION NO.##### OF <PARTY> LTD IPO HAS BEEN <PARTY> ON <DATE>.YOU WILL RECEIVE A UPI-MANDATE <PARTY> FOR <PARTY> OF FUNDS.<PARTY> TEAM",
+    "Your <PARTY> bill of <AMT> for <PARTY> account <MASK> is due on <DATE>. Pay at <URL> to avoid <PARTY> charges. <PARTY> Team",
+    "Hi <PARTY>, your <PARTY> policy <REF> of <AMT> is due on <DATE>. Please <PARTY> by <PARTY> to keep it in force.",
+    "<AMT> sent to <PARTY> on <DATE> via <PARTY> ref <REF> for <PARTY> at <PARTY> done",
+  ];
+  const built = layouts.map((layout) => {
+    const matcher = buildMatcher(layout);
+    assert.deepEqual(lintPattern(matcher.pattern, matcher.flags), [], layout);
+    return { layout, pattern: matcher.pattern, flags: matcher.flags };
+  });
+  // After a change to the matcher: UPDATE_FIXTURES=1 node --test api/test/sms_v2/layout_matcher.test.js, then run the Dart
+  // layout_corpus_test (it lints and times these patterns with the phone's own regex lint).
+  if (process.env.UPDATE_FIXTURES) fs.writeFileSync(file, JSON.stringify(built, null, 2) + "\n");
+  assert.deepEqual(built, JSON.parse(fs.readFileSync(file, "utf8")), "run with UPDATE_FIXTURES=1 to refresh layout_patterns.json");
+});
+
+test("a layout over the old limit: a fixed word that begins a longer word does not end a name (\"on\" in \"Onkar\"), and a name never starts with a blank", () => {
+  const layout = "Paid <PARTY> on <PARTY> to <PARTY> for <PARTY> at <PARTY> via <PARTY> done";
+  const matcher = buildMatcher(layout);
+  assert.ok(matcher.pattern.includes(String.raw`(?!\s)`) && matcher.pattern.includes(String.raw`(?<!\s)`), "no blank first or last");
+  assert.ok(reads(matcher, "Paid Mr Onkar Singh on Aaron Oneil to Tony Atlas for Fruits Forever at Shree On Line Mart via Gpay Viaduct done"));
+  const values = slotValues(matcher, "Paid Asha on Ravi   to Meera for Joes at Cafe via Upi done");
+  assert.deepEqual(Object.values(values), ["Asha", "Ravi", "Meera", "Joes", "Cafe", "Upi"]);
 });

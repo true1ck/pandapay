@@ -180,8 +180,11 @@ class TemplateUpload {
 
   /// What a message that can never be uploaded is marked with, so it is not read again at every pass: a layout the
   /// server would refuse (too many name slots), one that fails the checks below, one whose origin cannot be kept.
-  /// Bump the version when what may be uploaded changes, and they are looked at once more.
-  static const _skipMark = 'skip:v1';
+  /// The mark carries the limits that decide it (22 Nov 2026: the name-slot limit went from 4 to 12 and `skip:v1` was kept,
+  /// so every phone that had scanned a 5 to 12 slot layout never looked at it again), so a change of any limit makes the
+  /// old marks stale and the messages are looked at once more. Bump the version for a change that is not a limit.
+  static const _skipMark =
+      'skip:v2:$smsMaxAnchoredLayoutWildcards.$smsMaxLayoutWildcards.$smsMaxAdjacentLooseSlots';
 
   static final Random _random = Random.secure();
 

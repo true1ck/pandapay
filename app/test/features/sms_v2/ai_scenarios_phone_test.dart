@@ -299,18 +299,18 @@ void main() {
       );
       final local = openTemplateReviews().single['templateHash'] as String;
       expect(
-        AiStatusReader(state).templateState(local),
+        AiStatusReader(state, now: () => clockNow).templateState(local),
         AiTemplateState.checking,
       );
       aiStatus = 'pending';
       await sync();
       expect(
-        AiStatusReader(state).templateState(local),
+        AiStatusReader(state, now: () => clockNow).templateState(local),
         AiTemplateState.checking,
       );
       expect(spendMinor(), 0, reason: 'nothing is counted before an answer');
       expect(
-        AiStatusReader(state).hasChecking(),
+        AiStatusReader(state, now: () => clockNow).hasChecking(),
         isTrue,
         reason: 'the needs-review notification waits while the AI is working',
       );
@@ -349,11 +349,11 @@ void main() {
       await sync();
       final local = openTemplateReviews().single['templateHash'] as String;
       expect(
-        AiStatusReader(state).templateState(local),
+        AiStatusReader(state, now: () => clockNow).templateState(local),
         AiTemplateState.unavailable,
       );
       expect(spendMinor(), 0);
-      expect(AiStatusReader(state).hasChecking(), isFalse);
+      expect(AiStatusReader(state, now: () => clockNow).hasChecking(), isFalse);
     },
   );
 

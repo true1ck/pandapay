@@ -13,6 +13,7 @@
 
 const { repairEmit } = require("../draft_repair");
 const { parseLayout } = require("../layout_matcher");
+const { draftLayout } = require("../draft_layout");
 
 const EVERY_MS = 60 * 60_000;
 
@@ -29,14 +30,16 @@ function createDraftAudit({ store, validate, now = Date.now, log = () => {}, eve
       const rule = parse(row.ai_draft);
       if (!rule || !Array.isArray(rule.emit)) continue;
       result.checked += 1;
-      const template = { template_hash: row.template_hash, sender_brand: row.sender_brand, redacted_body: row.redacted_body };
+      // The worker validated the cleaned layout (draft_layout.js), so the audit must too, or an old alias tag reads as a mismatch.
+      const body = draftLayout(row.redacted_body);
+      const template = { template_hash: row.template_hash, sender_brand: row.sender_brand, redacted_body: body };
       const model = String(rule.createdBy ?? row.ai_model ?? "").replace(/^ai:/, "");
       if (!(await validate(rule, template, model)).length) {
         result.valid += 1;
         continue;
       }
       let slots;
-      try { slots = parseLayout(row.redacted_body).slots; } catch { slots = []; }
+      try { slots = parseLayout(body).slots; } catch { slots = []; }
       const { emit } = repairEmit(rule.emit, slots);
       const repaired = { ...rule, emit };
       if ((await validate(repaired, template, model)).length) {

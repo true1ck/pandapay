@@ -201,6 +201,19 @@ void main() {
   });
 
   group('S1-8: a layout the server would refuse for its name slots', () {
+    test('a message an earlier build marked as skipped (skip:v1, when 5 name slots were too many) is looked at again and goes up', () async {
+      final body = 'Paid Rs.450.00 to ${List.generate(7, (i) => _name(i + 1)).join(' and ')} on 20-11-26';
+      final source = open(body, sender: 'ALPHAB');
+      state.put('template:scanned:$source', 'skip:v1');
+      final sent = <Map>[];
+      await uploader((items) async {
+        sent.addAll(items);
+        return acceptAll(items);
+      }).drain();
+      expect(sent, hasLength(1), reason: 'the old mark must not keep a layout the server now takes from ever being sent');
+      expect(state.get('template:scanned:$source'), isNot('skip:v1'));
+    });
+
     test('is not uploaded, costs no upload slot, and is not read again; its neighbours go up', () async {
       final tooMany =
           'Paid Rs.450.00 to ${List.generate(13, (i) => _name(i + 1)).join(', ')} on 20-11-26';

@@ -1,0 +1,82 @@
+[
+  {
+    "layout": "<AMT> debited from A/c <MASK> on <DATE> to <PARTY>. UPI Ref <REF>. Avl Bal <AMT>.",
+    "pattern": "^\\s*(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+debited\\s+from\\s+A/c\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\s+to\\s+(?<party1>[\\s\\S]{1,60}?)\\.\\s+UPI\\s+Ref\\s+(?<ref1>\\d{6,})\\.\\s+Avl\\s+Bal\\s+(?<amt2>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Dear Customer, your OTP is <REF>. Do not share it with anyone.",
+    "pattern": "^\\s*Dear\\s+Customer,\\s+your\\s+OTP\\s+is\\s+(?<ref1>\\d{6,})\\.\\s+Do\\s+not\\s+share\\s+it\\s+with\\s+anyone\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Your account <MASK> was credited with <AMT> on <DATE>. Avl Bal <AMT>.",
+    "pattern": "^\\s*Your\\s+account\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\s+was\\s+credited\\s+with\\s+(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.\\s+Avl\\s+Bal\\s+(?<amt2>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "<AMT> spent on card <MASK> on <DATE>. Avl limit <AMT>.",
+    "pattern": "^\\s*(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+spent\\s+on\\s+card\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.\\s+Avl\\s+limit\\s+(?<amt2>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "<AMT> spent on card <MASK>.",
+    "pattern": "^\\s*(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+spent\\s+on\\s+card\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "For help call <PHONE>. Reply STOP to opt out.",
+    "pattern": "^\\s*For\\s+help\\s+call\\s+(?<phone1>\\+?\\d[\\d -]{5,}\\d)\\.\\s+Reply\\s+STOP\\s+to\\s+opt\\s+out\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Your account has been updated.",
+    "pattern": "^\\s*Your\\s+account\\s+has\\s+been\\s+updated\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Money sent to <VPA> successfully. UPI Ref <REF>.",
+    "pattern": "^\\s*Money\\s+sent\\s+to\\s+(?<vpa1>[\\w.\\-+*•●]+@[\\w.\\-]+)\\s+successfully\\.\\s+UPI\\s+Ref\\s+(?<ref1>\\d{6,})\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Track your order at <URL> now.",
+    "pattern": "^\\s*Track\\s+your\\s+order\\s+at\\s+(?<url1>https?://\\S+|www\\.\\S+|[a-z0-9-]+\\.(?:com|in|co|io|ly|me|net|org)(?:/\\S*)?)\\s+now\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Dear <PARTY>, request no <PARTY> for <PARTY> was <PARTY> on <PARTY>. Notice for <PARTY> of funds. <PARTY> Team",
+    "pattern": "^\\s*Dear\\s+(?<party1>(?!\\s)(?:(?!,\\s\\s?\\s?request\\s\\s?\\s?no\\b)[\\s\\S]){1,60}(?<!\\s)),\\s+request\\s+no\\s+(?<party2>(?!\\s)(?:(?!\\s\\s?\\s?for\\b)[\\s\\S]){1,60}(?<!\\s))\\s+for\\s+(?<party3>(?!\\s)(?:(?!\\s\\s?\\s?was\\b)[\\s\\S]){1,60}(?<!\\s))\\s+was\\s+(?<party4>(?!\\s)(?:(?!\\s\\s?\\s?on\\b)[\\s\\S]){1,60}(?<!\\s))\\s+on\\s+(?<party5>(?!\\s)(?:(?!\\.\\s\\s?\\s?Notice\\s\\s?\\s?for\\b)[\\s\\S]){1,60}(?<!\\s))\\.\\s+Notice\\s+for\\s+(?<party6>(?!\\s)(?:(?!\\s\\s?\\s?of\\s\\s?\\s?funds\\.)[\\s\\S]){1,60}(?<!\\s))\\s+of\\s+funds\\.\\s+(?<party7>(?!\\s)(?:(?!\\s\\s?\\s?Team\\s?\\s?\\s?$)[\\s\\S]){1,60}(?<!\\s))\\s+Team\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Paid <AMT> to <PARTY>",
+    "pattern": "^\\s*Paid\\s+(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+to\\s+(?<party1>[\\s\\S]{1,60}?)\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Code <PARTY> #### ok",
+    "pattern": "^\\s*Code\\s+(?<party1>[\\s\\S]{1,60}?)\\s+\\d\\d\\d\\d\\s+ok\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "DEAR <PARTY>,APPLICATION NO.##### OF <PARTY> LTD IPO HAS BEEN <PARTY> ON <DATE>.YOU WILL RECEIVE A UPI-MANDATE <PARTY> FOR <PARTY> OF FUNDS.<PARTY> TEAM",
+    "pattern": "^\\s*DEAR\\s+(?<party1>(?!\\s)(?:(?!,APPLICATION\\s\\s?\\s?NO\\.)[\\s\\S]){1,60}(?<!\\s)),APPLICATION\\s+NO\\.\\d\\d\\d\\d\\d\\s+OF\\s+(?<party2>(?!\\s)(?:(?!\\s\\s?\\s?LTD\\s\\s?\\s?IPO\\s\\s?\\s?HAS\\s\\s?\\s?BEEN\\b)[\\s\\S]){1,60}(?<!\\s))\\s+LTD\\s+IPO\\s+HAS\\s+BEEN\\s+(?<party3>(?!\\s)(?:(?!\\s\\s?\\s?ON\\b)[\\s\\S]){1,60}(?<!\\s))\\s+ON\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.YOU\\s+WILL\\s+RECEIVE\\s+A\\s+UPI-MANDATE\\s+(?<party4>(?!\\s)(?:(?!\\s\\s?\\s?FOR\\b)[\\s\\S]){1,60}(?<!\\s))\\s+FOR\\s+(?<party5>(?!\\s)(?:(?!\\s\\s?\\s?OF\\s\\s?\\s?FUNDS\\.)[\\s\\S]){1,60}(?<!\\s))\\s+OF\\s+FUNDS\\.(?<party6>(?!\\s)(?:(?!\\s\\s?\\s?TEAM\\s?\\s?\\s?$)[\\s\\S]){1,60}(?<!\\s))\\s+TEAM\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Your <PARTY> bill of <AMT> for <PARTY> account <MASK> is due on <DATE>. Pay at <URL> to avoid <PARTY> charges. <PARTY> Team",
+    "pattern": "^\\s*Your\\s+(?<party1>[\\s\\S]{1,60}?)\\s+bill\\s+of\\s+(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+for\\s+(?<party2>[\\s\\S]{1,60}?)\\s+account\\s+(?<mask1>[x*•●·]{1,12}\\d{2,6}|\\.{2,}\\d{2,6}|\\d{2,6}[x*•●·]{2,12}\\d{2,6}|ending(?:\\s+(?:with|in))?\\s+\\d{2,6})\\s+is\\s+due\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.\\s+Pay\\s+at\\s+(?<url1>https?://\\S+|www\\.\\S+|[a-z0-9-]+\\.(?:com|in|co|io|ly|me|net|org)(?:/\\S*)?)\\s+to\\s+avoid\\s+(?<party3>[\\s\\S]{1,60}?)\\s+charges\\.\\s+(?<party4>[\\s\\S]{1,60}?)\\s+Team\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "Hi <PARTY>, your <PARTY> policy <REF> of <AMT> is due on <DATE>. Please <PARTY> by <PARTY> to keep it in force.",
+    "pattern": "^\\s*Hi\\s+(?<party1>[\\s\\S]{1,60}?),\\s+your\\s+(?<party2>[\\s\\S]{1,60}?)\\s+policy\\s+(?<ref1>\\d{6,})\\s+of\\s+(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+is\\s+due\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\.\\s+Please\\s+(?<party3>[\\s\\S]{1,60}?)\\s+by\\s+(?<party4>[\\s\\S]{1,60}?)\\s+to\\s+keep\\s+it\\s+in\\s+force\\.\\s*$",
+    "flags": "i"
+  },
+  {
+    "layout": "<AMT> sent to <PARTY> on <DATE> via <PARTY> ref <REF> for <PARTY> at <PARTY> done",
+    "pattern": "^\\s*(?<amt1>(?:rs\\.?|inr|₹)?\\s*\\d[\\d,]*(?:\\.\\d+)?(?:\\s*/-)?)\\s+sent\\s+to\\s+(?<party1>[\\s\\S]{1,60}?)\\s+on\\s+(?<date1>\\d{4}-\\d{2}-\\d{2}(?:[:T ]\\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}[ -]?[a-z]{3,9}[ ,-]*\\d{2,4}(?:,? \\d{2}:\\d{2}(?::\\d{2})?)?|[a-z]{3,9}\\.? \\d{1,2},? \\d{2,4})\\s+via\\s+(?<party2>[\\s\\S]{1,60}?)\\s+ref\\s+(?<ref1>\\d{6,})\\s+for\\s+(?<party3>[\\s\\S]{1,60}?)\\s+at\\s+(?<party4>[\\s\\S]{1,60}?)\\s+done\\s*$",
+    "flags": "i"
+  }
+]

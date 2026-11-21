@@ -212,7 +212,7 @@ test("S10 the message wording reaches Gemini only when allowed, aligned and safe
 test("S11 a layout an existing rule already reads is never sent; one that is too garbled is refused by name, also unsent", async (t) => {
   const { buildMatcher } = require("../../src/sms_v2/layout_matcher");
   const covering = { id: "TESTBK-OTP", version: 1, senders: ["TESTBK"], family: "otp", match: { pattern: buildMatcher(LAYOUTS[1]).pattern, flags: "i" } };
-  const r = await rig(t, { layouts: [LAYOUTS[1], Array(9).fill("<PARTY>").join(" to ")], rules: [covering] });
+  const r = await rig(t, { layouts: [LAYOUTS[1], Array(13).fill("<PARTY>").join(" to ")], rules: [covering] });
   await r.drain();
   assert.deepEqual(states(r.rows), ["covered", "failed"]);
   assert.equal(r.rows[1].code, "layout_too_many_wildcards");
