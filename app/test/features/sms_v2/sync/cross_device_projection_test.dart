@@ -34,7 +34,11 @@ void main() {
     final totals = view['totals'] as Map;
     expect(server.length, greaterThan(300));
     expect((view['events'] as List).length, greaterThan(150));
-    expect(totals['refund'], greaterThan(0), reason: 'refund netting is exercised');
+    expect(
+      totals['refund'],
+      greaterThan(0),
+      reason: 'refund netting is exercised',
+    );
     expect((totals['byCategory'] as Map).length, greaterThan(2));
   });
 
@@ -74,20 +78,38 @@ void main() {
 
     // The user recategorises a purchase that has a refund on the Android phone.
     final events = android.events.listSince(DateTime.utc(1900));
-    final refund = events.firstWhere(
+    final before = digest(android);
+    // A refunded purchase, and its refund, that both have a category. A foreign-only purchase has no ledger row and so no category, and which
+    // purchase comes first depends on the shipped rules (a new rule set once put such a purchase first), so the pair is
+    // chosen by what it needs rather than by position.
+    final categorised = (before['categories'] as Map).keys.toSet();
+    Event? found;
+    Event? foundRefund;
+    for (final refund in events.where(
       (e) =>
           e.type == EventType.refund &&
+          categorised.contains(e.eventId) &&
           e.legs.any((l) => l.role == LegRole.original),
-    );
-    final originalFact = refund.legs
-        .firstWhere((l) => l.role == LegRole.original)
-        .factId;
-    final purchase = events.firstWhere(
-      (e) =>
-          e.type != EventType.refund &&
-          e.legs.any((l) => l.factId == originalFact),
-    );
-    final before = digest(android);
+    )) {
+      final originalFact = refund.legs
+          .firstWhere((l) => l.role == LegRole.original)
+          .factId;
+      for (final e in events) {
+        if (e.type != EventType.refund &&
+            e.legs.any((l) => l.factId == originalFact) &&
+            categorised.contains(e.eventId)) {
+          found = e;
+          foundRefund = refund;
+          break;
+        }
+      }
+      if (found != null) break;
+    }
+    if (found == null) {
+      fail('the fixture has no refunded purchase with a category');
+    }
+    final purchase = found;
+    final refund = foundRefund!;
     String category(Map<String, Object?> view, String eventId) =>
         (view['categories'] as Map)[eventId] as String;
     final service = CorrectionsService(
@@ -144,10 +166,7 @@ void main() {
     );
     final refundedTarget = recategorise(purchase, 'lane-p-refunded');
     final plainTarget = recategorise(plain, 'lane-p-plain');
-    expect(
-      category(digest(android), purchase.eventId),
-      '$refundedTarget|user',
-    );
+    expect(category(digest(android), purchase.eventId), '$refundedTarget|user');
 
     // Upload goes to the server; the iPhone receives it reordered and duplicated.
     final already = server.length;
