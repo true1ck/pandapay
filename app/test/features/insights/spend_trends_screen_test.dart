@@ -2279,6 +2279,13 @@ void main() {
             builder: (context, state) =>
                 Text(state.uri.toString(), key: const ValueKey('activity-uri')),
           ),
+          GoRoute(
+            path: '/activity/:id',
+            builder: (context, state) => Text(
+              'tx:${state.pathParameters['id']}',
+              key: const ValueKey('tx-detail'),
+            ),
+          ),
         ],
       );
       await tester.pumpWidget(
@@ -2435,6 +2442,55 @@ void main() {
         activityUri(tester),
         '/activity?type=investments&from=2026-10-01&to=2026-10-31',
       );
+    });
+
+    testWidgets('a preview row opens that payment, and only View all leaves '
+        'for Activity', (tester) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        // No spending: the line stands alone, with no mix card above it.
+        report: _report(spend: 0, investment: 8000),
+        rows: [
+          _detailEntry(
+            id: 'aug-invest',
+            merchant: 'Fund',
+            amount: 3000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'oct-invest',
+            merchant: 'Fund',
+            amount: 5000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 10, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+        ],
+      );
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      await tester.ensureVisible(line);
+      await tester.tap(line);
+      await tester.pumpAndSettle();
+      // Opening the line, or reading it, does not leave the page; with two
+      // investments the caption has nothing left to count.
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
+      expect(find.text('2 investments · newest first'), findsOneWidget);
+
+      await tester.tap(
+        find.byKey(const ValueKey('spending_invested_row_oct-invest')),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const ValueKey('tx-detail'))).data,
+        'tx:oct-invest',
+      );
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
     });
 
     testWidgets('Money in opens the picked month, clipped to a custom range', (
@@ -3090,12 +3146,30 @@ void main() {
 
       await tester.tap(line);
       await tester.pumpAndSettle();
-      // The two newest, newest first; the oldest is left for View all.
-      final b = find.text('Fund B · 25 Aug');
-      final c = find.text('Fund C · 20 Aug');
+      // The caption says what these are: the newest two of three.
+      expect(
+        find.descendant(
+          of: preview,
+          matching: find.text('Latest 2 of 3 · newest first'),
+        ),
+        findsOneWidget,
+      );
+      // The two newest, newest first, date first; the oldest is left for
+      // View all.
+      final b = find.descendant(of: preview, matching: find.text('Fund B'));
+      final c = find.descendant(of: preview, matching: find.text('Fund C'));
       expect(b, findsOneWidget);
       expect(c, findsOneWidget);
-      expect(find.text('Fund A · 5 Aug'), findsNothing);
+      expect(
+        find.descendant(of: preview, matching: find.text('25 Aug')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: preview, matching: find.text('20 Aug')),
+        findsOneWidget,
+      );
+      expect(find.descendant(of: preview, matching: find.text('Fund A')),
+          findsNothing);
       expect(tester.getTopLeft(b).dy, lessThan(tester.getTopLeft(c).dy));
       expect(
         find.descendant(of: preview, matching: find.text('₹2,500.00')),

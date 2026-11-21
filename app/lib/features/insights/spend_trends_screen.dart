@@ -2063,7 +2063,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               invested: invested,
               investedPeriodLabel: investedPeriodLabel,
               onInvestedTap: _openInvestments,
-              investedPreview: _latestInvestments,
+              investedPreview: _investmentsNewestFirst,
             ),
             const SizedBox(height: AppSpace.lg),
           ] else if (showInvested) ...[
@@ -2074,7 +2074,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               child: _CollapsibleInvestedLine(
                 amount: invested,
                 periodLabel: investedPeriodLabel,
-                latest: _latestInvestments,
+                investments: _investmentsNewestFirst,
                 onViewAll: _openInvestments,
               ),
             ),
@@ -2312,13 +2312,10 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   List<TransactionEntry> get _investmentEntries =>
       _rowsOfKind(TxnEntryKind.investment);
 
-  /// The two most recent of them, for the Invested line to preview. Only
-  /// computed while that line is open, so a shut line costs nothing.
-  List<TransactionEntry> _latestInvestments() {
-    final rows = _investmentEntries
-      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
-    return rows.take(2).toList();
-  }
+  /// Every investment on show, newest first, for the Invested line to preview.
+  /// Only computed while that line is open, so a shut line costs nothing.
+  List<TransactionEntry> _investmentsNewestFirst() => _investmentEntries
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
 
   EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
     final rows = _rowsOfKind(kind);
@@ -4580,13 +4577,13 @@ class _SpendingMixCardState extends State<SpendingMixCard> {
             SizedBox(height: compact ? 6 : AppSpace.md),
             Container(height: 1, color: BambooInk.hairlineOnPaper),
             SizedBox(height: compact ? 6 : AppSpace.sm),
-            if (widget.investedPreview case final latest?
+            if (widget.investedPreview case final investments?
                 when widget.onInvestedTap != null)
               _CollapsibleInvestedLine(
                 amount: invested,
                 periodLabel: widget.investedPeriodLabel,
                 compact: compact,
-                latest: latest,
+                investments: investments,
                 onViewAll: widget.onInvestedTap!,
               )
             else
@@ -5092,16 +5089,18 @@ class _InvestedLine extends StatelessWidget {
   }
 }
 
-/// The Invested line that opens in place: tap it to see the latest two
-/// investments, "View all" for the rest in Activity. Shut by default, so the
-/// mix card stays as short as before.
+/// The Invested line that opens in place. Shut, it is the one line it always
+/// was. Open, it adds a caption ("Latest 2 of 4 · newest first" with a small
+/// "View all ›") and the two newest investments, each opening its own detail.
+/// Only "View all" leaves for Activity.
 class _CollapsibleInvestedLine extends StatefulWidget {
   final Money amount;
   final String periodLabel;
   final bool compact;
 
-  /// The latest investments, asked for only while the line is open.
-  final List<TransactionEntry> Function() latest;
+  /// Every investment on show, newest first. Asked for only while the line is
+  /// open, so a shut line costs nothing.
+  final List<TransactionEntry> Function() investments;
 
   /// Opens the investments in Activity.
   final VoidCallback onViewAll;
@@ -5109,7 +5108,7 @@ class _CollapsibleInvestedLine extends StatefulWidget {
   const _CollapsibleInvestedLine({
     required this.amount,
     required this.periodLabel,
-    required this.latest,
+    required this.investments,
     required this.onViewAll,
     this.compact = false,
   });
@@ -5120,6 +5119,7 @@ class _CollapsibleInvestedLine extends StatefulWidget {
 }
 
 class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
+  static const _previewCount = 2;
   bool _expanded = false;
 
   static String _day(DateTime date) {
@@ -5144,8 +5144,17 @@ class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
   @override
   Widget build(BuildContext context) {
     final compact = widget.compact;
-    final fontSize = compact ? 10.5 : 12;
-    final latest = _expanded ? widget.latest() : const <TransactionEntry>[];
+    final size = compact ? 10.5 : 11.5;
+    final captionSize = compact ? 9.5 : 10.5;
+    final all = _expanded ? widget.investments() : const <TransactionEntry>[];
+    final shown = all.take(_previewCount).toList();
+    // Say which rows these are: the newest ones, and how many there are.
+    final caption = all.isEmpty
+        ? 'Details are not available for this period yet.'
+        : all.length > shown.length
+        ? 'Latest ${shown.length} of ${all.length} · newest first'
+        : '${all.length} ${all.length == 1 ? 'investment' : 'investments'}'
+              ' · newest first';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -5160,35 +5169,79 @@ class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
         if (_expanded)
           Padding(
             key: const ValueKey('spending_invested_preview'),
-            padding: EdgeInsets.only(
-              left: (compact ? 22 : 27) + (compact ? 6 : AppSpace.sm),
-              top: 4,
-            ),
+            padding: const EdgeInsets.only(top: 2),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (latest.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      'Details are not available for this period yet.',
-                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        caption,
+                        style: BambooFonts.ui(
+                          captionSize,
+                          color: BambooInk.ink500,
+                        ),
+                      ),
                     ),
-                  )
-                else
-                  for (final entry in latest)
-                    Padding(
+                    // The same small accent link the mix card uses; the only
+                    // thing here that leaves the page.
+                    Semantics(
+                      button: true,
+                      label: 'View all investments',
+                      child: ExcludeSemantics(
+                        child: InkWell(
+                          key: const ValueKey('spending_invested_view_all'),
+                          onTap: widget.onViewAll,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 2,
+                              horizontal: 2,
+                            ),
+                            child: Text(
+                              'View all  ›',
+                              style: BambooFonts.ui(
+                                captionSize,
+                                color: BambooChartColors.violet,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                for (final entry in shown)
+                  InkWell(
+                    key: ValueKey('spending_invested_row_${entry.id}'),
+                    onTap: () =>
+                        context.push('/activity/${entry.id}', extra: entry),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 3),
                       child: Row(
                         children: [
+                          SizedBox(
+                            width: compact ? 38 : 44,
+                            child: Text(
+                              _day(entry.occurredAt),
+                              maxLines: 1,
+                              style: BambooFonts.ui(
+                                size,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ),
                           Expanded(
                             child: Text(
-                              '${_merchantDisplayFor([entry], unknownLabel: 'Unknown').label}'
-                              ' · ${_day(entry.occurredAt)}',
+                              _merchantDisplayFor([
+                                entry,
+                              ], unknownLabel: 'Unknown').label,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: BambooFonts.ui(
-                                fontSize.toDouble(),
+                                size,
                                 color: BambooInk.ink900,
                               ),
                             ),
@@ -5199,7 +5252,7 @@ class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
                             confidence: Confidence.confirmed,
                             showConfidenceIcon: false,
                             style: BambooFonts.ui(
-                              fontSize.toDouble(),
+                              size,
                               weight: FontWeight.w600,
                               color: BambooInk.ink900,
                             ),
@@ -5207,14 +5260,7 @@ class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
                         ],
                       ),
                     ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    key: const ValueKey('spending_invested_view_all'),
-                    onPressed: widget.onViewAll,
-                    child: const Text('View all'),
                   ),
-                ),
               ],
             ),
           ),
