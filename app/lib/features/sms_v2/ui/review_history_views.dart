@@ -23,8 +23,9 @@ import '../sync/template_resend.dart';
 import '../ledger/providers.dart';
 import 'screen_parts.dart';
 
-/// How far back the Auto-resolved and History lists reach, and how many rows
-/// each shows. Both read the in-memory ledger model, never the whole history.
+/// How far back the History list reaches, and how many rows it shows. AI
+/// auto-resolved lists every AI read, all time. Both read the in-memory ledger
+/// model that is already loaded; neither queries the database.
 const settledWindow = Duration(days: 90);
 const settledMaxRows = 200;
 
@@ -161,7 +162,9 @@ SettledLists settledLists(
     if (entry.pipelineVersion != 2) continue;
     final source = entry.sourceKey;
     if (source == null || entry.eventId == null) continue;
-    if (entry.occurredAt.isBefore(cutoff)) continue;
+    // History (what the person changed) keeps its 90-day window; AI auto-resolved covers all time (owner, 21 Nov
+    // 2026: the AI-read messages were older than 90 days, so the tab showed none).
+    final old = entry.occurredAt.isBefore(cutoff);
     final facts = factsBySource[source] ?? const <Fact>[];
     if (facts.isEmpty) continue;
     final byUser = facts.any((f) => f.provenance.engine == Engine.user);
@@ -198,7 +201,7 @@ SettledLists settledLists(
     // Rules and the on-device reader sort quietly: they are not listed. Only
     // what the person changed (History) or what Gemini filed (AI auto-resolved).
     if (byUser) {
-      history.add(item);
+      if (!old) history.add(item);
     } else if (reader == SettledSource.ai) {
       auto.add(item);
     }
@@ -208,7 +211,8 @@ SettledLists settledLists(
   auto.sort(newest);
   history.sort(newest);
   return SettledLists(
-    auto: auto.take(settledMaxRows).toList(growable: false),
+    // Every AI read, all time: the list is built lazily, so its length costs nothing to draw.
+    auto: List.unmodifiable(auto),
     history: history.take(settledMaxRows).toList(growable: false),
   );
 }

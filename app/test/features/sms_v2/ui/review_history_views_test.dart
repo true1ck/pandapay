@@ -125,7 +125,7 @@ void main() {
     expect(lists.history, isEmpty);
   });
 
-  test('each list is capped at the row limit, newest first', () {
+  test('AI auto-resolved lists every AI read, newest first; History stays capped at the row limit', () {
     final entries = [
       for (var i = 0; i < settledMaxRows + 20; i++)
         _entry(
@@ -134,13 +134,36 @@ void main() {
           DateTime(2026, 11, 9).subtract(Duration(minutes: i)),
         ),
     ];
-    final facts = {
+    final aiFacts = {
       for (var i = 0; i < settledMaxRows + 20; i++)
         's$i': [_fact('f$i', 's$i', 'rules', ruleId: 'AI-cap$i')],
     };
-    final lists = settledLists(entries, facts, now: now);
-    expect(lists.auto.length, settledMaxRows);
-    expect(lists.auto.first.entry.id, 't0');
+    final ai = settledLists(entries, aiFacts, now: now);
+    expect(ai.auto.length, settledMaxRows + 20, reason: 'owner: show all, not a slice');
+    expect(ai.auto.first.entry.id, 't0');
+    final userFacts = {
+      for (var i = 0; i < settledMaxRows + 20; i++)
+        's$i': [_fact('u$i', 's$i', 'user')],
+    };
+    expect(settledLists(entries, userFacts, now: now).history.length, settledMaxRows);
+  });
+
+  test('AI auto-resolved covers all time; History keeps its 90-day window', () {
+    final lists = settledLists(
+      [
+        _entry('ai-old', 'sa', DateTime(2025, 6, 3)),
+        _entry('ai-new', 'sb', DateTime(2026, 11, 8)),
+        _entry('user-old', 'sc', DateTime(2025, 8, 2)),
+      ],
+      {
+        'sa': [_fact('fa', 'sa', 'rules', ruleId: 'AI-old1')],
+        'sb': [_fact('fb', 'sb', 'rules', ruleId: 'AI-new1')],
+        'sc': [_fact('fc', 'sc', 'user')],
+      },
+      now: now,
+    );
+    expect(lists.auto.map((i) => i.entry.id), ['ai-new', 'ai-old']);
+    expect(lists.history, isEmpty, reason: 'an edit older than 90 days stays out of History');
   });
 
   testWidgets('a card shows the shop, the amount and how it was settled', (
