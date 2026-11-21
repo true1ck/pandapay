@@ -482,7 +482,12 @@ class TemplateUpload {
     // Cleaned before it is hashed: a bare @handle and a long mixed ID never leave the phone, and the server (which refuses any
     // `@`) can read the format.
     final safe = smsCleanLayout(smsSkeleton(pair.layout.body));
-    if (smsLayoutWildcards(safe) > smsMaxLayoutWildcards || smsLayoutLooseRun(safe) > smsMaxAdjacentLooseSlots) return null;
+    // Name slots with fixed text after them cost the server nothing extra, so up to 12 are sent; 4 where none follows.
+    if (smsLayoutWildcards(safe) > smsMaxAnchoredLayoutWildcards ||
+        smsLayoutUnanchoredWildcards(safe) > smsMaxLayoutWildcards ||
+        smsLayoutLooseRun(safe) > smsMaxAdjacentLooseSlots) {
+      return null;
+    }
     final sample = shareWording ? smsSample(original: message.body, redacted: pair.sample.body) : null;
     // The brand the server files the layout under: letters and digits only (SBI-UPI is SBIUPI), as it files facts.
     // The phone's own hashes and rules still use the header as the engine reads it.

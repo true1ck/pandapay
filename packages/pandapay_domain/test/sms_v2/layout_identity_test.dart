@@ -88,6 +88,13 @@ void main() {
       expect(smsLayoutWildcards('no slots at all'), 0);
     });
 
+    test('a name slot with fixed text after it is anchored; one before a value slot, a digit mark or the end is not', () {
+      expect(smsLayoutUnanchoredWildcards('Dear <PARTY>, paid <AMT> to <PARTY> on <DATE>. <PARTY> Team'), 0);
+      expect(smsLayoutUnanchoredWildcards('<PARTY> <AMT> <W> #### <PARTY>'), 3);
+      expect(smsLayoutUnanchoredWildcards('Paid <AMT> to <PARTY>'), 1);
+      expect(smsLayoutUnanchoredWildcards('no slots at all'), 0);
+    });
+
     test('loose slots in a row are counted as the server counts them (a literal, a digit or a fixed slot lifts the run)', () {
       expect(smsLayoutLooseRun('Call <PHONE> <PHONE> <PHONE> now'), 3);
       expect(smsLayoutLooseRun('<PARTY> <W> <PARTY> sent money'), 3);
@@ -112,6 +119,15 @@ void main() {
       final corpus = jsonDecode(File('${_contracts().path}/fixtures/layout_corpus.json').readAsStringSync()) as Map;
       expect(smsMaxLayoutWildcards, corpus['wildcardLimit'], reason: 'api MAX_WILDCARDS and the phone constant must agree');
       expect(smsMaxAdjacentLooseSlots, corpus['adjacentLooseLimit'], reason: 'api MAX_ADJACENT_LOOSE and the phone constant must agree');
+      expect(smsMaxAnchoredLayoutWildcards, corpus['anchoredWildcardLimit'], reason: 'api MAX_ANCHORED_WILDCARDS and the phone constant must agree');
+      for (final c in (corpus['anchoredCases'] as List).cast<Map>()) {
+        final layout = c['layout'] as String;
+        expect(smsLayoutWildcards(layout), c['wildcards'], reason: layout);
+        expect(smsLayoutUnanchoredWildcards(layout), c['unanchored'], reason: layout);
+        final accepted = smsLayoutWildcards(layout) <= smsMaxAnchoredLayoutWildcards &&
+            smsLayoutUnanchoredWildcards(layout) <= smsMaxLayoutWildcards;
+        expect(accepted, c['accepted'], reason: layout);
+      }
       for (final entry in (corpus['entries'] as List).cast<Map>()) {
         expect(smsLayoutWildcards(entry['layout'] as String), entry['wildcards'], reason: entry['layout'] as String);
         expect(smsLayoutLooseRun(entry['layout'] as String), lessThanOrEqualTo(smsMaxAdjacentLooseSlots), reason: entry['layout'] as String);

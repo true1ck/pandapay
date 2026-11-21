@@ -32,7 +32,13 @@ const isWild = (kind) => WILDCARD_KINDS.has(kind) || !SLOT_PATTERNS[kind];
 // slots are worse still (3 phone numbers in a row: 1.7 s on 800 characters), so at most 2 in a row. The phone merges
 // neighbouring names into one <PARTY>, so real layouts rarely touch.
 const MAX_WILDCARDS = 4;
+// A wildcard followed by fixed text stops where that text begins (see `stopsAt`), so it can only end in one place and
+// the cost does not multiply per wildcard. Those are counted apart and allowed in far greater number: real bank texts
+// print many names and words as <PARTY> around fixed words (21 Nov 2026: 17 layouts, 3 of them seen 12 times, were
+// refused before any AI saw them).
+const MAX_ANCHORED_WILDCARDS = 12;
 const MAX_ADJACENT_LOOSE = 2;
+const ANCHOR_CHARS = 16;
 const isLoose = (kind) => isWild(kind) || kind === "phone"; // a phone pattern ([\d -]{5,}) backtracks like a name
 const MAX_PATTERN = 1900; // the rule schema allows 2,000
 
@@ -44,6 +50,9 @@ class LayoutError extends Error {
   }
 }
 
+// Up to 60 characters, none of them the start of what comes next: the wildcard ends where the fixed text begins and is
+// never tried at another length (the lazy form is tried at every length on a message that does not fit).
+const stopsAt = (next) => String.raw`(?:(?!${next})[\s\S]){1,60}`;
 const escapeText = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Splits a layout into text, spaces, digits and slots. Slots are numbered per kind: <AMT> twice gives
@@ -71,7 +80,22 @@ function parseLayout(layout) {
 function buildMatcher(layout) {
   if (typeof layout !== "string" || !layout.trim()) throw new LayoutError("layout_empty");
   const { parts, slots } = parseLayout(layout.trim());
-  if (slots.filter((s) => isWild(s.kind)).length > MAX_WILDCARDS) throw new LayoutError("layout_too_many_wildcards");
+  // Which wildcards are followed by fixed text, and the text that ends each of them.
+  const stops = new Map();
+  parts.forEach((part, i) => {
+    if (!part.slot || !isWild(part.slot.kind)) return;
+    let j = i + 1;
+    let spaced = false;
+    while (parts[j]?.space) {
+      spaced = true;
+      j++;
+    }
+    const next = parts[j];
+    if (next?.text) stops.set(part.slot.name, `${spaced ? "\\s+" : ""}${escapeText(next.text.slice(0, ANCHOR_CHARS))}`);
+  });
+  const wild = slots.filter((s) => isWild(s.kind));
+  if (wild.length > MAX_ANCHORED_WILDCARDS || wild.filter((s) => !stops.has(s.name)).length > MAX_WILDCARDS)
+    throw new LayoutError("layout_too_many_wildcards");
   let run = 0;
   for (const part of parts) {
     if (part.slot) run = isLoose(part.slot.kind) ? run + 1 : 0;
@@ -83,7 +107,7 @@ function buildMatcher(layout) {
   for (const part of parts) {
     if (part.slot) {
       const { name, kind } = part.slot;
-      pattern += `(?<${name}>${isWild(kind) ? WILDCARD : SLOT_PATTERNS[kind]})`;
+      pattern += `(?<${name}>${isWild(kind) ? (stops.has(name) ? stopsAt(stops.get(name)) : WILDCARD) : SLOT_PATTERNS[kind]})`;
       indexed += `<${name}>`;
     } else if (part.digit) {
       pattern += "\\d";
@@ -186,6 +210,7 @@ function checkedExamples(layout, matcher) {
 module.exports = {
   LayoutError,
   MAX_WILDCARDS,
+  MAX_ANCHORED_WILDCARDS,
   MAX_ADJACENT_LOOSE,
   SLOT_PATTERNS,
   FILLS,

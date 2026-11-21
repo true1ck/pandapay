@@ -1,6 +1,14 @@
 {
   "_about": "Synthetic layouts and messages (every value is invented). Two tests read this file: api/test/sms_v2/layout_matcher.test.js (the server's matcher reads every message of its layout) and packages/pandapay_domain/test/sms_v2/layout_corpus_test.dart (the phone's skeleton of each message, where skeleton is true, IS the layout). Together they stop the matcher drifting from the skeleton.",
   "wildcardLimit": 4,
+  "anchoredWildcardLimit": 12,
+  "anchoredCases": [
+    { "layout": "Dear <PARTY>, request no <PARTY> for <PARTY> was <PARTY> on <PARTY>. Notice for <PARTY> of funds. <PARTY> Team", "wildcards": 7, "unanchored": 0, "accepted": true },
+    { "layout": "<PARTY> <AMT> <PARTY> <AMT> <PARTY> <AMT> <PARTY> <AMT> <PARTY> <AMT>", "wildcards": 5, "unanchored": 5, "accepted": false },
+    { "layout": "Paid <AMT> to <PARTY>", "wildcards": 1, "unanchored": 1, "accepted": true },
+    { "layout": "Code <PARTY> #### ok", "wildcards": 1, "unanchored": 1, "accepted": true },
+    { "layout": "<PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x <PARTY> x end", "wildcards": 13, "unanchored": 0, "accepted": false }
+  ],
   "adjacentLooseLimit": 2,
   "entries": [
     {

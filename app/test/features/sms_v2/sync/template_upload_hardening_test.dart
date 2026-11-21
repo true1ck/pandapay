@@ -203,7 +203,7 @@ void main() {
   group('S1-8: a layout the server would refuse for its name slots', () {
     test('is not uploaded, costs no upload slot, and is not read again; its neighbours go up', () async {
       final tooMany =
-          'Paid Rs.450.00 to ${_name(1)}, ${_name(2)}, ${_name(3)}, ${_name(4)}, ${_name(5)}, ${_name(6)}, ${_name(7)}, ${_name(8)}, ${_name(9)} on 20-11-26';
+          'Paid Rs.450.00 to ${List.generate(13, (i) => _name(i + 1)).join(', ')} on 20-11-26';
       open(tooMany, sender: 'ALPHAB');
       open(plain(2), sender: 'ALPHAB');
       final sent = <Map>[];
@@ -214,7 +214,7 @@ void main() {
       await up.drain();
       expect(sent, hasLength(1), reason: 'only the ordinary layout is sent');
       for (final item in sent) {
-        expect(smsLayoutWildcards(item['redactedBody'] as String), lessThanOrEqualTo(smsMaxLayoutWildcards));
+        expect(smsLayoutWildcards(item['redactedBody'] as String), lessThanOrEqualTo(smsMaxAnchoredLayoutWildcards));
       }
       final before = TemplateUpload.messagesRedacted;
       await up.drain();

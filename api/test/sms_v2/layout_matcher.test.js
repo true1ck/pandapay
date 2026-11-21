@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const {
   LayoutError,
   MAX_WILDCARDS,
+  MAX_ANCHORED_WILDCARDS,
   MAX_ADJACENT_LOOSE,
   SLOT_PATTERNS,
   FILLS,
@@ -71,11 +72,15 @@ test("slotValues gives the value of each slot of a sample, or null when the samp
 test("refusals are named: empty layouts, too many name slots, a pattern too long for a rule, no words to learn from", () => {
   throwsCode(() => buildMatcher(""), "layout_empty");
   throwsCode(() => buildMatcher("   "), "layout_empty");
-  const names = Array(MAX_WILDCARDS + 1).fill("<PARTY>").join(" x ");
+  // A name slot with no fixed text after it (a value slot follows, or the message ends) is the costly kind: at most 4.
+  const names = Array(MAX_WILDCARDS + 1).fill("<PARTY>").join(" <AMT> ");
   throwsCode(() => buildMatcher(names), "layout_too_many_wildcards");
   // An unknown tag is a wildcard too, so it counts.
-  throwsCode(() => buildMatcher(`<MERCHANT> a ${Array(MAX_WILDCARDS).fill("<W>").join(" c ")}`), "layout_too_many_wildcards");
-  assert.doesNotThrow(() => buildMatcher(Array(MAX_WILDCARDS).fill("<PARTY>").join(" x ")));
+  throwsCode(() => buildMatcher(`<MERCHANT> <AMT> ${Array(MAX_WILDCARDS).fill("<W>").join(" <AMT> ")}`), "layout_too_many_wildcards");
+  assert.doesNotThrow(() => buildMatcher(Array(MAX_WILDCARDS).fill("<PARTY>").join(" <AMT> ")));
+  // One followed by fixed text stops where that text begins, so far more of them are accepted, up to MAX_ANCHORED_WILDCARDS.
+  assert.doesNotThrow(() => buildMatcher(Array(MAX_ANCHORED_WILDCARDS).fill("<PARTY>").join(" x ") + " end"));
+  throwsCode(() => buildMatcher(Array(MAX_ANCHORED_WILDCARDS + 1).fill("<PARTY>").join(" x ") + " end"), "layout_too_many_wildcards");
   throwsCode(() => buildMatcher(Array(30).fill("<DATE>").join(" x ")), "layout_pattern_too_long");
   throwsCode(() => exampleBodies("<AMT> <DATE> ####"), "layout_has_no_words");
 });
@@ -128,6 +133,14 @@ test("the phone's wildcard limit and count agree with the matcher (the phone ski
   // Lowering MAX_WILDCARDS here means changing wildcardLimit in the fixture and that constant on the phone.
   assert.equal(wildcardLimit, MAX_WILDCARDS);
   assert.equal(adjacentLooseLimit, MAX_ADJACENT_LOOSE);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_corpus.json"), "utf8")).anchoredWildcardLimit, MAX_ANCHORED_WILDCARDS);
+  const { anchoredCases } = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_corpus.json"), "utf8"));
+  for (const { layout, wildcards, accepted } of anchoredCases) {
+    assert.equal(parseLayout(layout).slots.filter((slot) => slot.kind === "party").length, wildcards, layout);
+    let refused = false;
+    try { buildMatcher(layout); } catch (error) { refused = error.code === "layout_too_many_wildcards"; }
+    assert.equal(!refused, accepted, layout);
+  }
   for (const { layout, wildcards } of entries) {
     const wild = parseLayout(layout).slots.filter((slot) => slot.kind === "party" || slot.kind === "w" || !SLOT_PATTERNS[slot.kind]);
     assert.equal(wild.length, wildcards, layout);
@@ -161,7 +174,10 @@ test("a layout is either refused, or turns a hostile near-miss message away fast
     ["8 name slots in a row", Array(8).fill(P).join(" ") + " ok.", "a "],
     ["5 name slots in a row", Array(5).fill(P).join(" ") + " ok.", "a "],
     ["3 phone numbers in a row", "Call <PHONE> <PHONE> <PHONE> now", "1 "],
-    ["4 name slots, the joining word repeated (the most that is accepted)", Array(MAX_WILDCARDS).fill(P).join(" a ") + " ok.", "a "],
+    ["4 name slots, the joining word repeated (the most that is accepted)", Array(MAX_WILDCARDS).fill(P).join(" <AMT> ") + " ok.", "a "],
+    ["12 name slots each ended by fixed text, the text repeated (the most that is accepted)", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" a ") + " ok.", "a "],
+    ["12 name slots each ended by fixed text, a longer word repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(" and ") + " ok.", "and "],
+    ["12 name slots joined by punctuation, the text repeated", Array(MAX_ANCHORED_WILDCARDS).fill(P).join(", ") + " ok.", ", "],
     ["2 pairs of touching name slots", `${P} ${P} a ${P} ${P} ok.`, "a "],
   ];
   const slow = [];

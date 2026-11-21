@@ -23,10 +23,15 @@ final RegExp _operatorSuffix = RegExp(r'-[STPG]$');
 final RegExp _spaces = RegExp(r'\s+');
 final RegExp _anyDigit = RegExp(r'\d');
 
-/// The most name or removed-word slots (`<PARTY>`, `<W>`, or a tag this build does not know) a layout may hold.
-/// The server refuses a layout with more (`MAX_WILDCARDS` in api/src/sms_v2/layout_matcher.js, checked against the
-/// shared fixture `layout_corpus.json`), so the phone does not spend an upload slot on one.
+/// The most name or removed-word slots (`<PARTY>`, `<W>`, or a tag this build does not know) a layout may hold when
+/// no fixed text follows them (a value slot follows, or the message ends): the costly kind. The server refuses a layout
+/// with more (`MAX_WILDCARDS` in api/src/sms_v2/layout_matcher.js, checked against the shared fixture
+/// `layout_corpus.json`), so the phone does not spend an upload slot on one.
 const int smsMaxLayoutWildcards = 4;
+
+/// The most name or removed-word slots in all. One followed by fixed text stops where that text begins, so it costs
+/// nothing extra on a message that does not fit (`MAX_ANCHORED_WILDCARDS` on the server).
+const int smsMaxAnchoredLayoutWildcards = 12;
 
 /// The most loose slots (names, removed words, phone numbers, unknown tags) a layout may hold with only spaces between
 /// them (`MAX_ADJACENT_LOOSE`; the server refuses more as `layout_adjacent_wildcards`).
@@ -42,6 +47,19 @@ int smsLayoutWildcards(String layout) {
   var count = 0;
   for (final m in _layoutTag.allMatches(layout)) {
     if (!_fixedSlotKinds.contains(m[1])) count++;
+  }
+  return count;
+}
+
+/// How many wildcard slots of [layout] have no fixed text right after them: only spaces, then a value slot, a digit
+/// mark (`#`) or the end. Same rule as the server's matcher (the slots it gives no stop text).
+int smsLayoutUnanchoredWildcards(String layout) {
+  final text = layout.trim();
+  var count = 0;
+  for (final m in _layoutTag.allMatches(text)) {
+    if (_fixedSlotKinds.contains(m[1])) continue;
+    final rest = text.substring(m.end).trimLeft();
+    if (rest.isEmpty || rest.startsWith('#') || _layoutTag.matchAsPrefix(rest) != null) count++;
   }
   return count;
 }

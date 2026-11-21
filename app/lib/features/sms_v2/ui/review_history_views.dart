@@ -589,8 +589,9 @@ GeminiBarState geminiBarState({
       title: 'AI could not draft ${plural(server.failed, 'format')}',
       detail:
           '${server.ready + server.covered} answered · $applied applied here · '
-          '${server.failed} failed'
-          '${server.held > 0 ? ' · ${server.held} held back' : ''}\n'
+          '${server.failed} failed\n'
+          // Held layouts are old ones this phone no longer has an open message for (it sends the open ones again by
+          // itself): not a failure, so they are not counted in this red line.
           'Messages in a failed format stay in Needs review for you to '
           'answer. PandaPay tries a failed format again on its own after a '
           'hiccup on our side, and once more whenever the AI is improved.',
