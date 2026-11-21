@@ -22,6 +22,7 @@ const {
   createPgWorkerStore,
   runTemplateWorkerOnce,
   busyWaitMs,
+  validateDraftSafely,
   PROMPT_VERSION,
 } = require("../template_worker");
 const {
@@ -37,6 +38,7 @@ const {
   openPatiently,
 } = require("./worker_resilience");
 const { createOutageRecovery } = require("./outage_recovery");
+const { createDraftAudit } = require("./draft_audit");
 
 // One pass of the worker: a layout first; when none is waiting, a shop left in
 // "Other" (only if the admin switched shop suggestions on).
@@ -142,6 +144,8 @@ async function main() {
   );
   let lastCleanup = 0;
   let consecutiveBusy = 0;
+  // Ready drafts are re-checked hourly with today's checks and repaired when they can be (draft_audit.js).
+  const audit = createDraftAudit({ store, validate: (rule, template, model) => validateDraftSafely(rule, template, model, []), log });
   // Layouts held back by an AI service outage are released as soon as the service answers again (not after 24 h).
   const recovery = createOutageRecovery({
     store,
@@ -162,6 +166,7 @@ async function main() {
         consecutiveBusy = result.status === "provider_busy" && !result.rescheduled ? consecutiveBusy + 1 : 0;
         // Looks at most every 2 minutes and never throws (jobs/outage_recovery.js).
         await recovery.check();
+        if (result.status === "idle") await audit.check();
         if (result.status === "idle" && Date.now() - lastCleanup > 3600000) {
           lastCleanup = Date.now();
           try {

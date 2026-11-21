@@ -671,6 +671,25 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
     settings() {
       return tx((client) => readSettings(client, { force: true }));
     },
+    // The ready drafts the audit re-checks (jobs/draft_audit.js): consenting submitters, no admin decision. At most 300 a pass.
+    readyDraftsForAudit() {
+      return tx(async (client) =>
+        (await client.query(
+          `SELECT t.template_hash, t.sender_brand, t.redacted_body, t.ai_draft, t.ai_model FROM sms_v2_unknown_templates t
+            WHERE t.ai_status='ready' AND t.ai_draft IS NOT NULL AND t.admin_decision IS NULL AND ${currentConsent}
+            ORDER BY t.template_hash LIMIT 300`,
+        )).rows,
+      );
+    },
+    // Replaces a ready draft with its repaired version (only its `emit` may differ), while it is still exactly `before`,
+    // undecided and consented. The database function is the one narrow door: the worker's row policy allows no direct update
+    // of a ready row. The new result revision makes phones pull it. Returns whether it replaced anything.
+    replaceReadyDraft(templateHash, before, after) {
+      return tx(async (client) =>
+        (await client.query("SELECT pandapay.sms_v2_ai_replace_ready_draft($1::text, $2::jsonb, $3::jsonb) AS done",
+          [templateHash, JSON.stringify(before), JSON.stringify(after)])).rows[0].done === true,
+      );
+    },
     outageDeferredCount() {
       return tx(async (client) =>
         Number((await client.query(`SELECT count(*)::int AS n FROM sms_v2_unknown_templates t WHERE ${outageDeferred}`)).rows[0].n));

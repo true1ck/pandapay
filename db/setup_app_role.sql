@@ -274,6 +274,10 @@ begin
         on public.sms_v2_unknown_templates to sms_ai_worker;
       grant execute on function pandapay.sms_v2_ai_requeue_durable(text) to sms_ai_worker;
     end if;
+    -- 20261127000000: replaces the emit of a ready draft that today's checks repair (api/src/sms_v2/jobs/draft_audit.js).
+    if to_regprocedure('pandapay.sms_v2_ai_replace_ready_draft(text,jsonb,jsonb)') is not null then
+      grant execute on function pandapay.sms_v2_ai_replace_ready_draft(text, jsonb, jsonb) to sms_ai_worker;
+    end if;
     -- 20261125010000: providers already rejected for the layout in the current retry cycle.
     if exists (select 1 from information_schema.columns
                 where table_schema = 'public' and table_name = 'sms_v2_unknown_templates' and column_name = 'ai_excluded_providers') then
