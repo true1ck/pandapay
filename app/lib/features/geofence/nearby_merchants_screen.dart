@@ -9,6 +9,7 @@ import '../../app/providers.dart';
 import '../../data/api_exception.dart';
 import '../../main.dart' show MoneyText;
 import '../cards/recommendation_confidence.dart';
+import 'background_location_disclosure.dart';
 import 'nearby_merchants_repository.dart';
 import 'geofence_monitor_service.dart';
 
@@ -55,7 +56,14 @@ class _NearbyMerchantsScreenState extends ConsumerState<NearbyMerchantsScreen> {
   }
 
   Future<void> _toggleBackgroundMonitoring(bool enable) async {
-    await ref.read(backgroundAlertsControllerProvider).setEnabled(enable);
+    final controller = ref.read(backgroundAlertsControllerProvider);
+    // The prominent disclosure must come before Android's "Allow all the
+    // time" prompt (Google Play requirement); declining leaves alerts off.
+    await setBackgroundAlertsWithDisclosure(
+      context,
+      enable: enable,
+      apply: controller.setEnabled,
+    );
   }
 
   Future<void> _checkNearby({bool auto = false}) async {
