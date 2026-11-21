@@ -30,7 +30,9 @@ import 'projection_writer.dart';
 /// 4: 18 Nov 2026: a message is always on the card or account it printed. A
 ///    stored link the message contradicts (another bank, another number) is
 ///    pointed back at the one it names (see [ProjectionRefresh]).
-const int projectionCodeVersion = 4;
+/// 5: 21 Nov 2026: a row an unverified AI rule read carries `ai_unverified` (the
+///    "AI" tag in lists).
+const int projectionCodeVersion = 5;
 
 /// One slice of a refresh: how many events were read, how many of them were
 /// rewritten, and whether the pass has more to do.

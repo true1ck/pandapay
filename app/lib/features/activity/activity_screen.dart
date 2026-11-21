@@ -4425,6 +4425,11 @@ class _TransactionTile extends StatelessWidget {
                           const SizedBox(width: AppSpace.xs),
                           TransactionBadgePill.plain(moneyInKindLabel!),
                         ],
+                        // Read by an AI rule PandaPay has not checked yet.
+                        if (txnHasAiTag(entry)) ...[
+                          const SizedBox(width: AppSpace.xs),
+                          TransactionAiTag(entry: entry),
+                        ],
                       ],
                     ),
                     if (subtitleParts.isNotEmpty) ...[

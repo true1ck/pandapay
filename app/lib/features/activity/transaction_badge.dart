@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../data/user_cards_repository.dart';
@@ -17,7 +18,13 @@ enum TxnBadgeKind {
   selfTransfer('Self transfer'),
   familyTransfer('Family transfer'),
   cardBill('Card bill'),
-  walletTopup('Wallet top-up');
+  walletTopup('Wallet top-up'),
+
+  /// A transaction an AI-drafted rule read that PandaPay has not checked yet. Not
+  /// a kind of money, so [txnBadgeKind] never returns it: it is shown beside the
+  /// kind (see [TransactionAiTag]), and nothing that decides what a payment is
+  /// looks at it.
+  aiUnverified('AI');
 
   const TxnBadgeKind(this.label);
   final String label;
@@ -25,7 +32,7 @@ enum TxnBadgeKind {
   /// The badges for money that moved between people or accounts and is left out
   /// of spending and money in (as opposed to a refund or a reversal).
   bool get isTransfer => switch (this) {
-    refund || reversal => false,
+    refund || reversal || aiUnverified => false,
     _ => true,
   };
 }
@@ -103,6 +110,7 @@ class TransactionBadgePill extends StatelessWidget {
     final (tint, fill, border, text) = switch (kind) {
       TxnBadgeKind.refund => (BambooInk.jade, 0.12, 0.3, BambooInk.jade),
       TxnBadgeKind.reversal => (BambooInk.amber, 0.15, 0.35, BambooInk.amber),
+      TxnBadgeKind.aiUnverified => (BambooInk.slate, 0.1, 0.35, BambooInk.slate),
       _ => (BambooInk.ink900, 0.07, 0.14, BambooInk.ink700),
     };
     return Semantics(
@@ -118,6 +126,44 @@ class TransactionBadgePill extends StatelessWidget {
         child: Text(
           label,
           style: BambooFonts.ui(10.5, weight: FontWeight.w700, color: text),
+        ),
+      ),
+    );
+  }
+}
+
+/// Whether [entry] carries the "AI" tag: an AI-drafted rule read it, PandaPay has
+/// not checked that rule yet, and the person has not confirmed or edited it. A
+/// flag the row already holds (set where the row is projected), so a list never
+/// looks anything up per row.
+bool txnHasAiTag(TransactionEntry entry) => entry.aiUnverified;
+
+/// The small "AI" tag beside a transaction's title. Nothing when [txnHasAiTag]
+/// is false. Tapping it opens AI auto-resolved on Needs review, where the
+/// message can be reviewed, fixed or dismissed; [onTap] replaces that.
+class TransactionAiTag extends StatelessWidget {
+  const TransactionAiTag({super.key, required this.entry, this.onTap, this.margin});
+
+  final TransactionEntry entry;
+  final VoidCallback? onTap;
+  final EdgeInsetsGeometry? margin;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!txnHasAiTag(entry)) return const SizedBox.shrink();
+    return GestureDetector(
+      key: Key('ai-tag-${entry.id}'),
+      behavior: HitTestBehavior.opaque,
+      onTap:
+          onTap ??
+          () => context.push('/activity/needs-review?tab=auto'),
+      child: Semantics(
+        button: true,
+        label: 'Read by AI, not verified yet. Open to review',
+        excludeSemantics: true,
+        child: TransactionBadgePill(
+          kind: TxnBadgeKind.aiUnverified,
+          margin: margin,
         ),
       ),
     );

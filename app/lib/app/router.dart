@@ -768,7 +768,10 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       // cardDetail's '/cards/:id' vs. its own static siblings above.
       GoRoute(
         path: AppRoute.needsReview,
-        builder: (context, state) => const ReviewInboxScreen(),
+        builder: (context, state) => ReviewInboxScreen(
+          // The "AI" tag on a transaction opens the AI auto-resolved tab.
+          initialTab: state.uri.queryParameters['tab'] == 'auto' ? 1 : 0,
+        ),
       ),
       GoRoute(
         path: AppRoute.duplicateReview,

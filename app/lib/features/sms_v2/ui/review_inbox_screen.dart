@@ -44,14 +44,17 @@ String receiptQuestion(LocalReviewItem item, [String locale = 'en']) {
 const _anotherAccount = '__another_account__';
 
 class ReviewInboxScreen extends ConsumerStatefulWidget {
-  const ReviewInboxScreen({super.key});
+  const ReviewInboxScreen({super.key, this.initialTab = 0});
+
+  /// 0 Needs review, 1 AI auto-resolved, 2 History.
+  final int initialTab;
   @override
   ConsumerState<ReviewInboxScreen> createState() => _ReviewInboxScreenState();
 }
 
 class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
   bool _saving = false;
-  int _tab = 0;
+  late int _tab = widget.initialTab.clamp(0, 2);
   ScaffoldMessengerState? _messenger;
 
   @override

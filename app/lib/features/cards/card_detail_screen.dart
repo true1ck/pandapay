@@ -1414,6 +1414,7 @@ class _RecentCardActivitySection extends ConsumerWidget {
                             ),
                             if (txnBadgeKind(txn) case final badge?)
                               TransactionBadgePill(kind: badge),
+                            if (txnHasAiTag(txn)) TransactionAiTag(entry: txn),
                           ],
                         ),
                       ),

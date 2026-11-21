@@ -3105,6 +3105,12 @@ class TransactionEntry {
   /// by the person, or an older server that does not send it.
   final DateTime? editedAt;
 
+  /// An SMS row an AI-drafted rule read that PandaPay has not checked yet (the
+  /// reading's rule id starts `AI-` and carries `:local:`) and that the person
+  /// has not confirmed or edited. Worked out where the row is projected, so a
+  /// list shows its "AI" tag without looking anything up. Never sent anywhere.
+  final bool aiUnverified;
+
   /// Whether this row is part of the person's spending: a spend row that they
   /// have not excluded. Use this wherever a spending total is built; use
   /// [entryKind] alone for card-side figures (dues, utilisation, rewards).
@@ -3152,6 +3158,7 @@ class TransactionEntry {
     this.excludeFromSpend = false,
     this.excludeReason,
     this.editedAt,
+    this.aiUnverified = false,
     this.tags = const [],
   });
 
@@ -3206,6 +3213,7 @@ class TransactionEntry {
       if (excludeFromSpend) 'exclude_from_spend': true,
       if (excludeFromSpend && excludeReason != null) 'exclude_reason': excludeReason,
       if (editedAt != null) 'edited_at': editedAt!.toUtc().toIso8601String(),
+      if (aiUnverified) 'ai_unverified': true,
       'tags': tags.map((tag) => tag.toJson()).toList(),
     };
   }
@@ -3258,6 +3266,7 @@ class TransactionEntry {
           ? (excludeReason ?? this.excludeReason)
           : null,
       editedAt: editedAt,
+      aiUnverified: aiUnverified,
     );
   }
 
@@ -3357,6 +3366,7 @@ class TransactionEntry {
       editedAt: json['edited_at'] is String
           ? DateTime.tryParse(json['edited_at'] as String)
           : null,
+      aiUnverified: json['ai_unverified'] == true,
       tags: (json['tags'] as List? ?? const [])
           .map((item) => TransactionTag.fromJson(item as Map<String, dynamic>))
           .toList(),

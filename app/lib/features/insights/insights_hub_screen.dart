@@ -1,3 +1,4 @@
+import '../activity/transaction_badge.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -1194,6 +1195,8 @@ class _MissedPreview extends StatelessWidget {
                             color: BambooInk.ink900,
                           ),
                         ),
+                        if (txnHasAiTag(row.entry))
+                          TransactionAiTag(entry: row.entry),
                         const SizedBox(height: 2),
                         Text(
                           '${rewardCardName(row.betterCard.name)} would have paid more',

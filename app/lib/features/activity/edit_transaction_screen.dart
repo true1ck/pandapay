@@ -15,6 +15,7 @@ import '../../app/design/merchant_brand.dart';
 import '../../app/design/sheet_select_field.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'transaction_badge.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
@@ -1284,9 +1285,19 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         foregroundColor: BambooInk.ink900,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: Text(
-          'Edit transaction',
-          style: BambooFonts.heading(17, color: BambooInk.ink900),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Edit transaction',
+              style: BambooFonts.heading(17, color: BambooInk.ink900),
+            ),
+            if (_originalEntry case final original?
+                when txnHasAiTag(original)) ...[
+              const SizedBox(width: AppSpace.sm),
+              TransactionAiTag(entry: original, margin: EdgeInsets.zero),
+            ],
+          ],
         ),
         actions: [
           TextButton(
