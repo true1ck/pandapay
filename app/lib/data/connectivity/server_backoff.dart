@@ -70,6 +70,11 @@ class ServerBackoff {
     // the API's load, and its own registration retry backs off by itself. It
     // used to restart this pause every few seconds and starve every queue.
     if (path != null && path.contains('/notification-devices')) return;
+    // The layout upload has its own wait (a 30 s to 2 min hold on a 429, a minute to an hour on a 5xx) and its
+    // answers are about the person's own daily allowance or the learning intake being paused (503 learning_paused,
+    // Retry-After an hour), not about the API's load. They used to freeze every write queue in the app for up to
+    // 10 minutes. Real overload still shows on every other endpoint, which report as before.
+    if (path != null && path.contains('/sms/v2/unknown-templates')) return;
     // A read limit (429 on a GET) is per endpoint: that reader keeps its own
     // cooldown. Freezing every write queue for minutes because of it left
     // queued edits unsent. A 503 on any method, and a 429 on a write, still

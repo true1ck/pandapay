@@ -117,4 +117,19 @@ void main() {
     expect(b.isPaused, isTrue);
     b.resetForTest();
   });
+
+  test('the layout upload own 429 (daily allowance) and 503 learning_paused do not freeze the other write queues', () {
+    final b = ServerBackoff.test(now: () => t0, random: Random(1));
+    b.noteResponse(429, '86400', path: '/sms/v2/unknown-templates', method: 'POST');
+    expect(b.isPaused, isFalse);
+    b.noteResponse(503, '3600', path: '/sms/v2/unknown-templates', method: 'POST');
+    expect(b.isPaused, isFalse);
+    // The same answers from any other endpoint still pause everything (real overload still shows).
+    b.noteResponse(503, '3600', path: '/sms/v2/facts', method: 'POST');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
+    b.noteResponse(429, '60', path: '/sms/v2/learning-signals', method: 'POST');
+    expect(b.isPaused, isTrue);
+    b.resetForTest();
+  });
 }
