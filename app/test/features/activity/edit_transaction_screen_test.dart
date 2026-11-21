@@ -248,6 +248,21 @@ void main() {
     expect(repo.lastEditArgs?['selfTransfer'], {'bank': 'slcbnk', 'accountLast4': '5799', 'remember': false});
   });
 
+  testWidgets('a payment to a recognised merchant does not offer self-transfer', (tester) async {
+    final repo = _FakeUserCardsRepository(TransactionEntry(
+      id: 't1', amount: Money.fromRupees(1000), occurredAt: DateTime(2026, 11, 2),
+      merchantName: 'ZOMATO', accountLast4: '1797',
+      instrument: TxnInstrument.upiBank, source: 'sms', status: 'active',
+    ));
+    await _pump(tester, repo: repo, withRouter: true, overrides: [
+      bankAccountSummariesProvider.overrideWith((ref) async => const [
+        BankAccountSummary(accountLast4: '5799', availableBalance: null,
+          latestSmsAt: null, smsCount: 1, issuerSlug: 'slcbnk'),
+      ]),
+    ]);
+    expect(find.text('Mark as self-transfer'), findsNothing);
+  });
+
   testWidgets('pre-fills amount and merchant from the existing transaction', (
     tester,
   ) async {
