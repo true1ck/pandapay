@@ -7,6 +7,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 import '../../../data/cached_regexp.dart';
+import '../../../data/connectivity/server_backoff.dart';
 import '../../../data/local/financial_store.dart';
 import '../category/category_snapshot.dart';
 import '../ledger/projection_writer.dart';
@@ -33,12 +34,14 @@ class SyncPull {
     required this.bundle,
     this.categoryIdBySlug = const {},
     this.accountIsCurrent = _alwaysCurrent,
-  }) {
+    DateTime Function()? clock,
+  }) : _clock = clock ?? DateTime.now {
     SmsV2Schema.ensure(financial.database.db);
   }
 
   static bool _alwaysCurrent() => true;
   final bool Function() accountIsCurrent;
+  final DateTime Function() _clock;
   final RuleBundle bundle;
   final FinancialStore financial;
   final String namespace;
@@ -69,6 +72,9 @@ class SyncPull {
   /// sync; without a record the only trace was a count of failures.
   static const problemKey = 'pull:error';
 
+  /// Set when the server answered 429: no pull is sent before this time. Same place as the upload's `template:wait`.
+  static const waitKey = 'pull:wait';
+
   Future<int> _recordOutcome(Future<int> run) async {
     try {
       final pages = await run;
@@ -86,7 +92,7 @@ class SyncPull {
       _state.put(
         problemKey,
         jsonEncode({
-          'at': DateTime.now().toUtc().toIso8601String(),
+          'at': _clock().toUtc().toIso8601String(),
           'type': error.runtimeType.toString(),
           'message': text.length > 240 ? '${text.substring(0, 240)}…' : text,
         }),
@@ -160,8 +166,42 @@ class SyncPull {
     });
   }
 
+  /// A pull the server did not answer with 200 used to end with no trace. The status (and the server's error code
+  /// when it sent one) is recorded for the phone details, and a 429 holds the next pull for what the server said
+  /// (clamped to 30 s to 1 h). A 401 is the shared client's business (it refreshes the session and retries once),
+  /// so it is left as it was. Nothing is thrown: the callers see the same quiet 'no pages' as before.
+  void _noteRefusal(http.Response response) {
+    final status = response.statusCode;
+    if (status == 401) return;
+    String? code;
+    try {
+      final body = jsonDecode(response.body);
+      final raw = body is Map ? (body['error'] ?? body['code']) : null;
+      if (raw is String && raw.isNotEmpty) code = raw.length > 60 ? raw.substring(0, 60) : raw;
+    } catch (_) {
+      // No readable code; the status says enough.
+    }
+    _rememberProblem(SyncHttpStatus(status, code));
+    if (status == 429) {
+      final now = _clock();
+      final asked = ServerBackoff.parseRetryAfter(response.headers['retry-after'], now) ?? const Duration(seconds: 60);
+      final wait = asked < const Duration(seconds: 30)
+          ? const Duration(seconds: 30)
+          : asked > const Duration(hours: 1)
+          ? const Duration(hours: 1)
+          : asked;
+      try {
+        _state.put(waitKey, now.add(wait).toUtc().toIso8601String());
+      } catch (_) {
+        // A hold that cannot be saved just means the next pull asks again.
+      }
+    }
+  }
+
   Future<int> _pull() async {
     var pages = 0;
+    final holdUntil = DateTime.tryParse(_state.get(waitKey) ?? '');
+    if (holdUntil != null && _clock().isBefore(holdUntil)) return pages;
     final touched = <String>{};
     _fullRebuildSeen = false;
     while (pages < 100 && accountIsCurrent()) {
@@ -183,7 +223,14 @@ class SyncPull {
             },
           )
           .timeout(const Duration(seconds: 30));
-      if (!accountIsCurrent() || response.statusCode != 200) return pages;
+      if (!accountIsCurrent()) return pages;
+      if (response.statusCode != 200) {
+        _noteRefusal(response);
+        return pages;
+      }
+      if (_state.get(waitKey) != null) {
+        _db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [namespace, waitKey]);
+      }
       final decoded = jsonDecode(response.body);
       _keepAiAnswers(decoded);
       final check = validateSyncResponseJson(decoded);
@@ -874,4 +921,14 @@ class SyncPull {
     ]);
     _state.put(_contextKey, context);
   }
+}
+
+/// What the phone details show when `GET /sms/v2/sync` is answered with something other than 200.
+class SyncHttpStatus implements Exception {
+  const SyncHttpStatus(this.status, this.code);
+  final int status;
+  final String? code;
+
+  @override
+  String toString() => code == null ? 'sync answered HTTP $status' : 'sync answered HTTP $status ($code)';
 }
