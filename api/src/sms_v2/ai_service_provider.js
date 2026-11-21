@@ -184,6 +184,9 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}${rerun ? `|rerun|${fee
           // Any 5xx (a proxy gives 520-524 when the service is slow or restarting) is the service being unavailable, not a bad setup.
           if ([408, 425, 429].includes(response.status) || response.status >= 500)
             throw busy("ai_service_unavailable", 15000);
+          // Too large for the service: a fact about THIS layout, the same on every retry and for no other layout, so it must not
+          // rest the whole worker as a configuration fault (22 Nov 2026 audit: it wedged the queue behind one layout).
+          if (response.status === 413) throw new LayoutError("ai_service_layout_too_large");
           if (response.status === 409) throw configFault("ai_service_prompt_version_mismatch");
           if (response.status === 412) throw configFault("ai_service_config_mismatch");
           throw configFault("ai_service_misconfigured");
