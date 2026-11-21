@@ -74,7 +74,9 @@ void main() {
     test('it is sent alone and backed off for longer each time; the others are never carried into its failed request', () async {
       final poison = plain(3);
       open(poison);
-      var requestsWithPoison = 0, carriedInnocents = 0, innocentsAccepted = 0;
+      var requestsWithPoison = 0, carriedInnocents = 0;
+      // Distinct layouts: a layout this fake server never answers is sent again after a day, by design (F9).
+      final innocentsAccepted = <String>{};
       bool isPoison(Map item) => 'info'.allMatches(item['redactedBody'] as String).length == 3;
       final up = uploader((items) async {
         if (items.any(isPoison)) {
@@ -82,7 +84,7 @@ void main() {
           carriedInnocents += items.where((i) => !isPoison(i)).length;
           return http.Response('{"error":"template_invalid"}', 400);
         }
-        innocentsAccepted += items.length;
+        innocentsAccepted.addAll(items.map((i) => i['templateHash'] as String));
         return acceptAll(items);
       });
       var next = 10;
@@ -94,7 +96,7 @@ void main() {
         await up.drain();
         now = now.add(const Duration(hours: 7));
       }
-      expect(innocentsAccepted, 12 * 9, reason: 'every innocent layout went up, in the pass it arrived');
+      expect(innocentsAccepted, hasLength(12 * 9), reason: 'every innocent layout went up, in the pass it arrived');
       expect(carriedInnocents, lessThanOrEqualTo(9), reason: 'only the one batch that first found it (it was 108, one batch in every pass): a layout already refused is never put in a batch with others');
       expect(requestsWithPoison, lessThanOrEqualTo(4), reason: 'it was 12: one every six hours, for ever');
       expect(outboxCount(), 1, reason: 'the refused layout is kept, not lost');
