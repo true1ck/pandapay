@@ -1,0 +1,45 @@
+{
+  "_about": "A layout is cleaned before it is drafted, checked and matched (api/src/sms_v2/draft_layout.js; the phone's smsCleanLayout in packages/pandapay_domain/lib/src/sms_v2/template/skeleton.dart must give the same result, tests read this file on both sides). Cleaning: odd tags <AMOUNT>/<ACCOUNT> become <AMT>/<MASK>; a bare @handle (not an e-mail) becomes <W>; a long token mixing letters with # digits (an ID) becomes <W>. Blanks are never merged. Idempotent. The template hash is always of the ORIGINAL layout.",
+  "entries": [
+    {
+      "name": "odd tags",
+      "layout": "Your Canara Bank account <ACCOUNT> debited for INR <AMOUNT> on <DATE>.",
+      "clean": "Your Canara Bank account <MASK> debited for INR <AMT> on <DATE>."
+    },
+    {
+      "name": "handle",
+      "layout": "Dear Customer, shop everything on EMI @Flipkart with your Kotak Debit Card.",
+      "clean": "Dear Customer, shop everything on EMI <W> with your Kotak Debit Card."
+    },
+    {
+      "name": "handle with a name tag",
+      "layout": "<AMT> spent on YES BANK Card <MASK> @UPI_<PARTY> <DATE> ##:##:## pm.",
+      "clean": "<AMT> spent on YES BANK Card <MASK> <W> <DATE> ##:##:## pm."
+    },
+    {
+      "name": "an e-mail-like text is not a handle",
+      "layout": "Write to help@bank.invalid for more.",
+      "clean": "Write to help@bank.invalid for more."
+    },
+    {
+      "name": "mixed id",
+      "layout": "Your transaction for <AMT> against txn ID mvtHfGfdjLvdwwKyVa#pF# has been processed successfully. -Kotak",
+      "clean": "Your transaction for <AMT> against txn ID <W> has been processed successfully. -Kotak"
+    },
+    {
+      "name": "short code with digits is not an id",
+      "layout": "<AMT> debited at <PARTY> OCT## via UPI. Ref DV#####.",
+      "clean": "<AMT> debited at <PARTY> OCT## via UPI. Ref DV#####."
+    },
+    {
+      "name": "an ordinary layout is untouched",
+      "layout": "<AMT> paid to <PARTY>.",
+      "clean": "<AMT> paid to <PARTY>."
+    },
+    {
+      "name": "blanks are never merged",
+      "layout": "Dear <PARTY>, application <PARTY> of <PARTY> has been accepted.",
+      "clean": "Dear <PARTY>, application <PARTY> of <PARTY> has been accepted."
+    }
+  ]
+}

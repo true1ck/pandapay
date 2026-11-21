@@ -479,7 +479,9 @@ class TemplateUpload {
       observedAt: message.receivedAt,
       options: SmsRedactionOptions(salt: salt),
     );
-    final safe = smsSkeleton(pair.layout.body);
+    // Cleaned before it is hashed: a bare @handle and a long mixed ID never leave the phone, and the server (which refuses any
+    // `@`) can read the format.
+    final safe = smsCleanLayout(smsSkeleton(pair.layout.body));
     if (smsLayoutWildcards(safe) > smsMaxLayoutWildcards || smsLayoutLooseRun(safe) > smsMaxAdjacentLooseSlots) return null;
     final sample = shareWording ? smsSample(original: message.body, redacted: pair.sample.body) : null;
     // The brand the server files the layout under: letters and digits only (SBI-UPI is SBIUPI), as it files facts.

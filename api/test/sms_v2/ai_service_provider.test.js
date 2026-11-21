@@ -500,3 +500,23 @@ test("the worker passes the last refusal to the next call", async () => {
   assert.equal(bodies[0].fix, undefined, "the first call has nothing to correct");
   assert.ok(Array.isArray(bodies[1]?.fix) && bodies[1].fix.length > 0, `second body: ${JSON.stringify(bodies[1])}`);
 });
+
+// 21 Nov 2026: a layout holding a literal "@handle" or a long mixed ID was refused by the service (422 invalid_layout) or
+// drafted with the ID as a "slot". The worker now cleans the layout first (draft_layout.js): the service and the AI see the
+// cleaned layout, the rule is built from it, and the template hash stays that of the original.
+test("a layout with an @handle is cleaned before the service sees it, and the format is drafted", async () => {
+  const store = makeStore();
+  const original = "<AMT> paid to <PARTY> at @Shop_<PARTY>.";
+  store.claim = async () => ({ ...template, redacted_body: original });
+  const seen = [];
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => { seen.push(JSON.parse(options.body)); return serviceJson({ answer: answer(), ...usage }); },
+  });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(seen[0].redactedBody, "<AMT> paid to <PARTY> at <W>.");
+  assert.ok(!/@/.test(seen[0].redactedBody));
+  const rule = store.finished[0].rule;
+  assert.equal(rule.match.templateHash, template.template_hash, "the hash is still the original layout's");
+  assert.ok(new RegExp(rule.match.pattern, rule.match.flags).test("Rs. 10 paid to RAHUL at @Shop_Name."));
+});

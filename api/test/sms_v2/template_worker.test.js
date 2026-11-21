@@ -524,7 +524,7 @@ test("a layout with too many name slots is refused with a reason, and Gemini is 
   let finished;
   let leased = false;
   const store = {
-    claim: async () => (leased ? null : ((leased = true), { ...template, redacted_body: Array(9).fill("<PARTY>").join(" a ") })),
+    claim: async () => (leased ? null : ((leased = true), { ...template, redacted_body: Array(9).fill("<PARTY>").join(" to ") })),
     beginAttempt: async () => assert.fail("no capacity is reserved"),
     finish: async (_t, out) => { finished = out; },
   };

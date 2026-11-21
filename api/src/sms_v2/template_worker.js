@@ -6,6 +6,7 @@ const { lintPattern } = require("./rules_admin_route");
 const { redactionError, sampleError } = require("./ai_templates");
 const { readSettings, DEFAULT_AI_MODEL, envNumber } = require("./settings");
 const { repairEmit } = require("./draft_repair");
+const { draftLayout } = require("./draft_layout");
 const { LayoutError, FILLS, buildMatcher, slotValues, exampleBodies, checkedExamples, fillWith, fillSynthetic, fillTags } = require("./layout_matcher");
 const { sanityErrors, isDoubtful, DOUBTFUL_CONFIDENCE } = require("./draft_sanity");
 const { PROMPT_VERSION, SMS_PLACEHOLDERS, SMS_DOMAIN_RULES, buildPrompt } = require("./ai_prompt");
@@ -993,8 +994,10 @@ async function runTemplateWorkerOnce({
   const deadline = AbortSignal.timeout(DRAFT_JOB_DEADLINE_MS);
   const callSignal = shutdown ? AbortSignal.any([deadline, shutdown]) : deadline;
   if (shutdown?.aborted) return { status: "shutdown" };
-  const template = await store.claim();
-  if (!template) return { status: "idle" };
+  const claimed = await store.claim();
+  if (!claimed) return { status: "idle" };
+  // The layout is cleaned before it is drafted, checked and matched (draft_layout.js); the hash stays the original's.
+  const template = { ...claimed, redacted_body: draftLayout(claimed.redacted_body) };
   const durable = layoutOnly && template.ai_job_attempts > 0 && !!template.ai_drafting_version;
   const routing = durable ? { skipProviders: template.ai_excluded_providers } : null;
   let errors = [];

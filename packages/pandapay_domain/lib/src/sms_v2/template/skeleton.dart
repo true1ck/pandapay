@@ -92,6 +92,21 @@ final RegExp _placeholder = RegExp(r'<[A-Z_]+>');
 final RegExp _word = RegExp(r"<[A-Z_]+>|[A-Za-z][A-Za-z']*");
 final RegExp _wordRuns = RegExp(r'<W>(?:[ ]+<W>)+');
 
+const Map<String, String> _layoutAliases = {'AMOUNT': 'AMT', 'ACCOUNT': 'MASK'};
+final RegExp _layoutAnyTag = RegExp(r'<([A-Z][A-Z_]*)>');
+final RegExp _layoutHandle = RegExp(r'(?<![\w>])@[A-Za-z_]\w*(?:<[A-Z_]+>)?');
+final RegExp _layoutMixedId = RegExp(r'(?<![\w<#>])(?=[A-Za-z#]*#)(?=(?:[^A-Za-z]*[A-Za-z]){6})[A-Za-z#]{12,}(?![\w>])');
+
+/// What goes up: odd tags a phone once wrote (<AMOUNT>, <ACCOUNT>) become <AMT> and <MASK>; a bare @handle (not an e-mail)
+/// becomes <W>, because the server refuses any `@` in a layout; a long token that mixes letters with # digits (an ID such
+/// as `mvtHfGfdjLvdwwKyVa#pF#`) becomes <W>, so no ID leaves the phone. Same result as the server's draftLayout up to its
+/// last step (api/src/sms_v2/draft_layout.js; both read contracts/sms/v2/fixtures/draft_layout_corpus.json).
+String smsCleanLayout(String layout) {
+  var text = layout.replaceAllMapped(_layoutAnyTag, (m) => _layoutAliases.containsKey(m[1]) ? '<${_layoutAliases[m[1]]}>' : m[0]!);
+  return text.replaceAll(_layoutHandle, '<W>').replaceAll(_layoutMixedId, '<W>');
+}
+
+
 /// Builds the skeleton of a message body.
 ///
 /// Amounts become `<AMT>`, dates `<DATE>`, masks `<MASK>`, UPI IDs and emails
