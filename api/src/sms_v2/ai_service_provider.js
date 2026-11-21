@@ -79,6 +79,21 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
   if (pinnedVersion && !/^[a-zA-Z0-9_.-]{1,64}$/.test(pinnedVersion))
     throw new Error("SMS_V2_AI_SERVICE_PROMPT_VERSION_invalid");
   let seenVersion = null;
+  // What the service says it can do (`x-ai-features`, a comma list on every answer). The validator's codes are sent as an
+  // optional `fix` field only once it has announced `fix-v1`: today's service answers 422 to any extra field, so either
+  // side can be deployed first.
+  const features = new Set();
+  const noteFeatures = (response) => {
+    for (const name of String(response.headers.get("x-ai-features") ?? "").split(",")) {
+      const feature = name.trim().toLowerCase();
+      if (/^[a-z0-9-]{1,32}$/.test(feature)) features.add(feature);
+    }
+  };
+  // Codes name a slot or a rule ("slot_not_in_layout: party1 (the layout has: amt1,date1)"), never message text; anything
+  // else is dropped, at most 8 of 160 characters.
+  // A code starts with a snake_case token (optionally a schema path), then an optional ": detail" of slot names and values.
+  const FIX_CODE = /^[a-z][a-z0-9_]*(?:\/[A-Za-z0-9_]+)*(?:: [A-Za-z0-9_:,.()#<>/ =|-]{1,120})?$/;
+  const fixCodes = (codes) => (Array.isArray(codes) ? codes.filter((code) => typeof code === "string" && code.length <= 160 && FIX_CODE.test(code)).slice(0, 8) : []);
   const seenRoutes = new Set();
   const versionOk = (response) => {
     const seen = response.headers.get("x-prompt-version");
@@ -102,7 +117,7 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
         return false;
       }
     },
-    async generateLayout({ senderBrand, redactedBody, signal, routing }) {
+    async generateLayout({ senderBrand, redactedBody, signal, routing, fix }) {
       assertLayout({ senderBrand, redactedBody });
       const requestId = randomUUID();
       const started = performance.now();
@@ -148,8 +163,9 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
               ...(routing.hadInfrastructureFailure ? { "X-AI-Prior-Unavailable": "true" } : {}),
             } : {}),
           },
-          body: JSON.stringify({ senderBrand, redactedBody }),
+          body: JSON.stringify({ senderBrand, redactedBody, ...(features.has("fix-v1") && fixCodes(fix).length ? { fix: fixCodes(fix) } : {}) }),
         });
+        noteFeatures(response);
         const orderedVersion = response.headers.get("x-ai-routing") === "ordered-v1";
         if (needsOrderedEndpoint && [200, 502].includes(response.status) && !orderedVersion) {
           await response.body?.cancel();

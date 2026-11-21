@@ -138,36 +138,49 @@ const fillTags = (sample) =>
 // "[IN<REF>]", "#rd" or "##:##PM": the "negative" equalled the positive, the pattern read it, and the layout failed
 // example_mismatch for ANY answer. 21 Nov 2026: 4 formats, 47 attempts.) A layout with no letters cannot be learned.
 function exampleBodies(layout) {
+  const { positives, candidates } = exampleCandidates(layout);
+  return { positives, negatives: [candidates[0], candidates.at(-1)].map((c, i) => c.make(i === 0 ? "zqx" : "zqy")) };
+}
+
+// Every fixed word of the layout as a candidate for the "must not match" body, in the order they appear.
+function exampleCandidates(layout) {
   const positives = [fillWith(layout, FILLS[0]), fillWith(layout, FILLS[1])];
   // A layout with no values prints the same text twice; stray spaces are allowed around a message.
   if (positives[1] === positives[0]) positives[1] = `${positives[0]} `;
   const parts = layout.split(/(<[A-Z][A-Z_]*>)/); // odd entries are the tags
-  const spots = [];
+  const candidates = [];
   parts.forEach((text, index) => {
     if (index % 2 === 1) return;
-    for (const match of text.matchAll(/[A-Za-z]{2,}/g)) spots.push({ index, at: match.index, length: match[0].length });
+    for (const match of text.matchAll(/[A-Za-z]{2,}/g)) {
+      candidates.push({
+        make: (to) =>
+          fillWith(
+            parts.map((part, i) => (i === index ? part.slice(0, match.index) + to + part.slice(match.index + match[0].length) : part)).join(""),
+            FILLS[0],
+          ),
+      });
+    }
   });
-  if (!spots.length) throw new LayoutError("layout_has_no_words");
-  const change = (spot, to) =>
-    fillWith(
-      parts.map((text, index) => (index === spot.index ? text.slice(0, spot.at) + to + text.slice(spot.at + spot.length) : text)).join(""),
-      FILLS[0],
-    );
-  return { positives, negatives: [change(spots[0], "zqx"), change(spots.at(-1), "zqy")] };
+  if (!candidates.length) throw new LayoutError("layout_has_no_words");
+  return { positives, candidates };
 }
 
 // The examples of a layout, checked against its own pattern: both positives read, both negatives refused and different
 // from the positives. A layout for which that cannot be shown is one our own checks would fail whatever an AI answers,
 // so it is refused here, with its own code, before any AI call is spent on it.
 function checkedExamples(layout, matcher) {
-  const examples = exampleBodies(layout);
+  const { positives, candidates } = exampleCandidates(layout);
   const regex = new RegExp(matcher.pattern, matcher.flags);
-  const sound =
-    examples.positives.every((body) => regex.test(body)) &&
-    examples.negatives.every((body) => !examples.positives.includes(body) && !regex.test(body)) &&
-    new Set(examples.negatives).size === 2;
-  if (!sound) throw new LayoutError("layout_examples_unsound");
-  return examples;
+  if (!positives.every((body) => regex.test(body))) throw new LayoutError("layout_examples_unsound");
+  // Two different bodies the pattern refuses: from the first fixed word that can break it, then from the last.
+  const refuses = (candidate, to) => {
+    const body = candidate.make(to);
+    return !positives.includes(body) && !regex.test(body) ? body : null;
+  };
+  const first = candidates.map((c) => refuses(c, "zqx")).find(Boolean);
+  const last = [...candidates].reverse().map((c) => refuses(c, "zqy")).find(Boolean);
+  if (!first || !last || first === last) throw new LayoutError("layout_examples_unsound");
+  return { positives, negatives: [first, last] };
 }
 
 module.exports = {

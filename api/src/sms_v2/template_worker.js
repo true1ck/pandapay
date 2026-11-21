@@ -1049,6 +1049,8 @@ async function runTemplateWorkerOnce({
         response = layoutOnly
           ? await provider.generateLayout({
               ...layout, model: config.model, maxOutputTokens: config.maxOutputTokens,
+              // Why the last draft was refused, so the next one can correct it (sent only to a service that supports it).
+              fix: errors,
               ...(durable ? {
                 signal: callSignal,
                 routing: { ...routing, timeoutMs: Math.max(1, Math.floor(attemptDeadline - performance.now())) },

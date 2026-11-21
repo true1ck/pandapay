@@ -235,3 +235,25 @@ test("a layout whose examples cannot be made sound is refused with its own code,
   const readsEverything = { pattern: "[\\s\\S]*", flags: "i" };
   throwsCode(() => checkedExamples(layout, readsEverything), "layout_examples_unsound");
 });
+
+// Found by fuzzing 60,000 random layouts (21 Nov 2026): when the first or last fixed word could not break the pattern (it
+// sat next to a loose slot), the layout was refused although another word of it could. Every fixed word is a candidate.
+test("examples use any fixed word that breaks the pattern, not only the first and the last", () => {
+  const { checkedExamples } = require("../../src/sms_v2/layout_matcher");
+  for (const layout of [
+    "ID Info<W> am <URL> to#### ;<MASK> - <URL>ID<PARTY>",
+    "₹ * <PARTY>Rs. <AMT> PM *",
+    "<AMT>--<VPA> Balance:<PHONE> <PARTY> Rs. <AMT>",
+  ]) {
+    const matcher = buildMatcher(layout);
+    let examples;
+    try { examples = checkedExamples(layout, matcher); } catch (error) { assert.equal(error.code, "layout_examples_unsound"); continue; }
+    const regex = new RegExp(matcher.pattern, matcher.flags);
+    for (const body of examples.positives) assert.ok(regex.test(body), layout);
+    for (const body of examples.negatives) assert.equal(regex.test(body), false, layout);
+  }
+  const rescued = ["ID Info<W> am <URL> to#### ;<MASK> - <URL>ID<PARTY>", "<AMT>--<VPA> Balance:<PHONE> <PARTY> Rs. <AMT>"].filter((layout) => {
+    try { checkedExamples(layout, buildMatcher(layout)); return true; } catch { return false; }
+  });
+  assert.ok(rescued.length >= 1, "at least one of the previously refused layouts now gets sound examples");
+});

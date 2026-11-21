@@ -435,3 +435,68 @@ test("a draft that needed no repair records nothing extra", async () => {
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
   assert.equal(store.attempts.find((entry) => entry.outcome === "valid").errorCodes, null);
 });
+
+// Feedback to the AI (owner, 21 Nov 2026): a retry used to carry nothing about why the last draft was refused. The service
+// takes only {senderBrand, redactedBody} today (it answers 422 to anything else), so the validator's codes are sent as an
+// optional `fix` field ONLY after the service has announced `x-ai-features: fix-v1`. Either side can be deployed first.
+test("feedback codes are sent only once the service has announced it understands them", async () => {
+  const bodies = [];
+  let announce = false;
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return serviceJson({ answer: answer(), ...usage }, { headers: announce ? { "x-ai-features": "other-feature, fix-v1" } : {} });
+    },
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  const fix = ["emitted_attrs_invalid", "attrs_balance_snapshot/asOf: pattern"];
+  await provider.generateLayout({ ...layout, fix });
+  assert.deepEqual(Object.keys(bodies[0]).sort(), ["redactedBody", "senderBrand"], "an older service never sees the extra field");
+  announce = true;
+  await provider.generateLayout({ ...layout });
+  assert.deepEqual(Object.keys(bodies[1]).sort(), ["redactedBody", "senderBrand"], "no codes, no field");
+  await provider.generateLayout({ ...layout, fix });
+  assert.deepEqual(bodies[2].fix, fix);
+});
+
+test("only well-formed codes are sent, at most 8, each at most 160 characters", async () => {
+  const bodies = [];
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      return serviceJson({ answer: answer(), ...usage }, { headers: { "x-ai-features": "fix-v1" } });
+    },
+  });
+  const layout = { senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." };
+  await provider.generateLayout(layout); // learns the feature
+  const long = `slot_not_in_layout: ${"x".repeat(200)}`;
+  const codes = ["capture_group_missing", "has a secret: Rs 5,000 to RAHUL", "ok_code", long, "example_mismatch", ...Array.from({ length: 10 }, (_, i) => `code_${i}`)];
+  await provider.generateLayout({ ...layout, fix: codes });
+  const sent = bodies.at(-1).fix;
+  assert.ok(sent.length <= 8);
+  assert.ok(sent.every((code) => code.length <= 160 && /^[a-z][a-z0-9_]*/.test(code)));
+  assert.ok(!sent.some((code) => /RAHUL|Rs 5/.test(code)), "a code with message-like text is never sent");
+  assert.ok(sent.includes("capture_group_missing") && sent.includes("example_mismatch"));
+});
+
+test("the worker passes the last refusal to the next call", async () => {
+  const store = makeStore();
+  store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 1 });
+  const bodies = [];
+  let call = 0;
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async (_url, options) => {
+      bodies.push(JSON.parse(options.body));
+      call += 1;
+      const draft = answer();
+      if (call === 1) draft.emit[0].attrs.direction = "sideways";
+      return serviceJson({ answer: draft, ...usage, provider: "gemini", model: config.model, routeHadInfrastructureFailure: false }, { headers: { "x-ai-routing": "ordered-v1", "x-ai-features": "fix-v1" } });
+    },
+  });
+  await runWorkerCycle({ layoutStore: store, provider, config });
+  assert.equal(bodies[0].fix, undefined, "the first call has nothing to correct");
+  assert.ok(Array.isArray(bodies[1]?.fix) && bodies[1].fix.length > 0, `second body: ${JSON.stringify(bodies[1])}`);
+});

@@ -119,3 +119,54 @@ test("end to end: answers that used to be rejected now build a rule that passes 
     assert.deepEqual(validateDraft(rule, template, model, []), [], layout);
   }
 });
+
+test("a failed-payment notice that prints no amount cannot be an attempt: it becomes a plain service notice", () => {
+  const noAmounts = slots(["party1", "party"], ["party2", "party"]);
+  const { emit, repairs } = repairEmit([{ factType: "attempt", attrs: { status: "failed", direction: "debit", purpose: "purchase" } }], noAmounts);
+  assert.deepEqual(emit, [{ factType: "info", attrs: { category: "service" } }]);
+  assert.ok(repairs.includes("attempt_without_amount"));
+  // with an amount slot in the layout it stays an attempt (the model may simply have forgotten to wire it)
+  assert.equal(repairEmit([{ factType: "attempt", attrs: { status: "failed", direction: "debit", purpose: "purchase" } }], SL).emit[0].factType, "attempt");
+});
+
+// Property test (fixed seed): over thousands of random answers repairEmit never throws, never modifies its input, never
+// changes an amount, a direction, a purpose or a status, and a second pass changes nothing.
+test("repairEmit is safe on any input: never throws, never touches amounts/direction/purpose, and is stable", () => {
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const pick = (list) => list[Math.floor(rnd() * list.length)];
+  const names = ["amt1", "amt2", "date1", "date9", "mask1", "party1", "party2", "ref1", "ghost1", "####", "bank", "", "AMT1", "<date1>"];
+  const types = ["movement", "attempt", "bill_due", "balance_snapshot", "info", "mandate", "hold", "reward", "limit_change", "instrument_hint", "bogus"];
+  const junk = [null, undefined, 5, "text", [], {}, true];
+  const randomFact = () => {
+    const fact = { factType: pick(types), attrs: {} };
+    for (const key of ["direction", "purpose", "status", "category", "rail"]) if (rnd() < 0.5) fact.attrs[key] = pick(["debit", "credit", "salary", "failed", "service", "unknown", "x"]);
+    for (const key of ["asOf", "dueAt", "dueDate", "billerName", "merchantName", "program"]) if (rnd() < 0.4) fact.attrs[key] = rnd() < 0.5 ? pick(names) : rnd() < 0.5 ? { from: pick(names) } : pick(junk);
+    if (rnd() < 0.7) fact.amounts = [{ role: pick(["posted", "available_balance", "due_total"]), from: pick(names), unit: "INR" }];
+    if (rnd() < 0.5) fact.occurredAt = rnd() < 0.7 ? { from: pick(names) } : pick(junk);
+    if (rnd() < 0.5) fact.instrument = { kind: "bank_account", ...(rnd() < 0.7 ? { maskFrom: pick(names) } : {}) };
+    if (rnd() < 0.5) fact.counterparty = { ...(rnd() < 0.7 ? { nameFrom: pick(names) } : {}), kind: pick(["merchant", "bank", "weird", "unknown"]) };
+    if (rnd() < 0.5) fact.references = { upiRef: pick(names), txnId: pick(names) };
+    return fact;
+  };
+  for (let i = 0; i < 4000; i++) {
+    const input = Array.from({ length: 1 + Math.floor(rnd() * 4) }, () => (rnd() < 0.05 ? pick(junk) : randomFact()));
+    const before = JSON.stringify(input);
+    const once = repairEmit(input, rnd() < 0.5 ? SL : slots(["party1", "party"]));
+    assert.equal(JSON.stringify(input), before, "the input is never modified");
+    const twice = repairEmit(once.emit, rnd() < 0 ? [] : SL);
+    input.forEach((fact, index) => {
+      const out = once.emit[index];
+      if (!fact || typeof fact !== "object" || fact.factType === "bill_due" || !out || out.factType === "info") return; // a downgrade replaces the whole fact
+      assert.deepEqual(out.amounts, fact.amounts, "amounts are never changed");
+      for (const key of ["direction", "purpose", "status", "category", "rail"]) assert.equal(out.attrs?.[key], fact.attrs?.[key], key);
+    });
+    void twice;
+  }
+  // stability, measured separately so the slot table is the same on both passes
+  for (let i = 0; i < 2000; i++) {
+    const input = [randomFact(), randomFact()];
+    const once = repairEmit(input, SL);
+    assert.deepEqual(repairEmit(once.emit, SL).emit, once.emit, "a second pass changes nothing");
+  }
+});

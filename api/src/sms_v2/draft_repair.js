@@ -106,6 +106,12 @@ function repairEmit(emit, slots) {
         return { factType: "info", attrs: { category: "service" } };
       }
     }
+    // An attempt (a failed, declined or scheduled payment) needs the amount it was for. A layout with no amount slot at
+    // all cannot give one, so the notice is a plain service notice: nothing says how much was involved.
+    if (fact.factType === "attempt" && !fact.amounts?.length && ![...kinds.values()].includes("amt")) {
+      done("attempt_without_amount");
+      return { factType: "info", attrs: { category: "service" } };
+    }
     if (fact.factType === "info" && fact.amounts) {
       delete fact.amounts;
       done("info_amounts");
