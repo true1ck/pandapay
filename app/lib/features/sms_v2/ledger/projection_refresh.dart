@@ -14,6 +14,7 @@ import '../storage/instrument_store.dart';
 import '../storage/ledger_store.dart';
 import '../storage/outbox_store.dart';
 import '../storage/subscription_store.dart';
+import '../storage/dismissal_store.dart';
 import '../storage/sync_state_store.dart';
 import 'projection_writer.dart';
 
@@ -292,6 +293,7 @@ class ProjectionRefresh {
       namespace: namespace,
     ).load();
     final marks = OwnerIdentityStore(_db, namespace: namespace).marksOnly();
+    final restoredMarks = DismissalStore(_state).restoredMarks();
 
     final changed = <v2.Event>[];
     var ledgerChanged = false;
@@ -309,6 +311,7 @@ class ProjectionRefresh {
         instrumentIdByFactId: instrumentIdByFactId,
         merchantAliases: merchantAliases,
         marks: marks,
+        restoredMarks: restoredMarks,
       );
       if (entriesDiffer ||
           !ProjectionWriter.displayUnchanged(row, stored[event.eventId])) {

@@ -6,6 +6,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_intake_repository.dart';
 import '../../sms_import/sms_background_queue.dart';
+import '../storage/dismissal_store.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/ledger_store.dart';
@@ -330,10 +331,15 @@ class ReadingRefresh {
       namespace: namespace,
     ).findByFactIds(sourceByFact.keys);
     final sourcesByEvent = <String, Set<String>>{};
+    final restored = DismissalStore(_state).restoredMarks();
     for (final event in events) {
       final sources = {for (final leg in event.legs) ?sourceByFact[leg.factId]};
       sourcesByEvent[event.eventId] = sources;
-      if (event.status == EventStatus.userConfirmed) touched.addAll(sources);
+      // A recovered transaction is confirmed only to undo its hide.
+      if (event.status == EventStatus.userConfirmed &&
+          !isRestoreOnly(restored, event.eventId, event.decidedAt)) {
+        touched.addAll(sources);
+      }
     }
     if (sourcesByEvent.isNotEmpty) {
       final decisions = LedgerStore(

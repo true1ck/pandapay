@@ -95,6 +95,14 @@ class AutoDismissal {
   }
 }
 
+/// True when [eventId] was put back by Recover and its decision time is still the
+/// one that restore stamped ([DismissalStore.restoredMarks]): the person has not
+/// decided it since.
+bool isRestoreOnly(Map<String, DateTime> marks, String eventId, DateTime? decidedAt) {
+  final mark = marks[eventId];
+  return mark != null && decidedAt != null && decidedAt.isAtSameMomentAs(mark);
+}
+
 class DismissalStore {
   const DismissalStore(this.state);
   final SyncStateStore state;
@@ -120,6 +128,18 @@ class DismissalStore {
     'DELETE FROM v2_sync_state WHERE namespace=? AND key=?',
     [state.namespace, '$_prefix$sourceKey'],
   );
+
+  /// The events Recover put back, with the decision time its restore stamped
+  /// (event id to time). An event whose decision time is still this one was put
+  /// back, not decided by the person: it is AI auto-resolved again, and a later
+  /// rejection of its AI rule may take its reading back like any other.
+  /// History dismissal records are kept per device: they are not synced, so
+  /// another phone of the same account lists nothing under History for them.
+  Map<String, DateTime> restoredMarks() => {
+    for (final d in all())
+      if (d.eventId != null && d.restoredDecidedAt != null)
+        if (DateTime.tryParse(d.restoredDecidedAt!) case final at?) d.eventId!: at,
+  };
 
   /// Every record of this account, dismissed and restored. One range scan over
   /// the primary key (`;` follows `:`), never a table scan.

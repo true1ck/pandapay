@@ -232,7 +232,7 @@ void main() {
         store: store,
         record: store.get('read1')!,
         aiStillReads: false,
-        restore: () async {},
+        restore: () async => true,
         decidedAt: () => null,
         sendToReview: () async => sent.add('read1'),
       );
@@ -261,6 +261,29 @@ void main() {
       );
       expect(to, RecoveredTo.needsReview);
       expect(sent, 1);
+    });
+
+    test('a restore that did not take (the account changed) keeps the row and stamps nothing', () async {
+      store.put(
+        AutoDismissal(
+          sourceKey: 'tx1',
+          kind: AutoDismissal.kindTransaction,
+          dismissedAt: at,
+          entryId: 'v2:e1',
+          eventId: 'e1',
+        ),
+      );
+      final to = await recoverDismissed(
+        store: store,
+        record: store.get('tx1')!,
+        aiStillReads: true,
+        restore: () async => false,
+        decidedAt: () => '2026-11-21T10:00:00Z',
+        sendToReview: () async => fail('not Needs review'),
+      );
+      expect(to, RecoveredTo.unchanged);
+      expect(store.get('tx1')!.restored, isFalse);
+      expect(store.get('tx1')!.restoredDecidedAt, isNull);
     });
 
     test('a failed hide leaves no record (History never lists what is still counted)', () async {

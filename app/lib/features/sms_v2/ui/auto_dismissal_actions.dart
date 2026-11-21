@@ -12,8 +12,10 @@ import '../storage/sync_state_store.dart';
 import '../providers/data_providers.dart';
 import 'review_history_views.dart';
 
-/// Where a recovered message went.
-enum RecoveredTo { autoResolved, needsReview }
+/// Where a recovered message went. [unchanged]: nothing was recovered (the
+/// restore did not take, for example because the account changed meanwhile),
+/// and the row stays in History.
+enum RecoveredTo { autoResolved, needsReview, unchanged }
 
 /// "Dismiss" on a transaction card of AI auto-resolved: this is not a real
 /// transaction. The record is saved first and then [hide] takes the transaction
@@ -80,7 +82,7 @@ Future<RecoveredTo> recoverDismissed({
   required DismissalStore store,
   required AutoDismissal record,
   required bool aiStillReads,
-  required Future<void> Function() restore,
+  required Future<bool> Function() restore,
   required String? Function() decidedAt,
   required Future<void> Function() sendToReview,
 }) async {
@@ -93,7 +95,7 @@ Future<RecoveredTo> recoverDismissed({
   if (!aiStillReads) return toReview();
   if (record.isTransaction) {
     try {
-      await restore();
+      if (!await restore()) return RecoveredTo.unchanged;
     } catch (_) {
       return toReview();
     }
@@ -173,6 +175,16 @@ Future<RecoveredTo> recoverFromHistory(
     restore: () async {
       if (entry == null) throw StateError('The transaction is gone');
       await restoreEntry(ref, entry);
+      // restoreEntry returns without doing anything when the account changed.
+      // Only a row that is on screen again was recovered.
+      if (ref.read(app.cacheNamespaceProvider) != namespace) return false;
+      return db
+          .select(
+            "SELECT json_extract(payload,'\$.status') AS status FROM financial_entities "
+            "WHERE namespace=? AND entity='transactions' AND id=?",
+            [namespace, entry.id],
+          )
+          .any((row) => row['status'] == 'active');
     },
     decidedAt: () {
       final eventId = item.record.eventId;

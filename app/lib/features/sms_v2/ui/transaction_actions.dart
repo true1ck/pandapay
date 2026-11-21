@@ -1,4 +1,6 @@
 import 'dart:convert';
+import '../storage/dismissal_store.dart';
+import '../storage/fact_store.dart';
 import '../storage/sync_state_store.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import '../../../data/local/financial_store.dart';
@@ -146,6 +148,10 @@ class SmsTransactionActions {
       namespace: controller.namespace,
     ).get(original.eventId!);
     if (event == null) throw ArgumentError('The SMS event is unavailable');
+    // Already hidden (a second tap, a retry): nothing to retire, and the saved
+    // copy below must stay the event as it was BEFORE the first hide, or a later
+    // restore would put back an "unknown" event and the row would stay uncounted.
+    if (event.type == EventType.unknown) return;
     SyncStateStore(
       financial.database.db,
       namespace: controller.namespace,
@@ -174,6 +180,39 @@ class SmsTransactionActions {
       corrected: {'eventType': previous.type.wire},
       confirm: true,
     );
+    _markRestored(original);
+  }
+
+  /// A transaction the person dismissed from AI auto-resolved, restored by any
+  /// route (History Recover, Activity's Deleted transactions, the detail
+  /// screen): the dismissal record keeps the decision time this restore
+  /// stamped, so the reading is AI auto-resolved again (not "you edited") and
+  /// keeps its "AI" tag while its rule is unverified. No record: nothing to do.
+  void _markRestored(TransactionEntry original) {
+    final source = original.sourceKey;
+    final eventId = original.eventId;
+    if (source == null || eventId == null) return;
+    final db = financial.database.db;
+    final store = DismissalStore(
+      SyncStateStore(db, namespace: controller.namespace),
+    );
+    final record = store.get(source);
+    if (record == null || record.restored || !record.isTransaction) return;
+    final decided = EventStore(
+      db,
+      namespace: controller.namespace,
+    ).get(eventId)?.decidedAt;
+    if (decided == null) return;
+    store.put(record.asRestored(decided.toUtc().toIso8601String()));
+    final unverified = FactStore(db, namespace: controller.namespace)
+        .forSource(source)
+        .any(
+          (f) =>
+              f.provenance.engine != Engine.user &&
+              f.provenance.ruleId.startsWith('AI-') &&
+              f.provenance.ruleId.contains(':local:'),
+        );
+    financial.setAiUnverified(controller.namespace, original.id, unverified);
   }
 
   static EventType _eventType(TransactionEntry row) => switch (row.entryKind) {

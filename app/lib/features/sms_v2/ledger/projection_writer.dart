@@ -7,7 +7,9 @@ import '../../../data/local/financial_store.dart';
 import '../../../data/user_cards_repository.dart';
 import '../personal/owner_identity_store.dart';
 import '../personal/personal_merchant_aliases.dart';
+import '../storage/dismissal_store.dart';
 import '../storage/ledger_store.dart';
+import '../storage/sync_state_store.dart';
 import '../storage/subscription_store.dart';
 
 /// Maps the ledger to the existing transaction model. All attribution comes
@@ -22,6 +24,7 @@ TransactionEntry? transactionForEvent(
   Map<String, String> instrumentIdByFactId = const {},
   Map<String, PersonalMerchantAlias> merchantAliases = const {},
   v2.OwnerIdentity? marks,
+  Map<String, DateTime> restoredMarks = const {},
 }) {
   final kind = transactionKindForEvent(event);
   final fact = moneyFactForEvent(event, facts);
@@ -153,7 +156,12 @@ TransactionEntry? transactionForEvent(
     source: 'sms',
     smsReceivedAt: fact.observedAt,
     status: 'active',
-    aiUnverified: isUnverifiedAiReading(fact, event),
+    aiUnverified: isUnverifiedAiReading(
+      fact,
+      event,
+      facts: facts,
+      restoredOnly: isRestoreOnly(restoredMarks, event.eventId, event.decidedAt),
+    ),
     // A cashback the bank credited is a confirmed reward, not an estimate.
     rewardState: event.type == v2.EventType.cashback ? 'confirmed' : 'estimated',
   );
@@ -164,11 +172,33 @@ TransactionEntry? transactionForEvent(
 /// cards use) and that the person has neither confirmed nor edited. An edit
 /// makes a person's own fact the money fact, a confirmation marks the event
 /// `user_confirmed`; either ends it.
-bool isUnverifiedAiReading(v2.Fact fact, v2.Event event) =>
-    fact.provenance.engine != v2.Engine.user &&
-    event.status != v2.EventStatus.userConfirmed &&
-    fact.provenance.ruleId.startsWith('AI-') &&
-    fact.provenance.ruleId.contains(':local:');
+///
+/// [restoredOnly]: the event was put back by Recover (its confirmation only
+/// undid a hide, see [isRestoreOnly]). The card reads it as AI auto-resolved
+/// again, so the tag does too, from the reading it was restored from: the leg
+/// with the `original` role (the restore made a copy of it as the person's own
+/// fact).
+bool isUnverifiedAiReading(
+  v2.Fact fact,
+  v2.Event event, {
+  Map<String, v2.Fact> facts = const {},
+  bool restoredOnly = false,
+}) {
+  var reading = fact;
+  if (restoredOnly) {
+    for (final leg in event.legs) {
+      if (leg.role == v2.LegRole.original && facts[leg.factId] != null) {
+        reading = facts[leg.factId]!;
+        break;
+      }
+    }
+  } else if (event.status == v2.EventStatus.userConfirmed) {
+    return false;
+  }
+  return reading.provenance.engine != v2.Engine.user &&
+      reading.provenance.ruleId.startsWith('AI-') &&
+      reading.provenance.ruleId.contains(':local:');
+}
 
 bool _unchanged(TransactionEntry? stored, TransactionEntry row) =>
     stored != null &&
@@ -286,6 +316,9 @@ class ProjectionWriter {
         }
       }
     }
+    final restoredMarks = DismissalStore(
+      SyncStateStore(db, namespace: ledger.namespace),
+    ).restoredMarks();
     final rowsByEvent = <String, List<v2.LedgerEntry>>{};
     for (final e in snapshot.entries) {
       rowsByEvent.putIfAbsent(e.eventId, () => []).add(e);
@@ -311,6 +344,7 @@ class ProjectionWriter {
             instrumentIdByFactId: instrumentIdByFactId,
             merchantAliases: merchantAliases,
             marks: marks,
+            restoredMarks: restoredMarks,
           );
           var old = existing[e.eventId];
           if (old == null && row != null) {

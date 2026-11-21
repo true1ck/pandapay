@@ -203,7 +203,14 @@ class SettledLists {
     this.auto = const [],
     this.history = const [],
     this.dismissed = const [],
+    this.healed = const [],
   });
+
+  /// Dismissal records of transactions that came back on screen by another route
+  /// (Activity's Deleted transactions, or the app closing between a restore and
+  /// its record being updated): [settledLists] already reads them as put back,
+  /// and the provider saves them as such so the next read agrees.
+  final List<AutoDismissal> healed;
 
   /// These lists with [added] in History, newest first.
   SettledLists withAdded(List<SettledItem> added) {
@@ -214,6 +221,7 @@ class SettledLists {
       auto: auto,
       history: List.unmodifiable(merged),
       dismissed: dismissed,
+      healed: healed,
     );
   }
 
@@ -261,6 +269,8 @@ SettledLists settledLists(
   Iterable<TransactionEntry> transactions,
   Map<String, List<Fact>> factsBySource, {
   Set<String> openReviewSources = const {},
+  Set<String> reviewDismissedSources = const {},
+  Set<String> eventLegSources = const {},
   Map<String, DateTime?> confirmedEvents = const {},
   Iterable<AutoDismissal> dismissals = const [],
 }) {
@@ -269,6 +279,7 @@ SettledLists settledLists(
   };
   final auto = <AutoItem>[];
   final history = <SettledItem>[];
+  final healed = <AutoDismissal>[];
   final entriesById = <String, TransactionEntry>{};
   // Messages that already have a transaction row above (whoever read them).
   final withTransaction = <String>{};
@@ -281,6 +292,8 @@ SettledLists settledLists(
     // Deleted, left out or dismissed: not an AI reading that counts any more. A
     // dismissal is listed from its own record (History).
     if (entry.status != 'active') continue;
+    // Marked "Not financial" on Needs review: History lists it there, once.
+    if (reviewDismissedSources.contains(source)) continue;
     final facts = factsBySource[source] ?? const <Fact>[];
     if (facts.isEmpty) continue;
     final machine = facts.firstWhere(
@@ -299,10 +312,20 @@ SettledLists settledLists(
     if (!byUser &&
         reader == SettledSource.ai &&
         confirmedEvents.containsKey(entry.eventId)) {
-      final restored = DateTime.tryParse(
-        dismissalBySource[source]?.restoredDecidedAt ?? '',
-      );
+      final record = dismissalBySource[source];
+      var restored = DateTime.tryParse(record?.restoredDecidedAt ?? '');
       final decided = confirmedEvents[entry.eventId];
+      // Dismissed, but on screen again: restored from somewhere other than
+      // Recover (Deleted transactions), or the app closed before the record was
+      // updated. The decision on the event is the restore's: read it as put back.
+      if (record != null &&
+          !record.restored &&
+          record.isTransaction &&
+          decided != null &&
+          !decided.isBefore(record.dismissedAt)) {
+        restored = decided;
+        healed.add(record.asRestored(decided.toUtc().toIso8601String()));
+      }
       byUser =
           restored == null ||
           decided == null ||
@@ -350,6 +373,10 @@ SettledLists settledLists(
     final dismissal = dismissalBySource[source];
     if (dismissal != null && !dismissal.restored) continue;
     if (openReviewSources.contains(source)) continue;
+    if (reviewDismissedSources.contains(source)) continue;
+    // A movement that is a leg of a transaction counted under another message
+    // (the other side of a transfer or a refund): Dismiss would hide nothing.
+    if (eventLegSources.contains(source)) continue;
     final machine = [
       for (final f in facts)
         if (f.provenance.engine != Engine.user) f,
@@ -376,6 +403,21 @@ SettledLists settledLists(
   final dismissed = <DismissedAutoItem>[];
   for (final dismissal in dismissals) {
     if (dismissal.restored) continue;
+    if (!dismissal.isTransaction) {
+      // A message that now backs a counted transaction, or that a signed rule
+      // reads, is no longer something the AI read: nothing to recover.
+      final now = factsBySource[dismissal.sourceKey] ?? const <Fact>[];
+      if (withTransaction.contains(dismissal.sourceKey) ||
+          eventLegSources.contains(dismissal.sourceKey) ||
+          (now.isNotEmpty &&
+              !now.any(
+                (f) =>
+                    f.provenance.engine != Engine.user &&
+                    f.provenance.ruleId.startsWith('AI-'),
+              ))) {
+        continue;
+      }
+    }
     if (dismissal.isTransaction) {
       final entry = entriesById[dismissal.entryId];
       // Back on screen (a restore from Activity): it is not dismissed any more.
@@ -427,6 +469,7 @@ SettledLists settledLists(
     auto: List.unmodifiable(auto),
     history: List.unmodifiable(history),
     dismissed: List.unmodifiable(dismissed),
+    healed: List.unmodifiable(healed),
   );
 }
 
@@ -439,14 +482,26 @@ final settledListsProvider = FutureProvider<SettledLists>((ref) async {
   // already built for the screen this list belongs to.
   final reviews = await ref.watch(reviewItemsProvider.future);
   final ai = await ref.watch(aiReviewStatusProvider.future);
+  // What was marked "Not financial": History lists it, so AI auto-resolved must not.
+  final reviewDismissed = await ref.watch(dismissedReviewItemsProvider.future);
   final namespace = ref.watch(app.cacheNamespaceProvider);
   final cache = await ref.watch(app.responseCacheProvider.future);
   final outbox = await ref.watch(app.outboxRepositoryProvider.future);
   final db = cache.financialStore.database.db;
   SmsV2Schema.ensure(db);
-  return settledLists(
+  final lists = settledLists(
     model.transactions,
     model.factsBySource,
+    reviewDismissedSources: {
+      for (final item in reviewDismissed)
+        if (item.payload['sourceKey'] case final String source) source,
+    },
+    eventLegSources: {
+      for (final event in model.ledger.events)
+        for (final leg in event.legs)
+          if (model.factsById[leg.factId]?.sourceKey case final String source)
+            source,
+    },
     openReviewSources: {
       for (final item in reviews)
         if (!ai.settledByAi(item))
@@ -458,7 +513,16 @@ final settledListsProvider = FutureProvider<SettledLists>((ref) async {
           event.eventId: event.decidedAt,
     },
     dismissals: DismissalStore(SyncStateStore(db, namespace: namespace)).all(),
-  ).withAdded(
+  );
+  // Save the records that were read as put back (a few small writes, then they
+  // are in the store and this list is empty).
+  if (lists.healed.isNotEmpty) {
+    final store = DismissalStore(SyncStateStore(db, namespace: namespace));
+    for (final record in lists.healed) {
+      store.put(record);
+    }
+  }
+  return lists.withAdded(
     addedFromReview(db, namespace: namespace, syncedId: outbox.syncedTransactionId),
   );
 });
@@ -511,6 +575,14 @@ Future<void> reopenReadForReview(WidgetRef ref, String sourceKey) async {
   final store = cache.financialStore;
   final db = store.database.db;
   SmsV2Schema.ensure(db);
+  // A question about this message is already open (the pipeline raised one for
+  // an unsure reading): one message is one question, so there is nothing to add.
+  final alreadyOpen = db.select(
+    "SELECT 1 FROM v2_review_items WHERE namespace=? AND status='open' AND kind='template' "
+    "AND json_extract(payload,'\$.sourceKey')=? LIMIT 1",
+    [namespace, sourceKey],
+  );
+  if (alreadyOpen.isNotEmpty) return;
   store.batch(() {
     db.execute(
       'INSERT INTO v2_review_items (namespace, review_id, kind, payload, status) '
@@ -729,6 +801,39 @@ class HistoryList extends ConsumerWidget {
   }
 }
 
+/// Runs one action of a card at a time: while it runs the card's buttons are
+/// disabled, so a double tap cannot start a second Dismiss, Recover or Fix that
+/// interleaves with the first.
+class _BusyGuard extends StatefulWidget {
+  const _BusyGuard({required this.builder});
+  final Widget Function(
+    BuildContext context,
+    bool busy,
+    Future<void> Function(Future<void> Function() action) run,
+  )
+  builder;
+
+  @override
+  State<_BusyGuard> createState() => _BusyGuardState();
+}
+
+class _BusyGuardState extends State<_BusyGuard> {
+  bool _busy = false;
+
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await action();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _busy, _run);
+}
+
 final _money = NumberFormat.currency(
   locale: 'en_IN',
   symbol: '₹',
@@ -782,7 +887,7 @@ class SettledCard extends ConsumerWidget {
     final category = e.categoryName ?? e.subcategoryName;
     final date = DateFormat('d MMM y').format(e.occurredAt.toLocal());
     void edit() => context.push('/activity/${e.id}/edit', extra: e);
-    return BambooPanel(
+    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
       key: Key('settled-${e.id}'),
       onTap: edit,
       semanticLabel: 'Open $title',
@@ -866,20 +971,24 @@ class SettledCard extends ConsumerWidget {
                     TextButton(
                       key: Key('reopen-${e.id}'),
                       style: BambooButtons.quiet,
-                      onPressed: () => _reopen(context, ref),
+                      onPressed: busy
+                          ? null
+                          : () => run(() => _reopen(context, ref)),
                       child: const Text('Move back to review'),
                     ),
                     TextButton(
                       key: Key('dismiss-${e.id}'),
                       style: BambooButtons.quiet,
-                      onPressed: () => _dismiss(context, ref),
+                      onPressed: busy
+                          ? null
+                          : () => run(() => _dismiss(context, ref)),
                       child: const Text('Dismiss'),
                     ),
                   ],
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -923,7 +1032,7 @@ class AiReadCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final preview = ref.watch(aiReadPreviewProvider(item.sourceKey)).valueOrNull;
     final date = DateFormat('d MMM y').format(item.occurredAt.toLocal());
-    return BambooPanel(
+    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
       key: Key('ai-read-${item.sourceKey}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -978,7 +1087,7 @@ class AiReadCard extends ConsumerWidget {
               OutlinedButton(
                 key: Key('fix-read-${item.sourceKey}'),
                 style: BambooButtons.secondary,
-                onPressed: () => _fix(context, ref),
+                onPressed: busy ? null : () => run(() => _fix(context, ref)),
                 child: const Text('Fix'),
               ),
             ],
@@ -986,14 +1095,16 @@ class AiReadCard extends ConsumerWidget {
               TextButton(
                 key: Key('dismiss-read-${item.sourceKey}'),
                 style: BambooButtons.quiet,
-                onPressed: () => _dismiss(context, ref),
+                onPressed: busy
+                    ? null
+                    : () => run(() => _dismiss(context, ref)),
                 child: const Text('Dismiss'),
               ),
             ],
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -1008,11 +1119,12 @@ class DismissedAutoCard extends ConsumerWidget {
       final to = await recoverFromHistory(ref, item);
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            to == RecoveredTo.autoResolved
-                ? 'Back in AI auto-resolved.'
-                : 'The AI no longer reads this one, so it is back in Needs review.',
-          ),
+          content: Text(switch (to) {
+            RecoveredTo.autoResolved => 'Back in AI auto-resolved.',
+            RecoveredTo.needsReview =>
+              'The AI no longer reads this one, so it is back in Needs review.',
+            RecoveredTo.unchanged => 'Could not recover this one. Try again.',
+          }),
         ),
       );
     } catch (_) {
@@ -1028,7 +1140,7 @@ class DismissedAutoCard extends ConsumerWidget {
     final amount = item.entry == null
         ? null
         : _money.format(item.entry!.amount.paise / 100);
-    return BambooPanel(
+    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
       key: Key('dismissed-auto-${item.sourceKey}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1058,12 +1170,14 @@ class DismissedAutoCard extends ConsumerWidget {
           OutlinedButton(
             key: Key('recover-${item.sourceKey}'),
             style: BambooButtons.secondary,
-            onPressed: () => _recover(context, ref),
+            onPressed: busy
+                ? null
+                : () => run(() => _recover(context, ref)),
             child: const Text('Recover'),
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
