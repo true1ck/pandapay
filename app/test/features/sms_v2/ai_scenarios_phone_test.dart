@@ -68,14 +68,31 @@ void main() {
               as Map)
           .cast<String, Object?>();
 
+  // What the draft says about itself: how sure it is, and which way it says the money went.
+  double? draftConfidence;
+  String? draftDirection;
+
   Map<String, Object?> ruleFor(String hash, {String status = 'provisional'}) {
     final rule = (jsonDecode(jsonEncode(fixture['rule'])) as Map)
         .cast<String, Object?>();
+    final emit = (rule['emit'] as List).cast<Map>().single;
     return {
       ...rule,
       'id': 'AI-$hash',
       'status': status,
       'match': {...(rule['match'] as Map), 'templateHash': hash},
+      if (draftConfidence != null) 'confidence': draftConfidence,
+      if (draftDirection != null)
+        'emit': [
+          {
+            ...emit,
+            'attrs': {
+              ...(emit['attrs'] as Map),
+              'direction': draftDirection,
+              if (draftDirection == 'credit') 'purpose': 'refund',
+            },
+          },
+        ],
     };
   }
 
@@ -180,11 +197,17 @@ void main() {
       (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
   ];
 
+  /// The AI rule that read a message, from the traces saved when it was read. A confident AI reading no longer
+  /// leaves an open review item, so the trace is the one place to ask.
   AiResolution? resolutionOfFirst({Set<String> shared = const {}}) {
-    for (final review in openTemplateReviews()) {
-      final r = AiStatusReader(
-        state,
-      ).resolution(review['sourceKey'] as String, sharedRuleIds: shared);
+    for (final row in database.db.select(
+      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'trace:%'",
+      [_namespace],
+    )) {
+      final r = AiStatusReader(state).resolution(
+        (row['key'] as String).substring('trace:'.length),
+        sharedRuleIds: shared,
+      );
       if (r != null) return r;
     }
     return null;
@@ -192,6 +215,8 @@ void main() {
 
   setUp(() async {
     consent = true;
+    draftConfidence = null;
+    draftDirection = null;
     clockNow = DateTime.utc(2026, 11, 20, 12);
     aiStatus = 'none';
     brokenPage = false;
@@ -335,10 +360,71 @@ void main() {
       final r = resolutionOfFirst();
       expect(r, isNotNull);
       expect(r!.verified, isFalse);
-      // Still listed in Needs review (labelled), so the person can correct it.
-      expect(openTemplateReviews(), isNotEmpty);
+      // A confident AI reading is applied without a question: it is listed under AI auto-resolved, not Needs review.
+      expect(openTemplateReviews(), isEmpty);
     },
   );
+
+  test('S11 a confident AI reading raises no question, however unverified it is', () async {
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+    await sync();
+    aiStatus = 'ready';
+    await sync();
+    expect(spendMinor(), 45000);
+    expect(openTemplateReviews(), isEmpty, reason: 'sure: no question');
+    expect(resolutionOfFirst()?.verified, isFalse, reason: 'still not verified');
+  });
+
+  test('S12 an unsure AI reading (low confidence) is applied and also asks', () async {
+    draftConfidence = .55;
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+    await sync();
+    aiStatus = 'ready';
+    await sync();
+    expect(spendMinor(), 45000, reason: 'unsure readings count too');
+    expect(openTemplateReviews(), hasLength(1), reason: 'unsure: one question');
+    expect(resolutionOfFirst(), isNotNull, reason: 'an AI reading: the card carries the AI suggested badge');
+  });
+
+  test('S13 a reading that contradicts its own message asks, although the AI is confident', () async {
+    // The message says "Sent Rs.450 ... to RAHUL KUMAR" (money out); this draft reads a credit.
+    draftDirection = 'credit';
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+    await sync();
+    aiStatus = 'ready';
+    await sync();
+    expect(openTemplateReviews(), hasLength(1), reason: 'direction conflict: one question');
+    expect(resolutionOfFirst(), isNotNull);
+  });
+
+  test('S14 a question the old rule raised for a confident reading is closed when the message is read again', () async {
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+    await sync();
+    aiStatus = 'ready';
+    await sync();
+    final source = database.db
+        .select("SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'trace:%'", [_namespace])
+        .single['key'] as String;
+    final key = source.substring('trace:'.length);
+    // What an older build left behind: an open template question for this AI-read message.
+    // (The first, unknown read of the message left this question; the AI reading resolved it. The old rule then
+    // opened it again for the unverified reading.)
+    database.db.execute(
+      "UPDATE v2_review_items SET status='open' WHERE namespace=? AND review_id=?",
+      [_namespace, '$key:0'],
+    );
+    expect(openTemplateReviews(), hasLength(1));
+    // The message is read again (new rules, a retry): the question is resolved, and not raised again.
+    database.db.execute('DELETE FROM sms_source_decisions WHERE namespace=?', [_namespace]);
+    database.db.execute('UPDATE sms_captured_messages SET processed=0 WHERE namespace=?', [_namespace]);
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)], backfill: true);
+    expect(openTemplateReviews(), isEmpty);
+    expect(spendMinor(), 45000, reason: 'nothing it read was lost');
+    expect(
+      database.db.select('SELECT status FROM v2_review_items WHERE namespace=?', [_namespace]).single['status'],
+      'resolved',
+    );
+  });
 
   test(
     'S3 a layout the AI could not read falls back to the plain state',

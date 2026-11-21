@@ -253,6 +253,15 @@ void main() {
     () async {
       final shared = RuleBundle.fromJson(baseline);
       await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+      // A second message in a layout the draft does not cover stays unread: a format still waiting for an answer.
+      // That open question, not a confidently read message, is what makes the phone ask for lost answers again.
+      await runtime.capture([
+        QueuedSms(
+          sender: 'AX-HDFCBK-S',
+          body: 'Paid Rs.99.00 from HDFC Bank A/c XX1234 to SOME SHOP on 20-11-26. Ref 6123456789099.',
+          receivedAt: DateTime.utc(2026, 11, 20, 7, 9),
+        ),
+      ]);
       await sync();
       await sync();
       expect(purposes(), ['purchase']);
@@ -278,7 +287,7 @@ void main() {
       for (var i = 0; i < 4; i++) {
         await sync();
       }
-      expect(rows('ai:%'), 1, reason: 'the answer was fetched again');
+      expect(rows('ai:%'), 2, reason: 'the answers (one per uploaded layout) were fetched again');
       expect(state.get('restore:ai:count'), '2');
       final again = ProvisionalStore(state).overlay(shared);
       expect(identical(again.bundle, first.bundle), isFalse, reason: 'the cache was invalidated');
