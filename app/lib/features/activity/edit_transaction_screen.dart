@@ -11,6 +11,7 @@ import '../sms_v2/providers/data_providers.dart';
 import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:flutter/material.dart';
+import '../../app/design/sheet_select_field.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
@@ -999,33 +1000,22 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         : '${_selfTransfer!.bank}:${_selfTransfer!.accountLast4}';
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpace.lg),
-      child: DropdownButtonFormField<String>(
+      child: SheetSelectField<String>(
         key: ValueKey('self-transfer-account:$selected'),
-        initialValue: selected,
-        isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Mark as self-transfer',
-          helperText:
-              'Excluded from spending. Choose the receiving account; remembering is optional.',
-          helperMaxLines: 2,
-        ),
-        hint: const Text('Choose receiving account'),
-        borderRadius: BorderRadius.circular(16),
-        dropdownColor: BambooInk.paper,
-        focusColor: Colors.transparent,
-        items: [
-          for (final choice in choices.entries)
-            DropdownMenuItem(
-              value: choice.key,
-              child: Text(
-                '${selfTransferBankLabel(choice.value.bank)} •${choice.value.accountLast4}',
-              ),
-            ),
-        ],
+        label: 'Mark as self-transfer',
+        helperText:
+            'Excluded from spending. Choose the receiving account; remembering is optional.',
+        hint: 'Choose receiving account',
+        sheetTitle: 'Receiving account',
+        options: choices.keys.toList(),
+        value: selected,
+        optionLabel: (key) {
+          final c = choices[key]!;
+          return '${selfTransferBankLabel(c.bank)} •${c.accountLast4}';
+        },
         onChanged: _saving
             ? null
             : (value) {
-                if (value == null) return;
                 setState(() {
                   _selfTransfer = choices[value];
                   _entryKind = TxnEntryKind.transfer;
@@ -1374,29 +1364,21 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpace.lg),
-                    DropdownButtonFormField<TxnEntryKind>(
+                    SheetSelectField<TxnEntryKind>(
                       key: ValueKey(_entryKind),
-                      initialValue: _entryKind,
-                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                      decoration: inputDecoration('Kind'),
-                      borderRadius: BorderRadius.circular(16),
-                      dropdownColor: BambooInk.paper,
-                      focusColor: Colors.transparent,
-                      menuMaxHeight: 320,
-                      items: [
+                      label: 'Kind',
+                      value: _entryKind,
+                      options: [
                         for (final kind in TxnEntryKind.values.where(
                           (kind) =>
                               (kind != TxnEntryKind.refund &&
                                   kind != TxnEntryKind.unknown) ||
                               kind == _entryKind,
                         ))
-                          DropdownMenuItem(
-                            value: kind,
-                            child: Text(kind.label),
-                          ),
+                          kind,
                       ],
+                      optionLabel: (kind) => kind.label,
                       onChanged: (value) {
-                        if (value == null) return;
                         setState(() {
                           _entryKind = value;
                           // Entertainment on an Investment makes no sense:
@@ -1445,29 +1427,16 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                     ],
                     if (_entryKind == TxnEntryKind.transfer &&
                         _onPhone(entry)) ...[
-                      DropdownButtonFormField<bool>(
+                      SheetSelectField<bool>(
                         key: ValueKey('transfer-type:$_cardBill'),
-                        initialValue: _cardBill,
-                        isExpanded: true,
-                        style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                        decoration: inputDecoration('Transfer type'),
-                        borderRadius: BorderRadius.circular(16),
-                        dropdownColor: BambooInk.paper,
-                        focusColor: Colors.transparent,
-                        items: const [
-                          DropdownMenuItem(
-                            value: false,
-                            child: Text('Between my accounts'),
-                          ),
-                          DropdownMenuItem(
-                            value: true,
-                            child: Text('Credit card bill'),
-                          ),
-                        ],
+                        label: 'Transfer type',
+                        value: _cardBill,
+                        options: const [false, true],
+                        optionLabel: (card) =>
+                            card ? 'Credit card bill' : 'Between my accounts',
                         onChanged: _saving
                             ? null
-                            : (value) =>
-                                  setState(() => _cardBill = value ?? false),
+                            : (value) => setState(() => _cardBill = value),
                       ),
                       const SizedBox(height: AppSpace.lg),
                     ],
@@ -1565,57 +1534,39 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpace.lg),
-                    DropdownButtonFormField<TxnRail>(
+                    SheetSelectField<TxnRail>(
                       key: ValueKey('rail-$_instrument'),
-                      initialValue: _rail,
-                      style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                      decoration: inputDecoration('Payment route'),
-                      isExpanded: true,
-                      borderRadius: BorderRadius.circular(16),
-                      dropdownColor: BambooInk.paper,
-                      focusColor: Colors.transparent,
-                      menuMaxHeight: 320,
-                      items: [
-                        // A route an older entry already carries stays
-                        // listed so opening it does not change it.
-                        for (final rail in {
-                          ...railsForInstrument(_instrument),
-                          _rail,
-                        })
-                          DropdownMenuItem(
-                            value: rail,
-                            child: Text(_railLabel(rail)),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) setState(() => _rail = value);
-                      },
+                      label: 'Payment route',
+                      value: _rail,
+                      // A route an older entry already carries stays
+                      // listed so opening it does not change it.
+                      options: {...railsForInstrument(_instrument), _rail}
+                          .toList(),
+                      optionLabel: _railLabel,
+                      onChanged: (value) => setState(() => _rail = value),
                     ),
                     if (_instrument == TxnInstrument.creditCard) ...[
                       const SizedBox(height: AppSpace.lg),
-                      DropdownButtonFormField<String>(
-                        initialValue: _userCardId,
-                        style: BambooFonts.ui(14.5, color: BambooInk.ink900),
-                        decoration: inputDecoration('Card'),
-                        isExpanded: true,
-                        borderRadius: BorderRadius.circular(16),
-                        dropdownColor: BambooInk.paper,
-                        focusColor: Colors.transparent,
-                        items: [
-                          // Only credit cards for a credit-card payment; a
-                          // card already chosen stays so it is not lost.
+                      SheetSelectField<String>(
+                        label: 'Card',
+                        value: _userCardId,
+                        // Only credit cards for a credit-card payment; a
+                        // card already chosen stays so it is not lost.
+                        options: [
                           for (final c in cards)
                             if (cardFitsInstrument(c.cardType, _instrument) ||
                                 c.id == _userCardId)
-                              DropdownMenuItem(
-                                value: c.id,
-                              child: Text(
-                                c.nickname?.isNotEmpty == true
-                                    ? c.nickname!
-                                    : c.cardName,
-                              ),
-                            ),
+                              c.id,
                         ],
+                        optionLabel: (id) {
+                          for (final c in cards) {
+                            if (c.id != id) continue;
+                            return c.nickname?.isNotEmpty == true
+                                ? c.nickname!
+                                : c.cardName;
+                          }
+                          return 'Saved card';
+                        },
                         onChanged: (v) => setState(() => _userCardId = v),
                       ),
                     ],
