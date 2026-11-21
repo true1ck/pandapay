@@ -119,6 +119,12 @@ final aiReviewStatusProvider = FutureProvider<AiReviewStatus>((ref) async {
       if (state == AiTemplateState.checking) {
         checking.add(hash);
       } else if (sharingOn &&
+          // Only where the AI has nothing usable for the format: it failed or was
+          // turned down (or this phone turned its draft down), or no answer and
+          // nothing in progress. A `ready` answer is a working rule: resetting
+          // would delete it, so no retry is offered while it stands.
+          (state == AiTemplateState.none ||
+              state == AiTemplateState.unavailable) &&
           remote.isNotEmpty &&
           item.payload['aiHold'] == null &&
           !isReceiptQuestion(item) &&

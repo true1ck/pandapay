@@ -7,6 +7,8 @@ import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
 import '../storage/schema.dart';
+import '../storage/sync_state_store.dart';
+import '../sync/ai_status.dart';
 import '../sync/template_retry.dart';
 
 /// The "Try again" button of a Needs review card whose format the AI could not
@@ -31,7 +33,14 @@ Future<bool> tryAgainFor(WidgetRef ref, List<LocalReviewItem> group) async {
       (byFormat[format] ??= []).addAll([if (source is String) source]);
     }
   }
+  final reader = AiStatusReader(SyncStateStore(db, namespace: namespace));
   for (final MapEntry(key: format, value: sources) in byFormat.entries) {
+    // Never reset a layout the AI answered with a working rule (or is still
+    // drafting): that would delete the rule this phone reads with.
+    final state = reader.templateState(format);
+    if (state != AiTemplateState.none && state != AiTemplateState.unavailable) {
+      continue;
+    }
     hashes.addAll(retry.reset(format, sourceKeys: sources));
   }
   ref.invalidate(aiReviewStatusProvider);

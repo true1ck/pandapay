@@ -496,10 +496,10 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     // What the person still has to answer, as questions: a format shared by
     // many messages is one question. An AI reading the AI was sure about is not
     // a question: it is AI auto-resolved.
-    final openItems = [
+    final openItems = onePerMessage([
       for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
         if (!ai.settledByAi(item)) item,
-    ];
+    ]);
     // Of those, the AI readings the AI was unsure about (they carry the
     // "AI suggested" badge on their card).
     final aiSuggested = {
@@ -581,10 +581,10 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                         onRetry: () => ref.invalidate(reviewItemsProvider),
                       ),
                       data: (items) {
-                        final rest = [
+                        final rest = onePerMessage([
                           for (final item in items)
                             if (!ai.settledByAi(item)) item,
-                        ];
+                        ]);
                         return ReviewInboxList(
                           items: rest,
                           busy: _saving,
@@ -1237,6 +1237,8 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
                       'The AI was not sure about this reading. Please check it.',
                     AiDoubt.directionConflict =>
                       "The message and the AI's reading disagree on whether money came in or went out.",
+                    AiDoubt.notMovedYet =>
+                      'The message says the money has not moved (yet), but the AI read a payment.',
                     AiDoubt.reopened => 'You moved this back to review.',
                   },
                   key: const Key('ai-doubt-reason'),
