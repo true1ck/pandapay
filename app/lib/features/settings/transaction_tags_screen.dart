@@ -115,6 +115,9 @@ class _TransactionTagsScreenState extends ConsumerState<TransactionTagsScreen> {
               RequiredBox(
                 invalid: submitted && targetId == null,
                 child: DropdownButtonFormField<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   isExpanded: true,
                   initialValue: targetId,
                   decoration: InputDecoration(

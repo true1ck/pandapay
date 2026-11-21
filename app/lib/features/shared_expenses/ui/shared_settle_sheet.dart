@@ -344,6 +344,9 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
     String? selected,
     ValueChanged<String?> choose,
   ) => DropdownButtonFormField<String>(
+    borderRadius: BorderRadius.circular(16),
+    dropdownColor: BambooInk.paper,
+    focusColor: Colors.transparent,
     key: ValueKey('$label:$selected'),
     initialValue: selected,
     isExpanded: true,

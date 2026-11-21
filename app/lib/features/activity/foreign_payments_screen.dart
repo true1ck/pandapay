@@ -547,6 +547,9 @@ class _ForeignPaymentDetailScreenState
                 ),
                 if (cards.isNotEmpty)
                   DropdownButtonFormField<String>(
+                    borderRadius: BorderRadius.circular(16),
+                    dropdownColor: BambooInk.paper,
+                    focusColor: Colors.transparent,
                     initialValue: cardId,
                     isExpanded: true,
                     decoration: const InputDecoration(

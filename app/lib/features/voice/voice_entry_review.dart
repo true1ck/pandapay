@@ -160,6 +160,9 @@ class VoiceEntryReview extends StatelessWidget {
         if (!isPoints) ...[
           if (isMoneyIn)
             DropdownButtonFormField<TxnInstrument>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _moneyInHow.containsKey(editor.instrument)
                   ? editor.instrument
                   : TxnInstrument.other,
@@ -179,6 +182,9 @@ class VoiceEntryReview extends StatelessWidget {
             )
           else
             DropdownButtonFormField<TxnInstrument>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: editor.instrument,
               decoration: InputDecoration(
                 labelText: editor.type == VoiceActionType.refund
@@ -219,6 +225,9 @@ class VoiceEntryReview extends StatelessWidget {
                 editor.requiresWalletCard &&
                 !editor.hasWalletCard(cards),
             child: DropdownButtonFormField<String>(
+            borderRadius: BorderRadius.circular(16),
+            dropdownColor: BambooInk.paper,
+            focusColor: Colors.transparent,
             initialValue: cards.any((c) => c.id == editor.selectedCardId)
                 ? editor.selectedCardId
                 : null,

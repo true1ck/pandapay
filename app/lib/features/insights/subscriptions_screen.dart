@@ -1138,6 +1138,9 @@ class _AutoPaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DropdownButtonFormField<String>(
+    borderRadius: BorderRadius.circular(16),
+    dropdownColor: BambooInk.paper,
+    focusColor: Colors.transparent,
     initialValue: _labels.containsKey(value) ? value : 'unknown',
     isExpanded: true,
     decoration: InputDecoration(

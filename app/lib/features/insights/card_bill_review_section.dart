@@ -233,6 +233,9 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
               RequiredBox(
                 invalid: _submitted && _cardId == null,
                 child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: available.any((c) => c.id == _cardId) ? _cardId : null,
                 decoration: InputDecoration(label: requiredLabel('Card')),
                 items: [

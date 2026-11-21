@@ -141,6 +141,9 @@ class _RequestUnsupportedCardScreenState extends ConsumerState<RequestUnsupporte
             ),
             const SizedBox(height: AppSpace.lg),
             DropdownButtonFormField<CardNetwork>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _networkGuess,
               decoration: const InputDecoration(labelText: 'Network (optional)'),
               items: [

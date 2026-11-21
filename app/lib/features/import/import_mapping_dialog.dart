@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../app/design/app_theme.dart' show BambooInk;
 import '../../app/design/bamboo_components.dart';
 import '../../app/required_field.dart';
 
@@ -107,6 +108,9 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
               ),
               if (widget.tables.length > 1)
                 DropdownButtonFormField<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   initialValue: _sheet,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Worksheet'),
@@ -121,6 +125,9 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                   }),
                 ),
               DropdownButtonFormField<ImportDateOrder>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 isExpanded: true,
                 key: ValueKey('date-order:$_sheet'),
                 initialValue: _dateOrder,
@@ -148,6 +155,9 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                   ),
                 ),
                 DropdownButtonFormField<ImportNumberFormat>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   isExpanded: true,
                   key: ValueKey('number:$_sheet'),
                   initialValue: _numberFormat,
@@ -165,6 +175,9 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                   onChanged: (v) => _numberFormat = v!,
                 ),
                 DropdownButtonFormField<bool>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   isExpanded: true,
                   key: ValueKey('sign:$_sheet'),
                   initialValue: _negativeIsExpense,
@@ -216,6 +229,9 @@ class _ImportMappingDialogState extends State<ImportMappingDialog> {
                   ),
                 for (final column in ImportColumn.values)
                   DropdownButtonFormField<int>(
+                    borderRadius: BorderRadius.circular(16),
+                    dropdownColor: BambooInk.paper,
+                    focusColor: Colors.transparent,
                     key: ValueKey('$_sheet:$_header:${column.name}'),
                     initialValue: _columns[column] ?? -2,
                     isExpanded: true,

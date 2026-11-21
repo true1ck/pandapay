@@ -106,6 +106,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
         actions: [FilledButton(onPressed: _submit, child: const Text('Save'))],
         children: [
           DropdownButtonFormField<CorrectionKind>(
+            borderRadius: BorderRadius.circular(16),
+            dropdownColor: BambooInk.paper,
+            focusColor: Colors.transparent,
             initialValue: _kind,
             isExpanded: true,
             decoration: const InputDecoration(
@@ -138,6 +141,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
             ),
           if (_kind == CorrectionKind.wrongKind)
             DropdownButtonFormField<EventType>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _eventType,
               isExpanded: true,
               decoration: const InputDecoration(
@@ -156,6 +162,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
           if (_kind == CorrectionKind.wrongCategory ||
               _kind == CorrectionKind.preferenceOnly)
             DropdownButtonFormField<String>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _category,
               isExpanded: true,
               decoration: const InputDecoration(
@@ -173,6 +182,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
             ),
           if (_kind == CorrectionKind.wrongInstrument)
             DropdownButtonFormField<String>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _instrument,
               isExpanded: true,
               decoration: InputDecoration(
@@ -243,6 +255,9 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
             ),
           if (_kind == CorrectionKind.wrongAmount)
             DropdownButtonFormField<String>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _role,
               decoration: const InputDecoration(
                 labelText: 'What does this amount mean?',

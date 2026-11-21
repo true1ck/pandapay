@@ -586,6 +586,9 @@ class _YearTotals extends StatelessWidget {
           children: [
             Expanded(child: Text('YEARLY ACTIVITY', style: _eyebrow)),
             DropdownButton<int>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               value: year,
               underline: const SizedBox.shrink(),
               items: [

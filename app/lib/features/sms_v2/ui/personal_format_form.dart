@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../app/design/app_theme.dart' show BambooInk;
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/required_field.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -100,6 +101,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
           padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
         ),
         DropdownButtonFormField<int>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           key: const Key('personal-amount'),
           isExpanded: true,
           decoration: InputDecoration(
@@ -138,6 +142,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
           },
         ),
         DropdownButtonFormField<int>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           key: const Key('personal-date'),
           isExpanded: true,
           decoration: const InputDecoration(
@@ -157,6 +164,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
         ),
         if (_date != null)
           DropdownButtonFormField<String>(
+            borderRadius: BorderRadius.circular(16),
+            dropdownColor: BambooInk.paper,
+            focusColor: Colors.transparent,
             key: const Key('personal-date-format'),
             initialValue: _dateFormat,
             isExpanded: true,
@@ -175,6 +185,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
           padding: EdgeInsets.fromLTRB(4, 8, 4, 0),
         ),
         DropdownButtonFormField<String>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           key: const Key('personal-instrument'),
           isExpanded: true,
           decoration: InputDecoration(
@@ -197,6 +210,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
               value == null ? 'Choose a confirmed account or card' : null,
         ),
         DropdownButtonFormField<EventType>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           key: const Key('personal-type'),
           initialValue: _type,
           isExpanded: true,
@@ -224,6 +240,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
         ),
         if (_type == EventType.ipoApplication)
           DropdownButtonFormField<AmountRole>(
+            borderRadius: BorderRadius.circular(16),
+            dropdownColor: BambooInk.paper,
+            focusColor: Colors.transparent,
             key: ValueKey(_type),
             initialValue: _role,
             decoration: const InputDecoration(
@@ -243,6 +262,9 @@ class _PersonalFormatFormState extends State<PersonalFormatForm> {
             onChanged: (value) => _role = value!,
           ),
         DropdownButtonFormField<Rail>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           key: const Key('personal-rail'),
           initialValue: _rail,
           decoration: const InputDecoration(

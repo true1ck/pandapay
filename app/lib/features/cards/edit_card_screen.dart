@@ -440,6 +440,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<int>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         initialValue: _statementDay,
                         decoration: const InputDecoration(
                           labelText: 'Statement day',
@@ -454,6 +457,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                     const SizedBox(width: AppSpace.md),
                     Expanded(
                       child: DropdownButtonFormField<int>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         initialValue: _dueDay,
                         decoration: const InputDecoration(labelText: 'Due day'),
                         items: [
@@ -478,6 +484,9 @@ class _EditCardScreenState extends ConsumerState<EditCardScreen> {
                 if (userCard.cardType?.toLowerCase() != 'debit') ...[
                 const SizedBox(height: AppSpace.lg),
                 DropdownButtonFormField<AutopayMode>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   initialValue: _autopayMode,
                   decoration: const InputDecoration(
                     labelText: 'Autopay preference',

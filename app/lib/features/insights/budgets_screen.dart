@@ -402,6 +402,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
             ),
             const SizedBox(height: AppSpace.md),
             DropdownButtonFormField<BudgetScope>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _scope,
               decoration: const InputDecoration(
                 labelText: 'Applies to',
@@ -432,6 +435,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
               RequiredBox(
                 invalid: _submitted && _scopeRefId == null,
                 child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: _scopeRefId,
                 decoration: InputDecoration(
                   label: requiredLabel('Category'),
@@ -463,6 +469,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
               RequiredBox(
                 invalid: _submitted && _scopeRefId == null,
                 child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: _scopeRefId,
                 decoration: InputDecoration(
                   label: requiredLabel('Tag'),
@@ -482,6 +491,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
               RequiredBox(
                 invalid: _submitted && _scopeRefId == null,
                 child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: _scopeRefId,
                 decoration: InputDecoration(
                   label: requiredLabel('Card'),
@@ -510,6 +522,9 @@ class _BudgetEditorSheetState extends ConsumerState<_BudgetEditorSheet> {
             ],
             const SizedBox(height: AppSpace.md),
             DropdownButtonFormField<BudgetPeriod>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _period,
               decoration: const InputDecoration(
                 labelText: 'Resets',
