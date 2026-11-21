@@ -2,9 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 
 import '../../../app/providers.dart' as app;
+import '../pipeline/ai_doubt.dart' show AiDoubt;
 import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
 import '../sync/ai_status.dart';
+import '../ledger/providers.dart';
+import 'ai_review_doubt.dart';
 import 'data_providers.dart';
 import 'runtime_provider.dart';
 
@@ -13,6 +16,7 @@ class AiReviewStatus {
   const AiReviewStatus({
     this.checkingTemplates = const {},
     this.resolved = const {},
+    this.readings = const AiOpenReadings(),
   });
 
   /// Local template hashes whose format was uploaded and awaits an answer.
@@ -20,6 +24,21 @@ class AiReviewStatus {
 
   /// Source key -> the AI rule that read it.
   final Map<String, AiResolution> resolved;
+
+  /// Which of those AI readings the AI was sure about (they are AI
+  /// auto-resolved, not questions) and which need the person (they stay on
+  /// Needs review with the "AI suggested" badge).
+  final AiOpenReadings readings;
+
+  /// An open question that is only an AI reading the AI was sure about: it does
+  /// not belong on Needs review.
+  bool settledByAi(LocalReviewItem item) => readings.settles(item);
+
+  /// Why the person is asked about an AI reading, when it is one.
+  AiDoubt? doubtOf(LocalReviewItem item) {
+    final source = item.payload['sourceKey'];
+    return source is String ? readings.doubtful[source] : null;
+  }
 
   AiResolution? resolutionOf(LocalReviewItem item) {
     final source = item.payload['sourceKey'];
@@ -34,6 +53,7 @@ class AiReviewStatus {
 
 final aiReviewStatusProvider = FutureProvider<AiReviewStatus>((ref) async {
   final items = await ref.watch(reviewItemsProvider.future);
+  final model = await ref.watch(smsV2LedgerReadModelProvider.future);
   final namespace = ref.watch(app.cacheNamespaceProvider);
   final cache = await ref.watch(app.responseCacheProvider.future);
   final db = cache.financialStore.database.db;
@@ -61,7 +81,15 @@ final aiReviewStatusProvider = FutureProvider<AiReviewStatus>((ref) async {
       checking.add(hash);
     }
   }
-  return AiReviewStatus(checkingTemplates: checking, resolved: resolved);
+  return AiReviewStatus(
+    checkingTemplates: checking,
+    resolved: resolved,
+    readings: classifyOpenAiReadings(
+      items: items,
+      aiRead: resolved.keys.toSet(),
+      factsBySource: model.factsBySource,
+    ),
+  );
 });
 
 /// What this phone itself holds about the AI check (answers saved, links back

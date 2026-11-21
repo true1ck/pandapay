@@ -11,12 +11,12 @@ import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
 import '../../../app/design/widgets.dart';
 import '../../../app/providers.dart' as app;
+import '../pipeline/ai_doubt.dart' show AiDoubt;
 import '../pipeline/review_answers.dart';
 import '../pipeline/trace.dart';
 import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
 import 'correction_form.dart';
-import 'dismissed_reviews_view.dart';
 import 'review_clustering.dart';
 import 'review_controller.dart';
 import 'review_draft.dart';
@@ -468,17 +468,21 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
         ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
     final ai =
         ref.watch(aiReviewStatusProvider).valueOrNull ?? const AiReviewStatus();
-    final aiItems = [
-      for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
-        if (ai.resolutionOf(item) != null) item,
-    ];
     // What the person still has to answer, as questions: a format shared by
-    // many messages is one question.
+    // many messages is one question. An AI reading the AI was sure about is not
+    // a question: it is AI auto-resolved.
     final openItems = [
       for (final item in review.valueOrNull ?? const <LocalReviewItem>[])
-        if (ai.resolutionOf(item) == null) item,
+        if (!ai.settledByAi(item)) item,
     ];
+    // Of those, the AI readings the AI was unsure about (they carry the
+    // "AI suggested" badge on their card).
+    final aiSuggested = {
+      for (final item in openItems)
+        if (ai.resolutionOf(item) != null) item.payload['sourceKey'],
+    }.length;
     final settled = ref.watch(settledListsProvider).valueOrNull;
+    final historyCount = (settled?.historyMessages ?? 0) + dismissed.length;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Needs review'),
@@ -511,26 +515,15 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                         'Needs review${review.valueOrNull == null ? '' : ' (${reviewQuestionCount(openItems, reviewKindOf)})'}',
                       ),
                     ),
-                    if (aiItems.isNotEmpty)
-                      ButtonSegment(
-                        value: 2,
-                        label: Text(
-                          'AI suggested (${reviewQuestionCount(aiItems, reviewKindOf)})',
-                        ),
-                      ),
                     ButtonSegment(
-                      value: 3,
+                      value: 1,
                       label: Text(
                         'AI auto-resolved (${settled?.auto.length ?? 0})',
                       ),
                     ),
                     ButtonSegment(
-                      value: 4,
-                      label: Text('History (${settled?.history.length ?? 0})'),
-                    ),
-                    ButtonSegment(
-                      value: 1,
-                      label: Text('Dismissed (${dismissed.length})'),
+                      value: 2,
+                      label: Text('History ($historyCount)'),
                     ),
                   ],
                   selected: {_tab},
@@ -541,30 +534,20 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
             ),
             // Always shown, on every tab: whether AI is working or not.
             GeminiStatusBar(
-              openItems: (review.valueOrNull?.length ?? 0) - aiItems.length,
-              // Per MESSAGE, from this phone: what the AI read (the AI
-              // auto-resolved list) and what still waits for a reading.
-              aiReadMessages: settled?.auto.length,
+              openItems: openItems.length,
+              // Per MESSAGE, from this phone: what the AI read and settled (AI
+              // auto-resolved), plus the readings it is unsure about (still on
+              // Needs review, with the AI suggested badge).
+              aiReadMessages: settled == null
+                  ? null
+                  : settled.auto.length + aiSuggested,
+              aiNeedsCheck: aiSuggested,
             ),
             Expanded(
-              child: _tab == 3
-                  ? const SettledList(history: false)
-                  : _tab == 4
-                  ? const SettledList(history: true)
-                  : _tab == 2 && aiItems.isNotEmpty
-                  ? ReviewInboxList(
-                      items: aiItems,
-                      busy: _saving,
-                      onAction: _act,
-                      aiStatus: ai,
-                      header: const _AiSuggestedNote(),
-                    )
-                  : _tab == 1
-                  ? DismissedReviewList(
-                      items: dismissed,
-                      busy: _saving,
-                      onRestore: _restore,
-                    )
+              child: _tab == 1
+                  ? const SettledList()
+                  : _tab == 2
+                  ? HistoryList(onRecoverReview: _restore, busy: _saving)
                   : review.when(
                       skipLoadingOnReload: true,
                       skipLoadingOnRefresh: true,
@@ -575,14 +558,20 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                       data: (items) {
                         final rest = [
                           for (final item in items)
-                            if (ai.resolutionOf(item) == null) item,
+                            if (!ai.settledByAi(item)) item,
                         ];
                         return ReviewInboxList(
                           items: rest,
                           busy: _saving,
                           onAction: _act,
                           aiStatus: ai,
-                          header: SharingOfferCard(openItems: rest.length),
+                          header: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SharingOfferCard(openItems: rest.length),
+                              if (aiSuggested > 0) const _AiSuggestedNote(),
+                            ],
+                          ),
                         );
                       },
                     ),
@@ -644,7 +633,7 @@ class _ReviewInboxListState extends State<ReviewInboxList> {
         content: Text(
           'These are the ${targets.length} messages shown under $scope. '
           'Future messages in the same formats will be ignored too. '
-          'You can undo this right after, or later from the Dismissed tab.',
+          'You can undo this right after, or later from History.',
         ),
         actions: [
           TextButton(
@@ -1006,6 +995,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
     final allMessages = group.every((i) => i.message != null);
     final uniform = bundle.uniformFormat;
     final aiResolution = widget.aiStatus.resolutionOf(first);
+    final aiDoubt = widget.aiStatus.doubtOf(first);
     final aiChecking =
         aiResolution == null && group.every(widget.aiStatus.isChecking);
     // Every question can also be answered by editing the whole transaction. A
@@ -1194,6 +1184,21 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
                   ? 'Verified by PandaPay'
                   : 'AI suggested, not yet verified',
             ),
+            if (aiDoubt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  switch (aiDoubt) {
+                    AiDoubt.lowConfidence =>
+                      'The AI was not sure about this reading. Please check it.',
+                    AiDoubt.directionConflict =>
+                      "The message and the AI's reading disagree on whether money came in or went out.",
+                    AiDoubt.reopened => 'You moved this back to review.',
+                  },
+                  key: const Key('ai-doubt-reason'),
+                  style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
+                ),
+              ),
           ] else if (aiChecking) ...[
             const SizedBox(height: 2),
             const AiStatusLine(
@@ -1310,11 +1315,11 @@ class _AiSuggestedNote extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: AppSpace.sm),
+    key: const Key('ai-suggested-note'),
+    padding: const EdgeInsets.only(top: AppSpace.sm),
     child: Text(
-      'These were read by an AI-written rule that no one at PandaPay has '
-      'checked yet. Use Fix if a reading is wrong; once it is verified the '
-      'label changes.',
+      'Cards marked "AI suggested" were read by AI, but it was not sure, or its reading does not match '
+      'the message. Check them with Correct or Fix. Everything the AI was sure about is in AI auto-resolved.',
       style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
     ),
   );

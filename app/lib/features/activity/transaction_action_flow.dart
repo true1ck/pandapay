@@ -93,6 +93,11 @@ void _refresh(WidgetRef ref) {
   ref.invalidate(transactionActionHistoryProvider);
 }
 
+/// Refreshes what shows transactions and totals after one was hidden or restored
+/// from somewhere other than the Activity screens (AI auto-resolved Dismiss and
+/// History Recover).
+void refreshTransactionViews(WidgetRef ref) => _refresh(ref);
+
 /// Hides [entry] as a refund / reversal / wrong transaction. The detail screen
 /// stays open: nothing here navigates.
 Future<void> ignoreEntry(

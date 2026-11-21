@@ -55,7 +55,6 @@ TransactionEntry _entry(String id, String source, DateTime at) =>
     );
 
 void main() {
-  final now = DateTime(2026, 11, 10);
 
   test(
     'only Gemini reads are AI auto-resolved; user facts are History; rule reads show nowhere',
@@ -71,7 +70,6 @@ void main() {
           'sb': [_fact('fb1', 'sb', 'rules'), _fact('fb2', 'sb', 'user')],
           'sc': [_fact('fc', 'sc', 'rules', ruleId: 'AI-abc123')],
         },
-        now: now,
       );
       expect(lists.history.map((i) => i.entry.id), ['b']);
       expect(lists.history.single.byUser, isTrue);
@@ -98,7 +96,6 @@ void main() {
       {
         'su': [_fact('fu', 'su', 'rules', ruleId: 'AI-abc:local:def')],
       },
-      now: now,
     );
     expect(lists.autoTransactions.single.how, 'Read by an AI rule, not yet verified');
   });
@@ -119,15 +116,15 @@ void main() {
         'so': [_fact('fo', 'so', 'rules')],
         'sv': [_fact('fv', 'sv', 'rules')],
       },
-      now: now,
     );
     expect(lists.auto, isEmpty);
     expect(lists.history, isEmpty);
   });
 
-  test('AI auto-resolved lists every AI read, newest first; History stays capped at the row limit', () {
+  test('AI auto-resolved and History list everything, newest first, with no row cap', () {
+    const many = 220;
     final entries = [
-      for (var i = 0; i < settledMaxRows + 20; i++)
+      for (var i = 0; i < many; i++)
         _entry(
           't$i',
           's$i',
@@ -135,20 +132,20 @@ void main() {
         ),
     ];
     final aiFacts = {
-      for (var i = 0; i < settledMaxRows + 20; i++)
+      for (var i = 0; i < many; i++)
         's$i': [_fact('f$i', 's$i', 'rules', ruleId: 'AI-cap$i')],
     };
-    final ai = settledLists(entries, aiFacts, now: now);
-    expect(ai.auto.length, settledMaxRows + 20, reason: 'owner: show all, not a slice');
+    final ai = settledLists(entries, aiFacts);
+    expect(ai.auto.length, many, reason: 'owner: show all, not a slice');
     expect((ai.auto.first as SettledItem).entry.id, 't0');
     final userFacts = {
-      for (var i = 0; i < settledMaxRows + 20; i++)
-        's$i': [_fact('u$i', 's$i', 'user')],
+      for (var i = 0; i < many; i++)
+        's$i': [_fact('u$i', 's$i', 'rules'), _fact('uu$i', 's$i', 'user')],
     };
-    expect(settledLists(entries, userFacts, now: now).history.length, settledMaxRows);
+    expect(settledLists(entries, userFacts).history.length, many);
   });
 
-  test('AI auto-resolved covers all time; History keeps its 90-day window', () {
+  test('AI auto-resolved and History both cover all time', () {
     final lists = settledLists(
       [
         _entry('ai-old', 'sa', DateTime(2025, 6, 3)),
@@ -160,10 +157,9 @@ void main() {
         'sb': [_fact('fb', 'sb', 'rules', ruleId: 'AI-new1')],
         'sc': [_fact('fc', 'sc', 'user')],
       },
-      now: now,
     );
     expect(lists.autoTransactions.map((i) => i.entry.id), ['ai-new', 'ai-old']);
-    expect(lists.history, isEmpty, reason: 'an edit older than 90 days stays out of History');
+    expect(lists.history.map((i) => i.entry.id), ['user-old'], reason: 'History has no 90-day window any more');
   });
 
   testWidgets('a card shows the shop, the amount and how it was settled', (
@@ -319,12 +315,12 @@ void main() {
             ),
           ],
           child: const MaterialApp(
-            home: Scaffold(body: SettledList(history: false)),
+            home: Scaffold(body: SettledList()),
           ),
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('messages AI read, newest first'), findsOneWidget);
+      expect(find.textContaining('Messages the AI read and was sure of, newest first'), findsOneWidget);
       expect(find.text('Shop g'), findsOneWidget);
       expect(find.text('Read by an AI rule, verified'), findsOneWidget);
     },
@@ -339,13 +335,13 @@ void main() {
           ),
         ],
         child: const MaterialApp(
-          home: Scaffold(body: SettledList(history: false)),
+          home: Scaffold(body: SettledList()),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('No message has been read by AI yet'), findsOneWidget);
-    expect(find.textContaining('open one to fix it'), findsOneWidget);
+    expect(find.textContaining('No message has been read by AI and settled yet'), findsOneWidget);
+    expect(find.textContaining('wait in Needs review'), findsOneWidget);
   });
 
   group('the Gemini status bar', () {

@@ -3,70 +3,22 @@ import 'package:intl/intl.dart';
 
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
-import '../providers/data_providers.dart';
 import 'review_clustering.dart';
-import 'screen_parts.dart';
 
-/// Messages the user marked "not financial", grouped by format, each group
-/// with a way back. Moving a group back removes the format's ignore rule and
-/// returns its messages to Needs review.
-class DismissedReviewList extends StatelessWidget {
-  const DismissedReviewList({
+/// One group of messages the user marked "not financial" (they share a format),
+/// as a History row. Recover removes the format's ignore rule and returns its
+/// messages to Needs review.
+class DismissedReviewPanel extends StatelessWidget {
+  const DismissedReviewPanel({
     super.key,
-    required this.items,
-    required this.onRestore,
-    this.busy = false,
-  });
-
-  final List<LocalReviewItem> items;
-  final bool busy;
-  final void Function(List<LocalReviewItem>) onRestore;
-
-  @override
-  Widget build(BuildContext context) {
-    if (items.isEmpty) {
-      return const SmsEmpty(
-        'Nothing dismissed. Messages you mark as not financial appear here, so you can bring them back.',
-        icon: Icons.inventory_2_outlined,
-      );
-    }
-    final bundles = bundleReviewItems(items, (_) => 'template');
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpace.lg,
-        AppSpace.sm,
-        AppSpace.lg,
-        AppSpace.xxl,
-      ),
-      children: [
-        const BambooNote(
-          'Messages you marked as not financial. Moving a group back reads that format again and returns its messages to Needs review.',
-        ),
-        const SizedBox(height: AppSpace.md),
-        for (final bundle in bundles)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpace.md),
-            child: _DismissedPanel(
-              bundle: bundle,
-              busy: busy,
-              onRestore: () => onRestore(bundle.items),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _DismissedPanel extends StatelessWidget {
-  const _DismissedPanel({
     required this.bundle,
     required this.busy,
-    required this.onRestore,
+    required this.onRecover,
   });
 
   final ReviewBundle bundle;
   final bool busy;
-  final VoidCallback onRestore;
+  final VoidCallback onRecover;
 
   @override
   Widget build(BuildContext context) {
@@ -116,10 +68,16 @@ class _DismissedPanel extends StatelessWidget {
               ),
             ),
           const SizedBox(height: AppSpace.lg),
+          Text(
+            'Dismissed from Needs review',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.sm),
           OutlinedButton(
+            key: Key('recover-${first.id}'),
             style: BambooButtons.secondary,
-            onPressed: busy ? null : onRestore,
-            child: const Text('Move back to review'),
+            onPressed: busy ? null : onRecover,
+            child: const Text('Recover'),
           ),
         ],
       ),
