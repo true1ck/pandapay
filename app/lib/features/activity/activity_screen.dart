@@ -80,6 +80,22 @@ class ActivityScreen extends ConsumerStatefulWidget {
   /// of one of the type filters. Starts on all time, since a SIP is monthly.
   final String? initialType;
 
+  /// More of what the Spending page can have on, so a list opened from one of
+  /// its tiles holds exactly what that tile added up. All optional.
+  final Set<String> initialCategoryIds;
+  final Set<String> initialCategoryLabels;
+  final Set<String> initialMerchants;
+  final Set<String> initialCardIds;
+  final bool initialUntagged;
+
+  /// Inside Money in: the kinds to show (keys of the Money in kinds). Empty is
+  /// all of Money in, which includes money back from investments.
+  final Set<String> initialMoneyInKinds;
+
+  /// With [initialType] `spending`: count it the way the Spending page does,
+  /// refunds netted off, and show it as "Spent".
+  final bool initialNetSpending;
+
   const ActivityScreen({
     super.key,
     this.initialTagIds = const {},
@@ -90,6 +106,13 @@ class ActivityScreen extends ConsumerStatefulWidget {
     this.initialSpendOnly = false,
     this.initialQuery,
     this.initialType,
+    this.initialCategoryIds = const {},
+    this.initialCategoryLabels = const {},
+    this.initialMerchants = const {},
+    this.initialCardIds = const {},
+    this.initialUntagged = false,
+    this.initialMoneyInKinds = const {},
+    this.initialNetSpending = false,
   });
 
   @override
@@ -274,6 +297,12 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
       widget.initialTo != null ||
       widget.initialSpendOnly ||
       widget.initialQuery != null ||
+      widget.initialCategoryIds.isNotEmpty ||
+      widget.initialCategoryLabels.isNotEmpty ||
+      widget.initialMerchants.isNotEmpty ||
+      widget.initialCardIds.isNotEmpty ||
+      widget.initialUntagged ||
+      widget.initialMoneyInKinds.isNotEmpty ||
       _initialType != null;
 
   _ActivityTypeFilter? get _initialType {
@@ -382,10 +411,25 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
           widget.initialFrom != null || widget.initialTo != null;
       final startsOnType = _initialType != null && !hasInitialDate;
       final defaultMonth = _activityMonthFilter();
+      final startType =
+          _initialType ??
+          (widget.initialSpendOnly
+              ? _ActivityTypeFilter.spending
+              : _ActivityTypeFilter.all);
       ref.read(_activityFilterProvider.notifier).state = ActivityFilter(
         tagIds: widget.initialTagIds,
         categoryId: widget.initialCategoryId,
         categoryLabel: widget.initialCategoryLabel,
+        categoryIds: widget.initialCategoryIds,
+        categoryLabels: widget.initialCategoryLabels,
+        merchants: widget.initialMerchants,
+        cardIds: widget.initialCardIds,
+        untagged: widget.initialUntagged,
+        moneyInKinds: widget.initialMoneyInKinds,
+        // Only meaningful on the Spending view.
+        netSpending:
+            widget.initialNetSpending &&
+            startType == _ActivityTypeFilter.spending,
         from: hasInitialDate
             ? widget.initialFrom
             : startsOnType
@@ -401,11 +445,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
             : startsOnType
             ? _ActivityDatePreset.allTime
             : _ActivityDatePreset.thisMonth,
-        type:
-            _initialType ??
-            (widget.initialSpendOnly
-                ? _ActivityTypeFilter.spending
-                : _ActivityTypeFilter.all),
+        type: startType,
         query: widget.initialQuery,
       );
       setState(() => _initialFilterReady = true);
@@ -1222,6 +1262,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                           entries,
                         ),
                         sort: sort,
+                        spentOnly: filter.netSpending,
                       );
                       final visibleSelected = projection.visibleSelectedCount(
                         _selectedIds,
@@ -1354,6 +1395,7 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                                           totalIncoming: row.totalIncoming!,
                                           totalOutgoing: row.totalOutgoing!,
                                           count: row.activeCount!,
+                                          spentOnly: row.spentOnly,
                                         ),
                                       );
                                     case ActivityRowKind.dayHeader:
@@ -1633,6 +1675,12 @@ class ActivityFilter {
   final Set<String> moneyInKinds;
   final _ActivityDatePreset datePreset;
 
+  /// On the Spending view only: count it the way the Spending page does. Refunds
+  /// are in the list and come off the total, and the strip reads "Spent" (what
+  /// that page's tile says) rather than Money out, which also holds money put
+  /// into investments. Set when the person comes from a Spending tile.
+  final bool netSpending;
+
   ActivityFilter({
     String? cardId,
     Set<String> cardIds = const {},
@@ -1652,6 +1700,7 @@ class ActivityFilter {
     this.type = _ActivityTypeFilter.all,
     this.moneyInKinds = const {},
     this.datePreset = _ActivityDatePreset.allTime,
+    this.netSpending = false,
   }) : cardIds = {?cardId, ...cardIds},
        categoryIds = {?categoryId, ...categoryIds},
        categoryLabels = {?categoryLabel, ...categoryLabels};
@@ -1699,7 +1748,12 @@ class ActivityFilter {
         type == _ActivityTypeFilter.moneyIn &&
         moneyInKinds.contains('refund') &&
         entry.entryKind == TxnEntryKind.refund;
-    if (!type.matches(entry) && !refundAsked) return false;
+    // The Spending page lists refunds among spending, since they come off it.
+    final refundNetted =
+        netSpending &&
+        type == _ActivityTypeFilter.spending &&
+        entry.entryKind == TxnEntryKind.refund;
+    if (!type.matches(entry) && !refundAsked && !refundNetted) return false;
     if (moneyInKinds.isNotEmpty && type == _ActivityTypeFilter.moneyIn) {
       if (!moneyInKinds.contains(_moneyInKindOf(entry, moneyInKindByEvent))) {
         return false;
@@ -1751,8 +1805,13 @@ class ActivityFilter {
     _ActivityTypeFilter? type,
     Set<String>? moneyInKinds,
     _ActivityDatePreset? datePreset,
+    bool? netSpending,
   }) {
     return ActivityFilter(
+      // Only means something on the Spending view.
+      netSpending:
+          (type ?? this.type) == _ActivityTypeFilter.spending &&
+          (netSpending ?? this.netSpending),
       cardIds: cardIds ?? (cardId != null ? {?cardId()} : this.cardIds),
       categoryIds:
           categoryIds ??
@@ -3982,10 +4041,14 @@ class _SummaryCard extends StatelessWidget {
   final Money totalIncoming;
   final Money totalOutgoing;
   final int count;
+
+  /// Show only "Spent" ([totalOutgoing]); the Spending page's own number.
+  final bool spentOnly;
   const _SummaryCard({
     required this.totalIncoming,
     required this.totalOutgoing,
     required this.count,
+    this.spentOnly = false,
   });
 
   @override
@@ -4002,29 +4065,41 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
-          Expanded(
-            child: _SummaryMetric(
-              label: 'Money in',
-              amount: totalIncoming,
-              prefix: '+',
-              color: BambooInk.jade,
+          if (spentOnly)
+            Expanded(
+              child: _SummaryMetric(
+                key: const ValueKey('activity_summary_spent'),
+                label: 'Spent',
+                amount: totalOutgoing,
+                prefix: '',
+                color: BambooInk.ink900,
+              ),
+            )
+          else ...[
+            Expanded(
+              child: _SummaryMetric(
+                label: 'Money in',
+                amount: totalIncoming,
+                prefix: '+',
+                color: BambooInk.jade,
+              ),
             ),
-          ),
-          Container(width: 1, height: 28, color: BambooInk.hairlineOnPaper),
-          const SizedBox(width: AppSpace.sm),
-          Expanded(
-            child: _SummaryMetric(
-              label: 'Money out',
-              amount: totalOutgoing,
-              prefix: '−',
-              color: BambooInk.clay,
+            Container(width: 1, height: 28, color: BambooInk.hairlineOnPaper),
+            const SizedBox(width: AppSpace.sm),
+            Expanded(
+              child: _SummaryMetric(
+                label: 'Money out',
+                amount: totalOutgoing,
+                prefix: '−',
+                color: BambooInk.clay,
+              ),
             ),
-          ),
+          ],
           const SizedBox(width: AppSpace.sm),
           Text(
             count == 0
                 ? 'No activity'
-                : totalOutgoing.paise == 0
+                : totalOutgoing.paise == 0 && !spentOnly
                 ? 'No spending'
                 : '$count txns',
             style: BambooFonts.ui(11.5, color: BambooInk.ink500),
@@ -4042,6 +4117,7 @@ class _SummaryMetric extends StatelessWidget {
   final Color color;
 
   const _SummaryMetric({
+    super.key,
     required this.label,
     required this.amount,
     required this.prefix,

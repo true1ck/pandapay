@@ -65,6 +65,9 @@ class ActivityListRow {
   final Money? totalOutgoing;
   final int? activeCount;
 
+  /// The strip shows only "Spent" ([totalOutgoing]); see [ActivityProjection].
+  final bool spentOnly;
+
   const ActivityListRow._({
     required this.kind,
     this.day,
@@ -72,6 +75,7 @@ class ActivityListRow {
     this.totalIncoming,
     this.totalOutgoing,
     this.activeCount,
+    this.spentOnly = false,
   });
 
   const ActivityListRow.selection() : this._(kind: ActivityRowKind.selection);
@@ -80,11 +84,13 @@ class ActivityListRow {
     required Money totalIncoming,
     required Money totalOutgoing,
     required int activeCount,
+    bool spentOnly = false,
   }) : this._(
          kind: ActivityRowKind.summary,
          totalIncoming: totalIncoming,
          totalOutgoing: totalOutgoing,
          activeCount: activeCount,
+         spentOnly: spentOnly,
        );
 
   const ActivityListRow.dayHeader(DateTime day)
@@ -114,10 +120,14 @@ class ActivityProjection {
     required this.activeCount,
   });
 
+  /// [spentOnly] is the Spending page's own number: spending with refunds
+  /// netted off (the ledger's spend), as "Spent", with no Money in beside it.
+  /// Money out also holds money put into investments, which is not spending.
   factory ActivityProjection.build(
     List<TransactionEntry> entries, {
     Totals? ledgerTotals,
     ActivitySort sort = ActivitySort.newest,
+    bool spentOnly = false,
   }) {
     final byDay = <DateTime, List<TransactionEntry>>{};
     final counts = <String, int>{};
@@ -129,6 +139,14 @@ class ActivityProjection {
       final date = entry.occurredAt;
       final day = DateTime(date.year, date.month, date.day);
       byDay.putIfAbsent(day, () => []).add(entry);
+      if (spentOnly &&
+          ledgerTotals == null &&
+          entry.status == 'active' &&
+          entry.entryKind == TxnEntryKind.refund) {
+        // No ledger: a refund still comes off what was spent.
+        outgoingPaise -= entry.amount.paise;
+        continue;
+      }
       if (ledgerTotals != null ||
           entry.status != 'active' ||
           entry.entryKind == TxnEntryKind.refund ||
@@ -147,17 +165,20 @@ class ActivityProjection {
         outgoingPaise += entry.amount.paise;
       }
     }
-    final incoming = Money.fromPaise(
-      ledgerTotals?.moneyInMinor ?? incomingPaise,
-    );
+    final incoming = spentOnly
+        ? const Money.zero()
+        : Money.fromPaise(ledgerTotals?.moneyInMinor ?? incomingPaise);
     final outgoing = Money.fromPaise(
-      ledgerTotals?.moneyOutMinor ?? outgoingPaise,
+      spentOnly
+          ? (ledgerTotals?.spendMinor ?? outgoingPaise)
+          : (ledgerTotals?.moneyOutMinor ?? outgoingPaise),
     );
     activeCount = ledgerTotals?.transactionCount ?? activeCount;
     final summary = ActivityListRow.summary(
       totalIncoming: incoming,
       totalOutgoing: outgoing,
       activeCount: activeCount,
+      spentOnly: spentOnly,
     );
     final List<ActivityListRow> rows;
     if (sort.groupsByDay) {
@@ -202,6 +223,7 @@ class ActivityProjectionCache {
   List<TransactionEntry>? _entries;
   Object? _scope;
   Totals? _ledgerTotals;
+  bool _spentOnly = false;
   ActivityProjection? _projection;
 
   ActivityProjection resolve(
@@ -209,16 +231,20 @@ class ActivityProjectionCache {
     required Object scope,
     Totals? ledgerTotals,
     ActivitySort sort = ActivitySort.newest,
+    bool spentOnly = false,
   }) {
     if (identical(_entries, entries) &&
         _scope == scope &&
+        _spentOnly == spentOnly &&
         identical(_ledgerTotals, ledgerTotals))
       return _projection!;
     final projection = ActivityProjection.build(
       entries,
       ledgerTotals: ledgerTotals,
       sort: sort,
+      spentOnly: spentOnly,
     );
+    _spentOnly = spentOnly;
     _ledgerTotals = ledgerTotals;
     _entries = entries;
     _scope = scope;

@@ -2025,4 +2025,161 @@ void main() {
       expect(tester.testTextInput.isVisible, isFalse);
     });
   });
+
+  // A tile on the Spending page opens the list that tile added up. These are
+  // the parts of that which live in Activity.
+  group('opened from a Spending tile', () {
+    List<TransactionEntry> spendRows() => [
+      _txn(
+        id: 'shop',
+        amount: Money.fromRupees(1000),
+        occurredAt: DateTime(2026, 3, 5),
+        merchantName: 'Corner Shop',
+      ),
+      _txn(
+        id: 'cafe',
+        amount: Money.fromRupees(500),
+        occurredAt: DateTime(2026, 3, 6),
+        merchantName: 'Cafe',
+        userCardId: 'uc2',
+        tags: const [TransactionTag(id: 't1', name: 'Work')],
+      ),
+      _txn(
+        id: 'refund',
+        amount: Money.fromRupees(200),
+        occurredAt: DateTime(2026, 3, 7),
+        merchantName: 'Corner Shop',
+        entryKind: TxnEntryKind.refund,
+      ),
+    ];
+
+    Future<void> open(WidgetTester tester, ActivityScreen screen) async {
+      final rows = spendRows();
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(rows),
+        cards: const [],
+        activityScreen: screen,
+        overrides: [transactionsProvider.overrideWith((ref) async => rows)],
+      );
+    }
+
+    testWidgets('Spent nets refunds off and reads Spent, not Money out', (
+      tester,
+    ) async {
+      await open(
+        tester,
+        const ActivityScreen(initialType: 'spending', initialNetSpending: true),
+      );
+      // 1,000 + 500 - the 200 refund, the way the Spending tile counts it.
+      expect(find.byKey(const ValueKey('activity_summary_spent')), findsOne);
+      expect(find.text('Spent'), findsOneWidget);
+      expect(find.text('₹1,300'), findsOneWidget);
+      expect(find.text('Money out'), findsNothing);
+      expect(find.text('Money in'), findsNothing);
+      // The refund is in the list, since it comes off the total.
+      expect(find.text('Corner Shop'), findsNWidgets(2));
+    });
+
+    testWidgets('without the flag Spending is exactly as it was', (
+      tester,
+    ) async {
+      await open(tester, const ActivityScreen(initialType: 'spending'));
+      expect(find.byKey(const ValueKey('activity_summary_spent')), findsNothing);
+      expect(find.text('Money out'), findsOneWidget);
+      expect(find.text('−₹1,500'), findsOneWidget);
+      // No refund among spending, and none taken off.
+      expect(find.text('Corner Shop'), findsOneWidget);
+    });
+
+    testWidgets('a merchant, a saved card or untagged narrows the list', (
+      tester,
+    ) async {
+      // A tile's link always carries the range; the rows are from March.
+      final from = DateTime(2026, 3, 1);
+      final to = DateTime(2026, 3, 31);
+      await open(
+        tester,
+        ActivityScreen(
+          initialFrom: from,
+          initialTo: to,
+          initialMerchants: const {'corner shop'},
+        ),
+      );
+      expect(find.text('Cafe'), findsNothing);
+      expect(find.text('Corner Shop'), findsWidgets);
+
+      await open(
+        tester,
+        ActivityScreen(
+          initialFrom: from,
+          initialTo: to,
+          initialCardIds: const {'uc2'},
+        ),
+      );
+      expect(find.text('Cafe'), findsOneWidget);
+      expect(find.text('Corner Shop'), findsNothing);
+
+      await open(
+        tester,
+        ActivityScreen(initialFrom: from, initialTo: to, initialUntagged: true),
+      );
+      expect(find.text('Cafe'), findsNothing);
+      expect(find.text('Corner Shop'), findsWidgets);
+
+      await open(
+        tester,
+        ActivityScreen(
+          initialFrom: from,
+          initialTo: to,
+          initialTagIds: const {'t1', 'other'},
+        ),
+      );
+      expect(find.text('Cafe'), findsOneWidget);
+      expect(find.text('Corner Shop'), findsNothing);
+    });
+
+    testWidgets('kinds leave money back from investments out of Money in', (
+      tester,
+    ) async {
+      final rows = [
+        _txn(
+          id: 'pay',
+          amount: Money.fromRupees(900),
+          occurredAt: DateTime(2026, 3, 5),
+          merchantName: 'Some Payer',
+          entryKind: TxnEntryKind.income,
+        ),
+        _txn(
+          id: 'redeem',
+          amount: Money.fromRupees(500),
+          occurredAt: DateTime(2026, 3, 6),
+          merchantName: 'Fund Redemption',
+          entryKind: TxnEntryKind.investmentReturn,
+        ),
+      ];
+      await _pump(
+        tester,
+        repo: _FakeUserCardsRepository(rows),
+        cards: const [],
+        // What the Spending page's Money in counts: everything but refunds and
+        // money back from investments.
+        activityScreen: const ActivityScreen(
+          initialType: 'moneyIn',
+          initialMoneyInKinds: {'salary', 'dividend', 'cashback', 'person', 'other'},
+        ),
+        overrides: [
+          transactionsProvider.overrideWith((ref) async => rows),
+          smsV2LedgerReadModelProvider.overrideWith(
+            (ref) async => LedgerReadModel(
+              ledger: LedgerSnapshot(entries: [], events: []),
+              transactions: rows,
+            ),
+          ),
+        ],
+      );
+      expect(find.text('Some Payer'), findsOneWidget);
+      expect(find.text('Fund Redemption'), findsNothing);
+    });
+  });
 }
