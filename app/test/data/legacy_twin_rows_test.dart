@@ -98,4 +98,46 @@ void main() {
     final rows = [_row('v2:a', pipeline: 2), _row('v2:b', pipeline: 2, key: 'k-b')];
     expect(identical(withoutLegacyTwins(rows), rows), isTrue);
   });
+
+  group('a message read again', () {
+    test('the earlier read is hidden, the later one stays', () {
+      final rows = [
+        _row('v2:old', pipeline: 2, key: 'm1'),
+        _row('v2:new', pipeline: 2, key: 'm1#0ae94b245000'),
+      ];
+      expect(_ids(withoutLegacyTwins(rows)), ['v2:new']);
+    });
+
+    test('two payments of one amount from two messages are both kept', () {
+      final rows = [
+        _row('v2:a', pipeline: 2, key: 'm1', rupees: 10000),
+        _row('v2:b', pipeline: 2, key: 'm2', rupees: 10000),
+      ];
+      expect(identical(withoutLegacyTwins(rows), rows), isTrue);
+    });
+
+    test('a different amount on the same message is not hidden', () {
+      final rows = [
+        _row('v2:old', pipeline: 2, key: 'm1', rupees: 100),
+        _row('v2:new', pipeline: 2, key: 'm1#abc', rupees: 200),
+      ];
+      expect(_ids(withoutLegacyTwins(rows)), ['v2:old', 'v2:new']);
+    });
+
+    test('work the person did on the earlier read keeps it', () {
+      final rows = [
+        _row('v2:old', pipeline: 2, key: 'm1', note: 'rent'),
+        _row('v2:new', pipeline: 2, key: 'm1#abc'),
+      ];
+      expect(_ids(withoutLegacyTwins(rows)), ['v2:old', 'v2:new']);
+    });
+
+    test('a withdrawn later read does not hide the earlier one', () {
+      final rows = [
+        _row('v2:old', pipeline: 2, key: 'm1'),
+        _row('v2:new', pipeline: 2, key: 'm1#abc', status: 'ignored'),
+      ];
+      expect(_ids(withoutLegacyTwins(rows)), ['v2:old', 'v2:new']);
+    });
+  });
 }

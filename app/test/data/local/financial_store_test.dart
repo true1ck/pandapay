@@ -276,6 +276,29 @@ void main() {
       );
     },
   );
+  test(
+    'a row with a server-made id is kept while its event is in the phone ledger, pruned once it is not',
+    () {
+      db.db.execute(
+        'CREATE TABLE IF NOT EXISTS v2_events (namespace TEXT NOT NULL, event_id TEXT NOT NULL, '
+        "type TEXT NOT NULL DEFAULT 't', status TEXT NOT NULL DEFAULT 's', payload TEXT NOT NULL DEFAULT '{}', "
+        'dirty INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (namespace, event_id))',
+      );
+      db.db.execute("INSERT INTO v2_events(namespace,event_id) VALUES ('a','evt-held')");
+      TransactionEntry adopted(String id, String event) =>
+          TransactionEntry.fromJson({...row(id).toJson(), 'event_id': event});
+      store.saveTransactions(
+        'a',
+        [adopted('uuid-held', 'evt-held'), adopted('uuid-gone', 'evt-gone'), row('srv')],
+        completeQuery: all,
+      );
+      store.saveTransactions('a', [row('srv')], completeQuery: all);
+      expect(
+        store.transactions('a', all)!.rows.map((r) => r.id).toSet(),
+        {'uuid-held', 'srv'},
+      );
+    },
+  );
   test('range replacement cannot remove rows outside its scope', () {
     store.saveTransactions('a', [
       row('early', day: 1),

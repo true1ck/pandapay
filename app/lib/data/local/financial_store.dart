@@ -991,7 +991,11 @@ class FinancialStore {
           "SELECT 1 FROM sqlite_master WHERE type='table' AND name='v2_events'",
         ).isNotEmpty;
         final pruneCandidate = hasV2Events
-            ? "(id NOT LIKE 'v2:%' OR NOT EXISTS (SELECT 1 FROM v2_events e WHERE e.namespace=financial_entities.namespace AND e.event_id=substr(financial_entities.id,4)))"
+            // A row is held by the phone when its event is in the phone's own
+            // ledger, whatever its id looks like: the projection keeps a
+            // server-made id when it adopts a row onto a phone event, and such a
+            // row the server does not list is a payment the phone read, not stale.
+            ? "NOT EXISTS (SELECT 1 FROM v2_events e WHERE e.namespace=financial_entities.namespace AND e.event_id=COALESCE(json_extract(financial_entities.payload,'\$.event_id'), CASE WHEN financial_entities.id LIKE 'v2:%' THEN substr(financial_entities.id,4) END))"
             : "id NOT LIKE 'v2:%'";
         final existing = database.db.select(
           "SELECT id, payload FROM financial_entities WHERE namespace=? AND entity='transactions' AND pending=0 AND observed_at <= ? AND $pruneCandidate AND NOT EXISTS (SELECT 1 FROM sync_pending_changes p WHERE p.namespace=financial_entities.namespace AND p.entity='transactions' AND p.entity_id=financial_entities.id)",

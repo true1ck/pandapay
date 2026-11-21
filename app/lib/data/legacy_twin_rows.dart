@@ -33,7 +33,7 @@ bool _carriesPersonsWork(TransactionEntry row) =>
 ///  * the person has not tagged, noted, re-categorised or excluded it.
 ///
 /// Rows are returned in their order, as the same instances.
-List<TransactionEntry> withoutLegacyTwins(List<TransactionEntry> rows) {
+List<TransactionEntry> _withoutOldPipelineCopies(List<TransactionEntry> rows) {
   var anyLegacy = false;
   final modern = <String, Set<int>>{};
   for (final row in rows) {
@@ -62,3 +62,46 @@ List<TransactionEntry> withoutLegacyTwins(List<TransactionEntry> rows) {
   }
   return kept.length == rows.length ? rows : kept;
 }
+
+/// The message a key was made from: a second event anchored on the same message
+/// is saved as `<message key>#<event prefix>` (see the server's sms_v2 storage).
+String _baseKey(String key) {
+  final at = key.indexOf('#');
+  return at < 0 ? key : key.substring(0, at);
+}
+
+/// Hides the earlier read of a message that was read again.
+///
+/// Reading a message again can give it a new event id (the rules changed); the
+/// server then holds both events, the first on the bare message key and the
+/// later one on `<key>#<prefix>`, and the old event's row stays active. One
+/// message is one payment, so when an active row and an active later-read row
+/// share the message, the kind and the amount, the earlier read is hidden.
+/// Never when the person tagged, noted, re-categorised or excluded it, and
+/// never for different amounts or kinds (a purchase and its refund stay).
+List<TransactionEntry> _withoutSupersededReads(List<TransactionEntry> rows) {
+  final later = <String>{};
+  for (final row in rows) {
+    final key = row.sourceKey;
+    if (row.status != 'active' || key == null || !key.contains('#')) continue;
+    later.add('${_baseKey(key)}|${row.entryKind.wireValue}|${row.amount.paise}');
+  }
+  if (later.isEmpty) return rows;
+  final kept = <TransactionEntry>[
+    for (final row in rows)
+      if (!(row.status == 'active' &&
+          row.sourceKey != null &&
+          !row.sourceKey!.contains('#') &&
+          !_carriesPersonsWork(row) &&
+          later.contains(
+            '${row.sourceKey}|${row.entryKind.wireValue}|${row.amount.paise}',
+          )))
+        row,
+  ];
+  return kept.length == rows.length ? rows : kept;
+}
+
+/// Hides what is not a second payment: the old-pipeline copy of a message the
+/// phone has read itself, and the earlier read of a message read again.
+List<TransactionEntry> withoutLegacyTwins(List<TransactionEntry> rows) =>
+    _withoutSupersededReads(_withoutOldPipelineCopies(rows));
