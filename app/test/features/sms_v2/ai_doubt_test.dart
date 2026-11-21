@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pandapay/data/local/app_database.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart' show SmsIntakeEntry;
 import 'package:pandapay/features/sms_import/sms_background_queue.dart';
 import 'package:pandapay/data/user_cards_repository.dart' show TransactionEntry;
@@ -59,7 +58,6 @@ Fact _spend(
 
 LocalReviewItem _template(
   String source, {
-  String? body,
   bool hasReading = true,
   String? reason,
 }) => LocalReviewItem(
