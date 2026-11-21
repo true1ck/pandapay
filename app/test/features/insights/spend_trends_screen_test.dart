@@ -2422,6 +2422,15 @@ void main() {
       await tester.ensureVisible(line);
       await tester.tap(line);
       await tester.pumpAndSettle();
+      // The opened line previews only October's payment.
+      final preview = find.byKey(const ValueKey('spending_invested_preview'));
+      expect(preview, findsOneWidget);
+      expect(
+        find.descendant(of: preview, matching: find.textContaining('Fund')),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const ValueKey('spending_invested_view_all')));
+      await tester.pumpAndSettle();
       expect(
         activityUri(tester),
         '/activity?type=investments&from=2026-10-01&to=2026-10-31',
@@ -2995,8 +3004,8 @@ void main() {
       );
     });
 
-    testWidgets('tapping the line, or See all in the opened row, opens Activity '
-        "on this period's investments", (tester) async {
+    testWidgets('View all on the opened line, or See all in the opened row, '
+        "opens Activity on this period's investments", (tester) async {
       await tester.binding.setSurfaceSize(const Size(400, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       const expected =
@@ -3006,7 +3015,11 @@ void main() {
         tester,
         _report(spend: 42000, investment: 15000, byCategory: mix),
       );
+      // The line opens in place first; Activity is one tap further.
       await tester.tap(find.byKey(const ValueKey('spending_invested_line')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('spending_invested_view_all')));
       await tester.pumpAndSettle();
       expect(
         tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data,
@@ -3031,6 +3044,72 @@ void main() {
         tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data,
         expected,
       );
+    });
+
+    testWidgets('the Invested line opens in place to the two latest '
+        'investments and shuts again', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 42000, investment: 6500, byCategory: mix),
+        transactions: [
+          _detailEntry(
+            id: 'fund-a',
+            merchant: 'Fund A',
+            amount: 3000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 5),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'fund-c',
+            merchant: 'Fund C',
+            amount: 1000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'fund-b',
+            merchant: 'Fund B',
+            amount: 2500,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 25),
+            entryKind: TxnEntryKind.investment,
+          ),
+        ],
+      );
+      final line = find.byKey(const ValueKey('spending_invested_line'));
+      final preview = find.byKey(const ValueKey('spending_invested_preview'));
+      // Shut by default: nothing extra under the mix.
+      expect(preview, findsNothing);
+
+      await tester.tap(line);
+      await tester.pumpAndSettle();
+      // The two newest, newest first; the oldest is left for View all.
+      final b = find.text('Fund B · 25 Aug');
+      final c = find.text('Fund C · 20 Aug');
+      expect(b, findsOneWidget);
+      expect(c, findsOneWidget);
+      expect(find.text('Fund A · 5 Aug'), findsNothing);
+      expect(tester.getTopLeft(b).dy, lessThan(tester.getTopLeft(c).dy));
+      expect(
+        find.descendant(of: preview, matching: find.text('₹2,500.00')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('spending_invested_view_all')),
+        findsOneWidget,
+      );
+
+      // Tap again to shut it.
+      await tester.tap(line);
+      await tester.pumpAndSettle();
+      expect(preview, findsNothing);
     });
 
     testWidgets('the Investments row opens into payees and payments like a '

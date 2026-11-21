@@ -2063,6 +2063,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               invested: invested,
               investedPeriodLabel: investedPeriodLabel,
               onInvestedTap: _openInvestments,
+              investedPreview: _latestInvestments,
             ),
             const SizedBox(height: AppSpace.lg),
           ] else if (showInvested) ...[
@@ -2070,10 +2071,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             // line under, and must still say what was invested.
             CardSummaryPanel(
               padding: const EdgeInsets.all(AppSpace.md),
-              child: _InvestedLine(
+              child: _CollapsibleInvestedLine(
                 amount: invested,
                 periodLabel: investedPeriodLabel,
-                onTap: _openInvestments,
+                latest: _latestInvestments,
+                onViewAll: _openInvestments,
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -2309,6 +2311,14 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   /// amount is made of, so a picked month or a filter narrows both alike.
   List<TransactionEntry> get _investmentEntries =>
       _rowsOfKind(TxnEntryKind.investment);
+
+  /// The two most recent of them, for the Invested line to preview. Only
+  /// computed while that line is open, so a shut line costs nothing.
+  List<TransactionEntry> _latestInvestments() {
+    final rows = _investmentEntries
+      ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+    return rows.take(2).toList();
+  }
 
   EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
     final rows = _rowsOfKind(kind);
@@ -4322,6 +4332,11 @@ class SpendingMixCard extends StatefulWidget {
   /// Opens the investments behind the figure. No tap target when null.
   final VoidCallback? onInvestedTap;
 
+  /// The latest investments, for the line to open onto in place. Asked for
+  /// only while the line is open. When given (with [onInvestedTap]) the line
+  /// opens and shuts; otherwise a tap goes straight to [onInvestedTap].
+  final List<TransactionEntry> Function()? investedPreview;
+
   const SpendingMixCard({
     required this.rows,
     required this.total,
@@ -4335,6 +4350,7 @@ class SpendingMixCard extends StatefulWidget {
     this.invested,
     this.investedPeriodLabel = 'this month',
     this.onInvestedTap,
+    this.investedPreview,
   });
 
   @override
@@ -4564,12 +4580,22 @@ class _SpendingMixCardState extends State<SpendingMixCard> {
             SizedBox(height: compact ? 6 : AppSpace.md),
             Container(height: 1, color: BambooInk.hairlineOnPaper),
             SizedBox(height: compact ? 6 : AppSpace.sm),
-            _InvestedLine(
-              amount: invested,
-              periodLabel: widget.investedPeriodLabel,
-              compact: compact,
-              onTap: widget.onInvestedTap,
-            ),
+            if (widget.investedPreview case final latest?
+                when widget.onInvestedTap != null)
+              _CollapsibleInvestedLine(
+                amount: invested,
+                periodLabel: widget.investedPeriodLabel,
+                compact: compact,
+                latest: latest,
+                onViewAll: widget.onInvestedTap!,
+              )
+            else
+              _InvestedLine(
+                amount: invested,
+                periodLabel: widget.investedPeriodLabel,
+                compact: compact,
+                onTap: widget.onInvestedTap,
+              ),
           ],
         ],
       ),
@@ -4955,11 +4981,18 @@ class _InvestedLine extends StatelessWidget {
   final bool compact;
   final VoidCallback? onTap;
 
+  /// The tap opens or shuts a preview below the line (see
+  /// [_CollapsibleInvestedLine]) instead of leaving the screen.
+  final bool expandable;
+  final bool expanded;
+
   const _InvestedLine({
     required this.amount,
     required this.periodLabel,
     this.compact = false,
     this.onTap,
+    this.expandable = false,
+    this.expanded = false,
   });
 
   @override
@@ -5020,14 +5053,21 @@ class _InvestedLine extends StatelessWidget {
           ),
         ),
         if (onTap != null)
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: BambooInk.ink500,
-          ),
+          expandable
+              ? _SpendingChevron(expanded: expanded)
+              : const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
+                ),
       ],
     );
     final tap = onTap;
+    final hint = !expandable
+        ? 'Opens your investments'
+        : expanded
+        ? 'Hides your latest investments'
+        : 'Shows your latest investments';
     return KeyedSubtree(
       key: const ValueKey('spending_invested_line'),
       child: tap == null
@@ -5036,7 +5076,7 @@ class _InvestedLine extends StatelessWidget {
               button: true,
               label:
                   '$title ${amount.format(hidePaise: false)}, not counted in '
-                  'your spending. Opens your investments',
+                  'your spending. $hint',
               child: ExcludeSemantics(
                 child: InkWell(
                   onTap: tap,
@@ -5048,6 +5088,137 @@ class _InvestedLine extends StatelessWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// The Invested line that opens in place: tap it to see the latest two
+/// investments, "View all" for the rest in Activity. Shut by default, so the
+/// mix card stays as short as before.
+class _CollapsibleInvestedLine extends StatefulWidget {
+  final Money amount;
+  final String periodLabel;
+  final bool compact;
+
+  /// The latest investments, asked for only while the line is open.
+  final List<TransactionEntry> Function() latest;
+
+  /// Opens the investments in Activity.
+  final VoidCallback onViewAll;
+
+  const _CollapsibleInvestedLine({
+    required this.amount,
+    required this.periodLabel,
+    required this.latest,
+    required this.onViewAll,
+    this.compact = false,
+  });
+
+  @override
+  State<_CollapsibleInvestedLine> createState() =>
+      _CollapsibleInvestedLineState();
+}
+
+class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
+  bool _expanded = false;
+
+  static String _day(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final local = date.toLocal();
+    return '${local.day} ${months[local.month - 1]}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = widget.compact;
+    final fontSize = compact ? 10.5 : 12;
+    final latest = _expanded ? widget.latest() : const <TransactionEntry>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _InvestedLine(
+          amount: widget.amount,
+          periodLabel: widget.periodLabel,
+          compact: compact,
+          expandable: true,
+          expanded: _expanded,
+          onTap: () => setState(() => _expanded = !_expanded),
+        ),
+        if (_expanded)
+          Padding(
+            key: const ValueKey('spending_invested_preview'),
+            padding: EdgeInsets.only(
+              left: (compact ? 22 : 27) + (compact ? 6 : AppSpace.sm),
+              top: 4,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (latest.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      'Details are not available for this period yet.',
+                      style: BambooFonts.ui(11, color: BambooInk.ink500),
+                    ),
+                  )
+                else
+                  for (final entry in latest)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${_merchantDisplayFor([entry], unknownLabel: 'Unknown').label}'
+                              ' · ${_day(entry.occurredAt)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: BambooFonts.ui(
+                                fontSize.toDouble(),
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpace.xs),
+                          MoneyText(
+                            entry.amount,
+                            confidence: Confidence.confirmed,
+                            showConfidenceIcon: false,
+                            style: BambooFonts.ui(
+                              fontSize.toDouble(),
+                              weight: FontWeight.w600,
+                              color: BambooInk.ink900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const ValueKey('spending_invested_view_all'),
+                    onPressed: widget.onViewAll,
+                    child: const Text('View all'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
