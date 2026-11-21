@@ -7057,6 +7057,28 @@ Future<List<TransactionEntry>> loadTransactionsWithOfflineCache(
       ready = true;
       return local.rows;
     }
+    // Right after the app starts, the first local read can come back
+    // empty-handed (the read worker is still starting, or the read was cut
+    // short by the account being resolved), and `local` stays null. Offline the
+    // server cannot help, so ask the phone once more before giving up: the
+    // rows it holds must never turn into "Can't reach PandaPay". A phone with
+    // nothing stored still surfaces the failure (local stays null again).
+    if (local == null && isOfflineLike(error) && (worker != null || cache == null)) {
+      try {
+        final readCache = cache ?? await _cacheOrNull(ref);
+        final again = await readCache?.readTransactions(
+          namespace,
+          filter,
+          isCurrent: () => ref.read(cacheNamespaceProvider) == namespace,
+        );
+        if (again != null && (again.complete || again.rows.isNotEmpty)) {
+          ready = true;
+          return again.rows;
+        }
+      } catch (_) {
+        // Fall through to the original failure below.
+      }
+    }
     rethrow;
   }
 }
