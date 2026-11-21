@@ -333,6 +333,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final identifier = _identifierController.text.trim();
     // Taken before any await: it outlives this screen (see below).
     final container = ProviderScope.containerOf(context, listen: false);
+    // Also taken before any await, for the sign-up hand-off below. Null when
+    // this screen is embedded or built without a router.
+    final router = GoRouter.maybeOf(context);
     try {
       final code = _codeController.text.trim();
       final authApi = ref.read(authApiProvider);
@@ -401,6 +404,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // there threw "Cannot use ref after the widget was disposed", skipped
       // ensureProfile and logged a false sign-in failure.
       container.read(accessTokenProvider.notifier).state = tokens.accessToken;
+
+      // A new sign-up moves on to product activation itself. Welcome opens this
+      // page with `push`, and the router's refresh then judges the page under
+      // it (/welcome), which it deliberately leaves alone for a signed-in
+      // person who has not finished setup. It never replaces the pushed page,
+      // so the screen sat on "Code accepted" with a Continue that did nothing
+      // until the app was restarted. The router's guards still apply to this
+      // move (phone gate first, then the activation check).
+      if (_isSignUp) router?.go(AppRoute.productActivation);
 
       // Keep returning-user sign-in on its existing path. New sign-ups must
       // pass the product-access gate before POST /profile creates a profile.
