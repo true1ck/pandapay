@@ -4,6 +4,11 @@ import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../providers/data_providers.dart';
 import '../../../data/cached_regexp.dart';
+import '../pipeline/review_content.dart';
+
+// The wording classifier moved to pipeline/review_content.dart (pure Dart, shared with the capture
+// pipeline); the screens keep importing it from here.
+export '../pipeline/review_content.dart';
 
 /// Groups Needs review items into bundles of "the same thing", sorts them
 /// into content types for the filter chips, and works out what a bundle may
@@ -20,97 +25,6 @@ import '../../../data/cached_regexp.dart';
 ///  * messages from one Pay Later provider merge across formats, because they
 ///    are all drawdowns on the same credit line. Format-specific actions are
 ///    then withheld ([ReviewBundle.uniformFormat] is false).
-
-/// What a message says it is, read from its wording. A hint for labels,
-/// filters and totals, never a decision about the money.
-enum ReviewContent {
-  declined('Declined or failed'),
-  security('Security or OTP notice'),
-  promotion('Promotion'),
-  mandate('Mandate or AutoPay'),
-  bill('Bill or due date'),
-  balance('Balance update'),
-  credit('Money in'),
-  debit('Money out'),
-  other('Other');
-
-  const ReviewContent(this.label);
-  final String label;
-
-  /// Only real movements have an amount worth adding up. A declined payment,
-  /// an upcoming mandate or a balance never moved the money it mentions.
-  bool get summable => this == credit || this == debit;
-}
-
-final _declined = cachedRegExp(
-  r'\b(declined|failed|failure|unsuccessful|not successful|rejected|could not be processed|insufficient (?:balance|funds))\b',
-  caseSensitive: false,
-);
-final _security = cachedRegExp(
-  r'\botp\b|verification code|one[- ]?time password|do not share|never share|\bcvv\b|login (?:alert|attempt)|password',
-  caseSensitive: false,
-);
-final _promotion = cachedRegExp(
-  r'pre-?approved|\boffer\b|apply now|limited time|t&c|terms apply|click here|congratulations|\bwin\b|\bcoupon\b',
-  caseSensitive: false,
-);
-final _mandate = cachedRegExp(
-  r'\bmandate\b|auto-?pay|auto[- ]?debit|standing instruction|\bnach\b|e-?mandate',
-  caseSensitive: false,
-);
-final _bill = cachedRegExp(
-  r'\bbill\b|statement|minimum (?:amount )?due|total (?:amount )?due|due date|payment due|outstanding',
-  caseSensitive: false,
-);
-final _credit = cachedRegExp(
-  r'\b(credited|received|refund(?:ed)?|cashback|deposited|reversed|reversal)\b',
-  caseSensitive: false,
-);
-final _debit = cachedRegExp(
-  r'\b(debited|spent|purchase|paid|withdrawn|deducted|charged|txn of|transaction of|used for|sent to|transferred|payment of)\b|\bsent\s+(?:rs\.?|inr|₹)',
-  caseSensitive: false,
-);
-final _balance = cachedRegExp(
-  r'\b(?:avl|available|a/c|account) ?(?:bal|balance)\b|\bbalance\b',
-  caseSensitive: false,
-);
-
-/// The content type of a message body. Order matters: a declined payment that
-/// also says "Not you? Call" is declined, not a security notice.
-ReviewContent classifyReviewContent(String body) {
-  if (_declined.hasMatch(body)) return ReviewContent.declined;
-  if (_security.hasMatch(body)) return ReviewContent.security;
-  if (_mandate.hasMatch(body)) return ReviewContent.mandate;
-  if (_bill.hasMatch(body)) return ReviewContent.bill;
-  if (_promotion.hasMatch(body) &&
-      !_debit.hasMatch(body) &&
-      !_credit.hasMatch(body)) {
-    return ReviewContent.promotion;
-  }
-  final isCredit = _credit.hasMatch(body);
-  final isDebit = _debit.hasMatch(body);
-  if (isDebit && !isCredit) return ReviewContent.debit;
-  if (isCredit && !isDebit) return ReviewContent.credit;
-  // Both verbs ("debited ... will be credited"): the first one is the event.
-  if (isDebit && isCredit) {
-    final d = _debit.firstMatch(body)!.start;
-    final c = _credit.firstMatch(body)!.start;
-    return d < c ? ReviewContent.debit : ReviewContent.credit;
-  }
-  // A balance notice only mentions a balance. A message with an amount before
-  // its "Avl Bal" is describing something that happened to the money in a
-  // wording we do not know, so it must not be filed as a harmless balance
-  // update (where it would sit under the alerts that can be dismissed in
-  // bulk).
-  final balance = _balance.firstMatch(body);
-  if (balance != null) {
-    final amount = _amount.firstMatch(body);
-    if (amount == null || amount.start > balance.start) {
-      return ReviewContent.balance;
-    }
-  }
-  return ReviewContent.other;
-}
 
 class ReviewBundle {
   const ReviewBundle({
