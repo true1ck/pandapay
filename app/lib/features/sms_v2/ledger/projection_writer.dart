@@ -153,10 +153,22 @@ TransactionEntry? transactionForEvent(
     source: 'sms',
     smsReceivedAt: fact.observedAt,
     status: 'active',
+    aiUnverified: isUnverifiedAiReading(fact, event),
     // A cashback the bank credited is a confirmed reward, not an estimate.
     rewardState: event.type == v2.EventType.cashback ? 'confirmed' : 'estimated',
   );
 }
+
+/// A reading an AI-drafted rule made that PandaPay has not checked yet (the
+/// rule id starts `AI-` and carries `:local:`, the same test the AI auto-resolved
+/// cards use) and that the person has neither confirmed nor edited. An edit
+/// makes a person's own fact the money fact, a confirmation marks the event
+/// `user_confirmed`; either ends it.
+bool isUnverifiedAiReading(v2.Fact fact, v2.Event event) =>
+    fact.provenance.engine != v2.Engine.user &&
+    event.status != v2.EventStatus.userConfirmed &&
+    fact.provenance.ruleId.startsWith('AI-') &&
+    fact.provenance.ruleId.contains(':local:');
 
 bool _unchanged(TransactionEntry? stored, TransactionEntry row) =>
     stored != null &&

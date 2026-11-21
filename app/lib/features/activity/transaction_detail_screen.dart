@@ -1536,6 +1536,11 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                           const SizedBox(height: AppSpace.xs),
                           TransactionBadge(entry: entry),
                         ],
+                        // Read by an AI rule PandaPay has not checked yet.
+                        if (txnHasAiTag(entry)) ...[
+                          const SizedBox(height: AppSpace.xs),
+                          TransactionAiTag(entry: entry),
+                        ],
                       ],
                     ),
                   ),

@@ -320,6 +320,7 @@ void main() {
     expect(lists().autoTransactions.single.how, 'Read by an AI rule, not yet verified');
     expect(lists().history, isEmpty);
     expect(tx.status, 'active');
+    expect(tx.aiUnverified, isTrue, reason: 'the row carries the AI tag: unverified AI rule, not edited');
   });
 
   test('a transaction open on Needs review is not also AI auto-resolved', () async {
@@ -410,6 +411,11 @@ void main() {
     final l = lists();
     expect(l.auto, isEmpty);
     expect(l.history.single.entry.id, tx.id);
+    expect(
+      model().transactions.firstWhere((e) => e.id == tx.id).aiUnverified,
+      isFalse,
+      reason: 'the tag ends when the person edits it',
+    );
   });
 
   test('Recover falls back to Needs review when the AI no longer reads the message', () async {
