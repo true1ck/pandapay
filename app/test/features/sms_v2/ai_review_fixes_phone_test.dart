@@ -23,6 +23,7 @@ import 'package:pandapay/features/sms_v2/storage/dismissal_store.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
 import 'package:pandapay/features/sms_v2/ui/auto_dismissal_actions.dart';
+import 'package:pandapay/features/sms_v2/ui/review_clustering.dart' show onePerMessage, reviewKindOf, reviewQuestionCount;
 import 'package:pandapay/features/sms_v2/ui/review_controller.dart';
 import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
 import 'package:pandapay/features/sms_v2/ui/transaction_actions.dart';
@@ -519,6 +520,63 @@ void main() {
         eventType: EventType.purchase,
       );
       expect(current(tx).aiUnverified, isFalse, reason: 'edited by the person: no tag, History');
+    });
+  });
+
+  group('7: one message is one question', () {
+    List<LocalReviewItem> asListed() {
+      // What reviewItemsProvider hands the screen: every open row, enriched with its source and reading.
+      final bySource = model().factsBySource;
+      String? sourceOfFact(Object? factId) => [
+        for (final e in bySource.entries)
+          if (e.value.any((f) => f.factId == factId)) e.key,
+      ].firstOrNull;
+      return [
+        for (final item in openItems())
+          LocalReviewItem(
+            id: item.id,
+            kind: item.kind,
+            payload: {
+              ...item.payload,
+              if (item.kind == 'template') 'hasReading': true,
+              'sourceKey':
+                  item.payload['sourceKey'] ??
+                  sourceOfFact(((item.payload['legs'] as List).first as Map)['factId']),
+            },
+          ),
+      ];
+    }
+
+    test('a doubtful AI reading that raised a template and an event question counts once', () async {
+      draftConfidence = .5;
+      await runtime.capture([_msg('RAHUL KUMAR', 450, 1), _msg('RAHUL KUMAR', 300, 2)]);
+      await sync();
+      aiStatus = 'ready';
+      await sync();
+      final kinds = openItems().map((i) => i.kind).toList();
+      expect(kinds.where((k) => k == 'template'), hasLength(2));
+      expect(kinds.where((k) => k == 'event'), isNotEmpty, reason: 'the linker was unsure too');
+      final listed = asListed();
+      // Two messages of one format: one question, not 1 + events.
+      expect(reviewQuestionCount(listed, reviewKindOf), greaterThan(1), reason: 'before: template + event questions');
+      expect(reviewQuestionCount(onePerMessage(listed), reviewKindOf), 1);
+    });
+
+    test('answering the template question answers its event question too', () async {
+      draftConfidence = .5;
+      await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+      await sync();
+      aiStatus = 'ready';
+      await sync();
+      final items = openItems();
+      final template = items.firstWhere((i) => i.kind == 'template');
+      expect(items.any((i) => i.kind == 'event'), isTrue);
+      (await controller()).apply(
+        items: [LocalReviewItem(id: template.id, kind: 'template', payload: {...template.payload, 'hasReading': true})],
+        kind: CorrectionKind.wrongLink,
+        confirm: true,
+      );
+      expect(openItems(), isEmpty, reason: 'no question left over for the same message');
     });
   });
 }

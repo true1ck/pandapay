@@ -114,6 +114,54 @@ void main() {
     });
   });
 
+  group('wordings the review found (invented messages)', () {
+    // wording -> the direction its own words give (null: not clear)
+    final directions = <String, Direction?>{
+      'Refund of Rs 500.00 for your purchase at SHOP credited to your card XX1234.': Direction.credit,
+      'Rs 200 debited from A/c XX1234 was reversed and credited back to your account on 12-Nov.': Direction.credit,
+      'Reversal of Rs 300 for txn at SHOP processed to A/c XX1234.': Direction.credit,
+      'John sent Rs 300 to you via UPI': Direction.credit,
+      'Rs 1000 transferred to your account XX1234 from XYZ': Direction.credit,
+      'Rs 300 debited from A/c XX1234 Avl Bal Rs 5000. Not you? Call 1800': Direction.debit,
+      'Rs 450 sent to SHOP from A/c XX1234': Direction.debit,
+      'Rs 500 debited and will be credited back in 3 days': null,
+      'Paid Rs 300 to SHOP, received by SHOP UPI Ref 1234': null,
+      'Rs 500 A/c XX1234 UPI Ref 123 SHOP': null,
+    };
+    directions.forEach((body, expected) {
+      test('direction of "$body" is $expected', () => expect(wordingDirection(body), expected));
+    });
+
+    test('a debit read from a refund, a reversal or money sent to you is a direction conflict', () {
+      for (final body in [
+        'Refund of Rs 500.00 for your purchase at SHOP credited to your card XX1234.',
+        'Rs 200 debited from A/c XX1234 was reversed and credited back to your account on 12-Nov.',
+        'John sent Rs 300 to you via UPI',
+        'Rs 1000 transferred to your account XX1234 from XYZ',
+      ]) {
+        expect(aiDoubtOf([_spend('a')], body: body), AiDoubt.directionConflict, reason: body);
+      }
+      // ...and a credit read from them is not.
+      expect(aiDoubtOf([_spend('a', direction: 'credit')], body: 'John sent Rs 300 to you via UPI'), isNull);
+    });
+
+    test('money that has not moved (a future debit, a request, a pending payment) must not be booked silently', () {
+      for (final body in [
+        'Your EMI of Rs 2000 will be debited on 5 Nov from A/c XX1234',
+        'ABC has requested Rs 500 from you on UPI. Approve in your app. Ref 123',
+        'UPI txn of Rs 300 to SHOP is pending',
+        'A debit of Rs 700 is scheduled for 9 Nov',
+        'OTP 4321 for txn of Rs 500 at SHOP. Do not share',
+      ]) {
+        expect(aiDoubtOf([_spend('a')], body: body), AiDoubt.notMovedYet, reason: body);
+      }
+      // A charge that is merely worded as a mandate is a real charge.
+      expect(aiDoubtOf([_spend('a')], body: 'Rs 200 has been debited via AutoPay mandate to NETFLIX'), isNull);
+      // Only a real movement is doubted: a reading that is not a movement is not.
+      expect(aiDoubtOf([_spend('a', evidenceOnly: true)], body: 'Rs 300 is pending'), isNull);
+    });
+  });
+
   group('which open questions are AI auto-resolved', () {
     test('confident: settled; unsure and reopened stay on Needs review', () {
       final items = [

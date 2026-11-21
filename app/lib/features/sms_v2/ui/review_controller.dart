@@ -231,6 +231,16 @@ class ReviewController {
               ),
             ),
           );
+          // The same message can also have an event question (the linker was
+          // unsure too): one message is one question, so answering it answers
+          // that one as well.
+          if (item.kind == 'template' && event != null) {
+            db.execute(
+              "UPDATE v2_review_items SET status='resolved' WHERE namespace=? AND kind='event' "
+              "AND status='open' AND json_extract(payload,'\$.eventId')=?",
+              [namespace, event.eventId],
+            );
+          }
           // A renamed shop is remembered under the name the SMS prints, so the
           // person's name shows on this and every later SMS from that shop. The
           // earlier ones change only when they ask for it (see SimilarChanges).

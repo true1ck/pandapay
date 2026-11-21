@@ -461,6 +461,21 @@ void main() {
     expect(retry.isRetrying(local), isFalse);
   });
 
+  test('S16 a reading that books a payment from a message that says it is pending asks, although the AI is confident', () async {
+    await runtime.capture([
+      QueuedSms(
+        sender: 'AX-HDFCBK-S',
+        body: 'Sent Rs.450.00 from HDFC Bank A/c XX1234 to RAHUL KUMAR on 20-11-26. Ref 612345678901. Status: pending.',
+        receivedAt: DateTime.utc(2026, 11, 20, 7, 1),
+      ),
+    ]);
+    await sync();
+    aiStatus = 'ready';
+    await sync();
+    expect(spendMinor(), 45000, reason: 'still applied, like any unsure reading');
+    expect(openTemplateReviews(), hasLength(1), reason: 'but it asks');
+  });
+
   test(
     'S3 a layout the AI could not read falls back to the plain state',
     () async {

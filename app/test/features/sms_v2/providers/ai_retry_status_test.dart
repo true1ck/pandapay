@@ -96,6 +96,28 @@ void main() {
     expect((await status()).retryable, isEmpty, reason: 'nothing is sent without sharing');
   });
 
+  test('a working (ready) answer, or one still pending, is never reset: no Try again', () async {
+    unreadQuestion();
+    sentAs('ready');
+    expect((await status()).retryable, isEmpty, reason: 'a ready answer is a working private rule');
+    sentAs('pending');
+    expect((await status()).retryable, isEmpty, reason: 'pending: the AI is still working');
+    expect((await status()).checkingTemplates, {local});
+  });
+
+  test('a ready answer this phone itself turned down is as good as none: Try again is offered', () async {
+    unreadQuestion();
+    sentAs('none');
+    const draft = '11111111-1111-4111-8111-111111111111';
+    state().put(
+      'ai:$remote',
+      jsonEncode({'status': 'ready', 'templateHash': remote, 'draftId': draft, 'rule': {'id': 'AI-x'}}),
+    );
+    expect((await status()).retryable, isEmpty, reason: 'draft not judged: a working rule');
+    state().put('draft:verdict:$remote', jsonEncode({'draftId': draft, 'verdict': 'rejected'}));
+    expect((await status()).retryable, {local});
+  });
+
   test('not for a question that waits for history or is a receipt question', () async {
     unreadQuestion(extra: {'aiHold': 'history'});
     sentAs('failed');

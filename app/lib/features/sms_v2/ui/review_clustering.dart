@@ -335,6 +335,27 @@ List<ReviewBundle> bundleReviewItems(
   return bundles;
 }
 
+/// One message is one question. A doubtful AI reading raises a template question
+/// (the pipeline's `_templateReview`) and, when the linker is also unsure, an
+/// event question about the same message: only the template one is shown, and
+/// answering it answers the other too (see `ReviewController.apply`).
+List<LocalReviewItem> onePerMessage(List<LocalReviewItem> items) {
+  final withTemplate = <String>{
+    for (final item in items)
+      if (item.kind == 'template' &&
+          item.payload['sourceKey'] is String)
+        item.payload['sourceKey']! as String,
+  };
+  if (withTemplate.isEmpty) return items;
+  return [
+    for (final item in items)
+      if (item.kind != 'event' ||
+          item.payload['sourceKey'] is! String ||
+          !withTemplate.contains(item.payload['sourceKey']))
+        item,
+  ];
+}
+
 /// How many questions the person has to answer for [items]: one per bundle,
 /// because a format shared by many messages is answered once. This is the
 /// number shown on Needs review, not the number of messages behind it.

@@ -16,6 +16,11 @@ enum AiDoubt {
   /// other (for example "credited" in the message, a debit in the reading).
   directionConflict,
 
+  /// The AI booked money that moved, but the message says it has not (a future
+  /// debit, a schedule, a request, a pending payment), or is a kind of message
+  /// that never moves money (declined, OTP, promotion).
+  notMovedYet,
+
   /// The person moved it back to Needs review themselves (Fix).
   reopened,
 }
@@ -42,6 +47,17 @@ bool readingContradictsWording(String body, Iterable<Fact> facts) {
   return moves.isNotEmpty && moves.every((m) => m.direction != said);
 }
 
+/// True when the AI read a real money movement from a message that says money has
+/// not moved, or that is of a kind that never moves it ([saysNotYetMoved],
+/// [isNeverAMovement]): it would otherwise enter the totals as a spend or an
+/// income. Same classifier as the Needs review chips, no extra wording here.
+bool readingBooksUnmovedMoney(String body, Iterable<Fact> facts) {
+  final moves = facts.any(
+    (fact) => fact is MovementFact && fact.evidenceOnly != true,
+  );
+  return moves && (saysNotYetMoved(body) || isNeverAMovement(body));
+}
+
 /// Whether the person should look at an AI reading, and why. Null is a reading
 /// the AI was sure about: it needs no question. [body] is the message text,
 /// when it is on the phone; without it only confidence can be judged.
@@ -52,6 +68,9 @@ AiDoubt? aiDoubtOf(Iterable<Fact> aiFacts, {String? body}) {
   }
   if (body != null && readingContradictsWording(body, facts)) {
     return AiDoubt.directionConflict;
+  }
+  if (body != null && readingBooksUnmovedMoney(body, facts)) {
+    return AiDoubt.notMovedYet;
   }
   return null;
 }

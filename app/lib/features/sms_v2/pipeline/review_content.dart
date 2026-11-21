@@ -54,6 +54,24 @@ final _debit = cachedRegExp(
   r'\b(debited|spent|purchase|paid|withdrawn|deducted|charged|txn of|transaction of|used for|sent to|transferred|payment of)\b|\bsent\s+(?:rs\.?|inr|₹)',
   caseSensitive: false,
 );
+/// Money sent or transferred TO the person ("John sent Rs 300 to you", "Rs 1000
+/// transferred to your account"): the debit words in it describe the other side.
+final _inbound = cachedRegExp(
+  r'\b(?:sent|transferred)\b[^.\n]{0,40}?\bto (?:you|your (?:a/c|account|acc\w*))\b',
+  caseSensitive: false,
+);
+/// The words of [_credit] that mean money coming back (a refund, a reversal,
+/// cashback): a message that has them AND a debit verb is about the credit.
+final _comingBack = cachedRegExp(
+  r'\b(?:refund(?:ed)?|cashback|reversed|reversal)\b',
+  caseSensitive: false,
+);
+/// Money that has not moved (yet): a future debit, a schedule, a request waiting
+/// for approval, a pending payment.
+final _notYetMoved = cachedRegExp(
+  r'\bwill be (?:debited|charged|deducted|auto-?debited|collected|processed)\b|\bscheduled\b|\bupcoming\b|\brequested\b|\bcollect request\b|\bpending\b',
+  caseSensitive: false,
+);
 final _balance = cachedRegExp(
   r'\b(?:avl|available|a/c|account) ?(?:bal|balance)\b|\bbalance\b',
   caseSensitive: false,
@@ -71,14 +89,18 @@ ReviewContent classifyReviewContent(String body) {
       !_credit.hasMatch(body)) {
     return ReviewContent.promotion;
   }
-  final isCredit = _credit.hasMatch(body);
-  final isDebit = _debit.hasMatch(body);
+  // Money sent TO the person reads with debit words ("sent ... to you"): those
+  // describe the other side, so they are left out of the debit test.
+  final inbound = _inbound.firstMatch(body);
+  final debitText = inbound == null ? body : body.replaceAll(_inbound, ' ');
+  final isCredit = _credit.hasMatch(body) || inbound != null;
+  final isDebit = _debit.hasMatch(debitText);
   if (isDebit && !isCredit) return ReviewContent.debit;
   if (isCredit && !isDebit) return ReviewContent.credit;
   // Both verbs ("debited ... will be credited"): the first one is the event.
   if (isDebit && isCredit) {
-    final d = _debit.firstMatch(body)!.start;
-    final c = _credit.firstMatch(body)!.start;
+    final d = _debit.firstMatch(debitText)!.start;
+    final c = _credit.firstMatch(body)?.start ?? inbound!.start;
     return d < c ? ReviewContent.debit : ReviewContent.credit;
   }
   // A balance notice only mentions a balance. A message with an amount before
@@ -112,8 +134,27 @@ Direction? wordingDirection(String body) {
   if (content != ReviewContent.debit && content != ReviewContent.credit) {
     return null;
   }
-  final isCredit = _credit.hasMatch(body);
-  final isDebit = _debit.hasMatch(body);
+  final inbound = _inbound.hasMatch(body);
+  final isCredit = _credit.hasMatch(body) || inbound;
+  final isDebit = _debit.hasMatch(inbound ? body.replaceAll(_inbound, ' ') : body);
+  // A refund, a reversal or cashback beside a debit verb ("debited ... was
+  // reversed and credited back") is money coming back.
+  if (isCredit && isDebit && _comingBack.hasMatch(body)) return Direction.credit;
   if (isCredit == isDebit) return null;
   return isCredit ? Direction.credit : Direction.debit;
 }
+
+/// True when the message says the money has not moved (yet): a future debit, a
+/// schedule, a request, a pending payment. A reading that books such a message
+/// as money that moved is unsure.
+bool saysNotYetMoved(String body) => _notYetMoved.hasMatch(body);
+
+/// True for a kind of message that never moves money by itself (a declined
+/// payment, an OTP or security notice, a promotion). A mandate or a bill is
+/// left out on purpose: a real charge is often worded as one.
+bool isNeverAMovement(String body) => switch (classifyReviewContent(body)) {
+  ReviewContent.declined ||
+  ReviewContent.security ||
+  ReviewContent.promotion => true,
+  _ => false,
+};

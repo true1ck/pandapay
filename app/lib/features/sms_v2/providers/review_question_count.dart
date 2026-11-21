@@ -140,8 +140,8 @@ final reviewQuestionCountProvider = FutureProvider<int>((ref) async {
     aiRead: aiRead,
     factsBySource: factsBySource,
   );
-  return reviewQuestionCount([
+  return reviewQuestionCount(onePerMessage([
     for (final item in items)
       if (!readings.settles(item)) item,
-  ], reviewKindOf);
+  ]), reviewKindOf);
 });
