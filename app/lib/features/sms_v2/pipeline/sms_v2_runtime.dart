@@ -19,6 +19,7 @@ import '../../../data/local_first/command_outbox.dart';
 import '../../../data/user_cards_repository.dart';
 import '../instruments/instrument_seeder.dart';
 import 'ai_withdrawal.dart';
+import 'stale_questions.dart';
 import '../storage/event_store.dart';
 import '../storage/fact_store.dart';
 import '../storage/instrument_store.dart';
@@ -783,6 +784,16 @@ class SmsV2Runtime {
     // A re-read that was cut short (app closed, an error) left messages without
     // their transaction: finish it before anything else.
     await guarded(finishPendingReread);
+    // Questions an older build opened for messages that are read now (see closeStaleTemplateQuestions).
+    await guarded(() async {
+      final closed = closeStaleTemplateQuestions(
+        financial.database.db,
+        namespace,
+      );
+      if (closed > 0) {
+        financial.notifyExternalChanges(namespace, const ['needs_review']);
+      }
+    });
     final salaryMarker = '${_revision(active.revision)}:salary-payer-1';
     if (_state.get('salary:payer-recheck') != salaryMarker) {
       await guarded(() async {
