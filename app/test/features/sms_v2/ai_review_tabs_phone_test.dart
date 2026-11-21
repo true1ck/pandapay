@@ -21,7 +21,6 @@ import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
 import 'package:pandapay/features/sms_v2/ui/transaction_actions.dart';
 import 'package:pandapay/features/sms_v2/ledger/reports.dart' show LedgerReadModel;
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
-import 'package:pandapay/features/sms_v2/sync/ai_status.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -65,6 +64,7 @@ void main() {
     'rules': <Object?>[],
     'categoryRules': <Object?>[],
   };
+  // ignore: unused_local_variable
   final signature =
       ((jsonDecode(
                     File(
@@ -203,22 +203,6 @@ void main() {
     ))
       (jsonDecode(row['payload'] as String) as Map).cast<String, Object?>(),
   ];
-
-  /// The AI rule that read a message, from the traces saved when it was read. A confident AI reading no longer
-  /// leaves an open review item, so the trace is the one place to ask.
-  AiResolution? resolutionOfFirst({Set<String> shared = const {}}) {
-    for (final row in database.db.select(
-      "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'trace:%'",
-      [_namespace],
-    )) {
-      final r = AiStatusReader(state).resolution(
-        (row['key'] as String).substring('trace:'.length),
-        sharedRuleIds: shared,
-      );
-      if (r != null) return r;
-    }
-    return null;
-  }
 
   setUp(() async {
     consent = true;
