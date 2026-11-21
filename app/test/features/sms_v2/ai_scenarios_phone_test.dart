@@ -15,6 +15,7 @@ import 'package:pandapay/features/sms_v2/pipeline/sms_v2_runtime.dart';
 import 'package:pandapay/features/sms_v2/storage/event_store.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
 import 'package:pandapay/features/sms_v2/sync/ai_status.dart';
+import 'package:pandapay/features/sms_v2/sync/template_retry.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:sqlite3/sqlite3.dart';
 
@@ -424,6 +425,40 @@ void main() {
       database.db.select('SELECT status FROM v2_review_items WHERE namespace=?', [_namespace]).single['status'],
       'resolved',
     );
+  });
+
+  test('S15 Try again: a layout the AI failed on is sent again at once, and a second press waits five minutes', () async {
+    await runtime.capture([_msg('RAHUL KUMAR', 450, 1)]);
+    await sync();
+    aiStatus = 'rejected'; // the admin turned the draft down
+    await sync();
+    final local = openTemplateReviews().single['templateHash'] as String;
+    final source = openTemplateReviews().single['sourceKey'] as String;
+    expect(
+      AiStatusReader(state, now: () => clockNow).templateState(local),
+      AiTemplateState.unavailable,
+    );
+    expect(uploaded, hasLength(1));
+    await sync();
+    expect(uploaded, hasLength(1), reason: 'nothing resends it by itself');
+
+    final retry = TemplateRetry(database.db, namespace: _namespace, clock: () => clockNow);
+    expect(retry.canTry(local), isTrue);
+    final hashes = retry.reset(local, sourceKeys: [source]);
+    expect(hashes, hasLength(1));
+    expect(retry.isRetrying(local), isTrue, reason: 'the card says Trying again until an answer arrives');
+    aiStatus = 'none';
+    await sync();
+    expect(uploaded, hasLength(2), reason: 'the layout went up again at the next pass');
+    expect(uploaded.last, hashes.single);
+    expect(retry.canTry(local), isFalse, reason: 'rate limit: one press per five minutes');
+    expect(retry.reset(local, sourceKeys: [source]), isEmpty);
+    await sync();
+    expect(uploaded, hasLength(2), reason: 'never loops');
+    // A new answer ends "Trying again".
+    aiStatus = 'ready';
+    await sync();
+    expect(retry.isRetrying(local), isFalse);
   });
 
   test(
