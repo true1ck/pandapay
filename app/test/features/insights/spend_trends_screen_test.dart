@@ -2584,62 +2584,19 @@ void main() {
       expect(kinds, isNot(contains('investment_return')));
     });
 
-    testWidgets('Spent opens Activity on spending for the range and the '
-        'picked month', (tester) async {
-      Future<void> pumpAndTapSpent({int? month}) async {
-        await pumpRouted(
-          tester,
-          from: DateTime(2026, 8, 15),
-          to: DateTime(2026, 10, 20),
-          report: _report(spend: 1500, income: 90000),
-          rows: const [],
-        );
-        if (month != null) await tapMonth(tester, month);
-        await tester.ensureVisible(find.text('Spent').first);
-        await tester.tap(find.text('Spent').first);
-        await tester.pumpAndSettle();
-      }
-
-      await pumpAndTapSpent();
-      var p = Uri.parse(activityUri(tester)).queryParameters;
-      expect(p['type'], 'spending');
-      expect(p['from'], '2026-08-15');
-      expect(p['to'], '2026-10-20');
-      // Without the ledger there is no netting to ask for.
-      expect(p.containsKey('net'), isFalse);
-
-      await pumpAndTapSpent(month: 2);
-      p = Uri.parse(activityUri(tester)).queryParameters;
-      expect(p['from'], '2026-10-01');
-      expect(p['to'], '2026-10-20');
-    });
-
-    testWidgets('Spent asks for refunds netted off on the ledger path', (
-      tester,
-    ) async {
+    testWidgets('Spent is not a link yet: its ledger total and the Activity '
+        'rows are not reconciled', (tester) async {
       await pumpRouted(
         tester,
         from: DateTime(2026, 8, 1),
         to: DateTime(2026, 10, 31),
         report: _report(spend: 1500, income: 90000),
         rows: const [],
-        overrides: [
-          smsV2ReportingEnabledProvider.overrideWithValue(true),
-          smsV2LedgerReadModelProvider.overrideWith(
-            (ref) async => LedgerReadModel(
-              ledger: LedgerSnapshot(entries: [], events: []),
-              transactions: const [],
-            ),
-          ),
-        ],
       );
       await tester.ensureVisible(find.text('Spent').first);
       await tester.tap(find.text('Spent').first);
       await tester.pumpAndSettle();
-      expect(
-        Uri.parse(activityUri(tester)).queryParameters['net'],
-        'true',
-      );
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
     });
 
     testWidgets('a tag on this screen goes to Activity with the tile', (
@@ -2653,8 +2610,8 @@ void main() {
         rows: const [],
         tagIds: const {'trip'},
       );
-      await tester.ensureVisible(find.text('Spent').first);
-      await tester.tap(find.text('Spent').first);
+      await tester.ensureVisible(find.text('Money in'));
+      await tester.tap(find.text('Money in'));
       await tester.pumpAndSettle();
       expect(
         Uri.parse(activityUri(tester)).queryParametersAll['tag'],

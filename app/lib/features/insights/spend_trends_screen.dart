@@ -1440,13 +1440,6 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     },
   );
 
-  /// Spent for this period, in Activity: the same rows, with refunds listed
-  /// since they come off the total (the strip then reads Spent).
-  void _openSpent() => _openActivity(
-    type: 'spending',
-    net: ref.read(smsV2ReportingEnabledProvider),
-  );
-
   /// Rewards for this period. That page keeps its own card and category
   /// filters and cannot take this screen's, so the person is told when any are
   /// on.
@@ -2164,7 +2157,6 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
           _SpendMetricsCard(
             report: summaryReport,
             onMoneyIn: _openMoneyIn,
-            onSpent: _openSpent,
             onRewards: _openRewards,
           ),
           const SizedBox(height: AppSpace.lg),
@@ -3446,13 +3438,11 @@ class _FilterLabel extends StatelessWidget {
 class _SpendMetricsCard extends StatelessWidget {
   final SpendReport report;
   final VoidCallback onMoneyIn;
-  final VoidCallback onSpent;
   final VoidCallback onRewards;
 
   const _SpendMetricsCard({
     required this.report,
     required this.onMoneyIn,
-    required this.onSpent,
     required this.onRewards,
   });
 
@@ -3494,17 +3484,15 @@ class _SpendMetricsCard extends StatelessWidget {
                     chevron: true,
                   ),
                 ),
-                InkWell(
-                  onTap: onSpent,
-                  borderRadius: BorderRadius.circular(12),
-                  child: _SpendMetricTile(
-                    label: 'Spent',
-                    amount: report.spend.total,
-                    icon: Icons.north_rounded,
-                    accent: BambooInk.ink700,
-                    tint: BambooInk.paperCool,
-                    chevron: true,
-                  ),
+                // Not a link yet: this total adds up the SMS ledger while Activity
+                // adds up saved rows, and on real phones they differ (see
+                // docs on the Spent/Activity reconciliation work).
+                _SpendMetricTile(
+                  label: 'Spent',
+                  amount: report.spend.total,
+                  icon: Icons.north_rounded,
+                  accent: BambooInk.ink700,
+                  tint: BambooInk.paperCool,
                 ),
                 _SpendMetricTile(
                   label: shortBy.isNegative ? 'Surplus' : 'Short by',
