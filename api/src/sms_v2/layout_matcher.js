@@ -41,12 +41,15 @@ const MAX_WILDCARDS = 4;
 // before a ".", cannot be read), and no layout that was readable may lose that.
 const MAX_ANCHORED_WILDCARDS = 12;
 const MAX_ADJACENT_LOOSE = 2;
-const ANCHOR_CHARS = 40; // the fixed text after a slot that ends it, counted in characters of the layout
+// The fixed text after a slot that ends it, in characters of the layout. A layout whose pattern comes out too long is built
+// again with the next, shorter budget (22 Nov 2026: a 372-character bill notice with 4 dates and 7 name slots, seen 12 times,
+// needed 2,098 characters with 40 and 1,905 with 8).
+const ANCHOR_BUDGETS = [40, 24, 12, 8];
 // One to three blanks, written without a variable quantifier: the phone's regex lint (lint.dart) and the server's
 // (lintPattern) both refuse a quantified group that holds a variable quantifier, even inside a lookahead.
 const GAP = String.raw`\s\s?\s?`;
 const isLoose = (kind) => isWild(kind) || kind === "phone"; // a phone pattern ([\d -]{5,}) backtracks like a name
-const MAX_PATTERN = 1900; // the rule schema allows 2,000
+const MAX_PATTERN = 1990; // the rule schema and the phone lint allow 2,000
 
 class LayoutError extends Error {
   constructor(code) {
@@ -64,7 +67,7 @@ const stopsAt = (next) => String.raw`(?:(?!${next})[\s\S]){1,60}`;
 // ANCHOR_CHARS of text, always its first word), as a pattern for a lookahead; null when a slot, a digit mark or the end
 // of the layout follows directly (the slot is then not anchored). A run that reaches the end of the layout is closed
 // with the end, so a name that merely contains the first word does not stop early.
-function stopAfter(parts, i) {
+function stopAfter(parts, i, budget) {
   let j = i + 1;
   let gap = false;
   let chars = 0;
@@ -79,9 +82,9 @@ function stopAfter(parts, i) {
     }
     if (!part.text) break;
     const letters = Array.from(part.text); // by character, so an emoji is never cut in half
-    if (out && chars + letters.length > ANCHOR_CHARS) break;
-    last = letters.slice(0, ANCHOR_CHARS).join("");
-    whole = letters.length <= ANCHOR_CHARS;
+    if (out && chars + letters.length > budget) break;
+    last = letters.slice(0, budget).join("");
+    whole = letters.length <= budget;
     out += (gap ? GAP : "") + escapeText(last);
     chars += letters.length;
     gap = false;
@@ -117,16 +120,27 @@ function parseLayout(layout) {
 }
 
 function buildMatcher(layout) {
+  for (let i = 0; ; i++) {
+    try {
+      return buildWithBudget(layout, ANCHOR_BUDGETS[i]);
+    } catch (error) {
+      // Only a pattern that is too long is tried again, with shorter stops; any other refusal is final.
+      if (!(error instanceof LayoutError) || error.code !== "layout_pattern_too_long" || i >= ANCHOR_BUDGETS.length - 1) throw error;
+    }
+  }
+}
+
+function buildWithBudget(layout, budget) {
   if (typeof layout !== "string" || !layout.trim()) throw new LayoutError("layout_empty");
   const { parts, slots } = parseLayout(layout.trim());
   const wild = slots.filter((s) => isWild(s.kind));
-  // Which name slots are followed by fixed text, and the text (the whole fixed run after it, up to ANCHOR_CHARS) that
+  // Which name slots are followed by fixed text, and the text (the whole fixed run after it, up to the budget) that
   // ends each of them. Only a layout over the old limit uses them; see MAX_ANCHORED_WILDCARDS.
   const stops = new Map();
   if (wild.length > MAX_WILDCARDS) {
     parts.forEach((part, i) => {
       if (!part.slot || !isWild(part.slot.kind)) return;
-      const stop = stopAfter(parts, i);
+      const stop = stopAfter(parts, i, budget);
       if (stop) stops.set(part.slot.name, stop);
     });
   }

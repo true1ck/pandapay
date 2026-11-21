@@ -16,6 +16,7 @@ const {
   fillWith,
   fillSynthetic,
   exampleBodies,
+  checkedExamples,
 } = require("../../src/sms_v2/layout_matcher");
 const { lintPattern } = require("../../src/sms_v2/rules_admin_route");
 
@@ -310,6 +311,20 @@ test("a layout over the old limit reads its realistic messages, and its stop is 
   assert.equal(reads(matcher, "Something else entirely."), false);
 });
 
+// 22 Nov 2026: a 372-character bill notice (4 dates, 7 name slots, 2 links, an address; seen 12 times) came out at 2,098 characters
+// with the first stops and 1,905 with the shortest, over the 1,900 limit at every size. The limit is now 1,990 (the schema allows
+// 2,000) and a layout that is too long is built again with shorter stops. This one is invented, with the same shape.
+const LONG_NOTICE = "Dear Customer, The <DATE> statement for your <PARTY> account with <PARTY> Number +<REF> has been sent to <EMAIL> Statement <PARTY> : Period : <DATE> to <DATE> Total Amount payable : Rs. <PARTY> Payment due date: <DATE> To <PARTY> and download your statement, click <URL> To <PARTY> you understand how it is calculated, see the guide here - <URL> Team <PARTY>";
+
+test("a long notice with many dates and name slots is built with shorter stops instead of being refused for its length", () => {
+  const matcher = buildMatcher(LONG_NOTICE);
+  assert.ok(matcher.pattern.length <= 1990, String(matcher.pattern.length));
+  assert.deepEqual(lintPattern(matcher.pattern, matcher.flags), []);
+  assert.doesNotThrow(() => checkedExamples(LONG_NOTICE, matcher));
+  const message = "Dear Customer, The 20-Nov-26 statement for your Fibre account with Acme Networks Number +918765432101 has been sent to a.b@example.in Statement Number : Period : 01-Nov-26 to 30-Nov-26 Total Amount payable : Rs. 1,299.00 Payment due date: 05-Dec-26 To pay and download your statement, click https://x.in/a To help you understand how it is calculated, see the guide here - https://x.in/b Team Acme";
+  assert.ok(reads(matcher, message));
+});
+
 test("every pattern the matcher builds passes the server lint, here and for the phone (layout_patterns.json is linted by Dart too)", () => {
   const file = path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_patterns.json");
   const { anchoredCases } = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../contracts/sms/v2/fixtures/layout_corpus.json"), "utf8"));
@@ -320,6 +335,7 @@ test("every pattern the matcher builds passes the server lint, here and for the 
     "Your <PARTY> bill of <AMT> for <PARTY> account <MASK> is due on <DATE>. Pay at <URL> to avoid <PARTY> charges. <PARTY> Team",
     "Hi <PARTY>, your <PARTY> policy <REF> of <AMT> is due on <DATE>. Please <PARTY> by <PARTY> to keep it in force.",
     "<AMT> sent to <PARTY> on <DATE> via <PARTY> ref <REF> for <PARTY> at <PARTY> done",
+    LONG_NOTICE,
   ];
   const built = layouts.map((layout) => {
     const matcher = buildMatcher(layout);
