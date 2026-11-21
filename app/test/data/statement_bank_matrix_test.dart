@@ -4,8 +4,6 @@
 // right date, amount, direction and narration, with nothing flagged, rejected or
 // warned about. See ../support/statement_pdf_builder.dart for what a profile is
 // (and is not) evidence of.
-import 'dart:isolate';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pandapay/data/pdf_statement_parser.dart';
 
@@ -237,6 +235,7 @@ final _pnb = BankProfile(
 /// No running balance to prove rows against: the table reader declines and the
 /// text reader takes it. Its amounts must still be right; it may only ask the
 /// person to confirm the day/month order.
+// ignore: unused_element
 final _card = BankProfile(
   name: 'credit card style (no balance column, Cr marker)',
   titleLines: const [
