@@ -5,6 +5,7 @@ const { validateRequest, validateBundle } = require("./contracts");
 const { lintPattern } = require("./rules_admin_route");
 const { redactionError, sampleError } = require("./ai_templates");
 const { readSettings, DEFAULT_AI_MODEL, envNumber } = require("./settings");
+const { repairEmit } = require("./draft_repair");
 const { LayoutError, FILLS, buildMatcher, slotValues, exampleBodies, checkedExamples, fillWith, fillSynthetic, fillTags } = require("./layout_matcher");
 const { sanityErrors, isDoubtful, DOUBTFUL_CONFIDENCE } = require("./draft_sanity");
 const { PROMPT_VERSION, SMS_PLACEHOLDERS, SMS_DOMAIN_RULES, buildPrompt } = require("./ai_prompt");
@@ -254,10 +255,15 @@ function normalizeSlots(node) {
 
 // The rule for a layout: the pattern comes from the layout (layout_matcher.js), the facts from the model's
 // answer, the examples from the layout. The rule is then checked like any draft (validateDraft).
-function buildRule(answer, template, matcher, model) {
+// `repair: false` builds the rule exactly as the model wrote it; the tests that prove the validator names each kind of
+// wrong wiring use it. Production always repairs.
+function buildRule(answer, template, matcher, model, { repair: repairFacts = true } = {}) {
   if (!answer || typeof answer !== "object" || Array.isArray(answer) || !Array.isArray(answer.emit) || !answer.emit.length || answer.emit.length > 6)
     throw new AnswerError("answer_shape_invalid");
-  const emit = normalizeSlots(answer.emit).map((fact) => {
+  // Slips in how the model wrote the facts are repaired first (draft_repair.js): what it got right is never changed.
+  const normalized = normalizeSlots(answer.emit);
+  const repair = repairFacts ? repairEmit(normalized, matcher.slots) : { emit: normalized, repairs: [] };
+  const emit = repair.emit.map((fact) => {
     if (!fact || typeof fact !== "object" || Array.isArray(fact)) throw new AnswerError("answer_shape_invalid");
     const out = { ...fact };
     // Money is rupees unless the model says points; the engine reads the date forms itself.
@@ -272,7 +278,7 @@ function buildRule(answer, template, matcher, model) {
   const types = emit.map((fact) => fact.factType);
   const sender = template.sender_brand;
   const { positives, negatives } = exampleBodies(template.redacted_body);
-  return stampDraft(
+  const rule = stampDraft(
     {
       version: 1,
       family: typeof answer.family === "string" && /^[a-z][a-z0-9_]{0,40}$/.test(answer.family) ? answer.family : "ai_layout",
@@ -289,6 +295,9 @@ function buildRule(answer, template, matcher, model) {
     template,
     model,
   );
+  // Which repairs were made, for the attempt record. Not part of the rule (the contract allows no extra keys).
+  Object.defineProperty(rule, "repairs", { value: repair.repairs, enumerable: false });
+  return rule;
 }
 
 // What the phone's engine makes of a slot used as an attribute (rule_engine.dart: _dateAttrKeys, _instantAttrKeys and
@@ -1078,7 +1087,8 @@ async function runTemplateWorkerOnce({
         promptVersion: provider.promptVersion ?? PROMPT_VERSION,
         outcome: busy?.systemic ? "provider_error" : errors.length ? "rejected" : "valid",
         errorKind: failure?.kind ?? null,
-        errorCodes: failure?.codes ?? null,
+        // A valid draft lists the repairs it needed (draft_repair.js), so how often they rescue a draft can be measured.
+        errorCodes: failure?.codes ?? (draft?.repairs?.length ? draft.repairs.map((code) => `repaired_${code}`) : null),
         httpStatus: failure?.status ?? null,
       };
       if (!layoutOnly || errors.length) await store.recordAttempt(template, attempt, usage);

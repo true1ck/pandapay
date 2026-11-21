@@ -13,7 +13,8 @@ const MODEL = "test-model";
 const templateFor = (layout) => ({ template_hash: "c".repeat(64), sender_brand: "TESTBK", redacted_body: layout });
 const check = ({ layout, answer }) => {
   const template = templateFor(layout);
-  const rule = buildRule(answer, template, buildMatcher(layout), MODEL);
+  // repair: false: this battery proves the validator names each kind of wrong wiring, so it sees the answer as written.
+  const rule = buildRule(answer, template, buildMatcher(layout), MODEL, { repair: false });
   return { rule, errors: validateDraft(rule, template, MODEL, []) };
 };
 

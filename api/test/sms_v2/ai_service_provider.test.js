@@ -411,3 +411,27 @@ test("the service's own error code is logged when it answers an error, so an out
   assert.equal(logs.at(-1).serviceError, "provider_misconfigured");
   assert.equal(JSON.stringify(logs).includes(env.SMS_V2_AI_SERVICE_TOKEN), false);
 });
+
+test("a draft that needed a repair is accepted, and the attempt records which repair (so its effect can be measured)", async () => {
+  const store = makeStore();
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async () => {
+      const draft = answer();
+      draft.emit[0].references = { txnId: "ghost1" }; // a slot the layout does not have
+      return serviceJson({ answer: draft, ...usage });
+    },
+  });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.finished[0].rule.emit[0].references, undefined, "the reference to a slot that is not there was dropped");
+  const valid = store.attempts.find((entry) => entry.outcome === "valid");
+  assert.deepEqual(valid.errorCodes, ["repaired_reference"]);
+  assert.equal(valid.errorKind, null);
+});
+
+test("a draft that needed no repair records nothing extra", async () => {
+  const store = makeStore();
+  const provider = createAiServiceProvider({ env, fetchImpl: async () => serviceJson({ answer: answer(), ...usage }) });
+  assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
+  assert.equal(store.attempts.find((entry) => entry.outcome === "valid").errorCodes, null);
+});

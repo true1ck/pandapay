@@ -95,14 +95,16 @@ test("a rule is built from the layout and the model's answer, and passes the sam
   messy.emit[0].amounts[0] = { role: "posted", from: "<AMT1>" };
   messy.emit[0].occurredAt = { from: "Date1", formats: ["dd/MM/yyyy"] };
   messy.emit[0].counterparty.nameFrom = "PARTY1";
-  const tidy = buildRule(messy, template, matcher, config.model);
+  // (repair: false: this layout has no date slot, and production would drop the date; here only the tidying is under test)
+  const tidy = buildRule(messy, template, matcher, config.model, { repair: false });
   assert.deepEqual(tidy.emit[0].amounts[0], { role: "posted", from: "amt1", unit: "INR" });
   assert.deepEqual(tidy.emit[0].occurredAt, { from: "date1" });
   assert.equal(tidy.emit[0].counterparty.nameFrom, "party1");
   // A slot the layout does not have is caught by the capture check, not guessed.
   const wrong = answer();
   wrong.emit[0].amounts[0].from = "amt9";
-  assert.ok(validateDraft(buildRule(wrong, template, matcher, config.model), template, config.model).includes("capture_group_missing"));
+  // (repair: false: this proves the validator names it; production repairs a reference to a missing slot, draft_repair.js)
+  assert.ok(validateDraft(buildRule(wrong, template, matcher, config.model, { repair: false }), template, config.model).includes("capture_group_missing"));
   // Nothing usable: no emit.
   for (const bad of [null, [], {}, { emit: [] }, { emit: ["x"] }, { emit: Array(7).fill({ factType: "info" }) }])
     assert.throws(() => buildRule(bad, template, matcher, config.model), AnswerError);
