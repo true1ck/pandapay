@@ -1,0 +1,216 @@
+{
+  "_source": "contracts/sms/v2/fact.schema.json in the PandaPay repo",
+  "_sha256": "60d2bba741569cd35c6dbb80c04f3688172b196c0bddaf46d15866f74e45e36e",
+  "factTypes": {
+    "movement": {
+      "attrs": {
+        "direction": {
+          "enum": [
+            "debit",
+            "credit"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "purchase",
+            "p2p",
+            "atm",
+            "salary",
+            "interest",
+            "refund",
+            "cashback",
+            "reversal",
+            "fee",
+            "emi",
+            "card_payment",
+            "wallet_topup",
+            "investment",
+            "bill_payment",
+            "insurance",
+            "tax",
+            "transfer",
+            "dividend",
+            "unknown"
+          ]
+        },
+        "rail": {
+          "enum": [
+            "upi",
+            "card",
+            "imps",
+            "neft",
+            "rtgs",
+            "cheque",
+            "nach",
+            "wallet",
+            "cash",
+            "unknown"
+          ]
+        },
+        "mandateRef": {},
+        "evidenceOnly": {}
+      }
+    },
+    "attempt": {
+      "attrs": {
+        "status": {
+          "enum": [
+            "failed",
+            "declined",
+            "pending",
+            "scheduled",
+            "cancelled"
+          ]
+        },
+        "direction": {
+          "enum": [
+            "debit",
+            "credit"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "purchase",
+            "p2p",
+            "atm",
+            "salary",
+            "interest",
+            "refund",
+            "cashback",
+            "reversal",
+            "fee",
+            "emi",
+            "card_payment",
+            "wallet_topup",
+            "investment",
+            "bill_payment",
+            "insurance",
+            "tax",
+            "transfer",
+            "dividend",
+            "unknown"
+          ]
+        },
+        "dueAt": {}
+      }
+    },
+    "hold": {
+      "attrs": {
+        "phase": {
+          "enum": [
+            "placed",
+            "released",
+            "converted"
+          ]
+        },
+        "purpose": {
+          "enum": [
+            "ipo_asba",
+            "upi_mandate_block",
+            "preauth",
+            "lien",
+            "other"
+          ]
+        },
+        "issueName": {}
+      }
+    },
+    "balance_snapshot": {
+      "attrs": {
+        "asOf": {}
+      }
+    },
+    "limit_change": {
+      "attrs": {
+        "previousMinor": {},
+        "reason": {
+          "enum": [
+            "increase",
+            "decrease",
+            "assigned"
+          ]
+        }
+      }
+    },
+    "bill_due": {
+      "attrs": {
+        "dueDate": {},
+        "statementDate": {},
+        "billerName": {},
+        "dueMonthOnly": {},
+        "billKind": {
+          "enum": [
+            "utility",
+            "telecom",
+            "insurance",
+            "loan",
+            "rent",
+            "education",
+            "tax"
+          ]
+        }
+      }
+    },
+    "mandate": {
+      "attrs": {
+        "phase": {
+          "enum": [
+            "created",
+            "modified",
+            "paused",
+            "resumed",
+            "revoked",
+            "expired"
+          ]
+        },
+        "frequency": {},
+        "merchantName": {},
+        "oneTime": {},
+        "mandatePurpose": {
+          "enum": [
+            "ipo",
+            "subscription",
+            "bill",
+            "sip",
+            "loan",
+            "other"
+          ]
+        }
+      }
+    },
+    "reward": {
+      "attrs": {
+        "program": {},
+        "expiresAt": {}
+      }
+    },
+    "instrument_hint": {
+      "attrs": {
+        "hint": {
+          "enum": [
+            "card_issued",
+            "card_activated",
+            "account_opened",
+            "product_name",
+            "linked_upi"
+          ]
+        }
+      }
+    },
+    "info": {
+      "attrs": {
+        "category": {
+          "enum": [
+            "otp",
+            "security",
+            "promotion",
+            "service",
+            "delivery",
+            "other"
+          ]
+        },
+        "amountMinor": {}
+      }
+    }
+  }
+}

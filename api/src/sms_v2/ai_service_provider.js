@@ -249,4 +249,4 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}${rerun ? `|rerun|${fee
   };
 }
 
-module.exports = { createAiServiceProvider };
+module.exports = { createAiServiceProvider, assertLayout };

@@ -154,7 +154,7 @@ test("ordered routing resumes after a backend-rejected draft on the capability-o
     ["/v1/sms-rule-drafts/ordered", null, "experiential"],
     ["/v1/sms-rule-drafts/ordered", "gemini", "experiential"],
   ]);
-  assert.ok(calls[0].timeout > 0 && calls[0].timeout <= 90000);
+  assert.ok(calls[0].timeout > 0 && calls[0].timeout <= 300000);
   assert.ok(calls[1].timeout <= calls[0].timeout);
 });
 

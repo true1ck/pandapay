@@ -17,6 +17,7 @@ const { openRuleAdminStore } = require("../admin_store");
 const { openAiWorkerStore } = require("../ai_worker_store");
 const { createAdminDbHelpers } = require("../../admin/server");
 const { createAiServiceProvider } = require("../ai_service_provider");
+const { createLocalChainProvider } = require("../local_chain_provider");
 const {
   workerConfig,
   createPgWorkerStore,
@@ -88,6 +89,20 @@ function currentHeadroom(settings) {
 // The PandaPay AI client, or null (with a metadata-only log) when it is not set up or its settings are malformed.
 // Never throws: a bad setting must not crash-loop the container.
 function chooseProvider(log, env = process.env) {
+  // The providers run in this process when SMS_V2_AI_CHAIN=on is set and their keys are in the environment (a key turns a
+  // provider on, no key leaves it out). It is opt-in so that a stray key (a developer's own GEMINI_API_KEY) never sends a layout
+  // anywhere, and so a deploy does not change the route by itself. Otherwise the PandaPay AI service is called as before.
+  try {
+    if (env.SMS_V2_AI_CHAIN === "on") {
+      const chain = createLocalChainProvider({ env, logger: log });
+      if (chain) {
+        log({ event: "sms_v2_ai_chain", status: "configured", routes: chain.configured });
+        return chain;
+      }
+    }
+  } catch (error) {
+    log({ event: "sms_v2_ai_chain", status: "misconfigured", code: String(error?.message).slice(0, 60) });
+  }
   try {
     const provider = createAiServiceProvider({ env, logger: log });
     if (provider) return provider;

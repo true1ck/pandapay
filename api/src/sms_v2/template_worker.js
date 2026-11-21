@@ -640,8 +640,10 @@ function draftUsage(response, config, layoutOnly) {
 // Both run every operation in one transaction. Submitter and consent rows are
 // never read directly: pandapay.sms_v2_ai_consent_people answers how many
 // consenting people submitted a layout, in either mode.
-const DRAFT_JOB_DEADLINE_MS = 90000;
-const DRAFT_JOB_LEASE_MS = 120000;
+// A slow provider (NVIDIA takes 16 to 20 s a layout, and a walk over several providers longer) is waited for: a job may take
+// five minutes, and its lease outlasts it so another worker does not take the layout while it runs.
+const DRAFT_JOB_DEADLINE_MS = 300000;
+const DRAFT_JOB_LEASE_MS = 330000;
 const TRANSIENT_REPLY_REASONS = new Set(["empty", "no_usage"]);
 const MAX_DRAFT_ROUTE_CALLS = 15; // Up to seven providers, one re-ask of each that answered wrongly, and one exhaustion response.
 // A job that ends with a rejected draft or the 90 s budget run out while "some route had trouble" is retried
