@@ -23,6 +23,7 @@ import 'review_draft.dart';
 import 'review_history_views.dart';
 import 'screen_parts.dart';
 import 'sharing_offer_card.dart';
+import 'try_again_action.dart';
 
 // Defined with the bundling they feed; the screen's other files import them from here.
 export 'review_clustering.dart' show isReceiptQuestion, reviewKindOf;
@@ -135,6 +136,27 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     }
     if (action == 'edit') {
       await _edit(group.first, namespace);
+      return;
+    }
+    if (action == 'try-again') {
+      try {
+        final started = await tryAgainFor(ref, group);
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  started
+                      ? 'Trying again. We will read it for you if the AI can.'
+                      : 'This format was just tried. Give it a few minutes.',
+                ),
+              ),
+            );
+        }
+      } catch (error) {
+        if (mounted) smsShowError(context, error);
+      }
       return;
     }
     if (action == 'choose-card') {
@@ -1001,6 +1023,25 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
     final aiDoubt = widget.aiStatus.doubtOf(first);
     final aiChecking =
         aiResolution == null && group.every(widget.aiStatus.isChecking);
+    // "Try again" was pressed and no new answer has come yet.
+    final aiRetrying =
+        aiResolution == null &&
+        !hasReading &&
+        group.every(widget.aiStatus.isRetrying);
+    // The AI could not read this format (or nothing is in progress for it).
+    final canTryAgain =
+        aiResolution == null &&
+        !hasReading &&
+        !aiRetrying &&
+        group.every(widget.aiStatus.canRetry);
+    final Widget? tryAgain = canTryAgain
+        ? TextButton(
+            key: const Key('try-again'),
+            style: BambooButtons.quiet,
+            onPressed: _on('try-again'),
+            child: const Text('Try again'),
+          )
+        : null;
     // Every question can also be answered by editing the whole transaction. A
     // group of several messages has no single transaction: each message has
     // its own Edit in the expanded list.
@@ -1125,7 +1166,7 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
               )
             : fix(true),
         secondary: [if (hasReading) fix(false)],
-        quiet: [?editWhole, if (allMessages) notFinancial],
+        quiet: [?tryAgain, ?editWhole, if (allMessages) notFinancial],
       );
     }
 
@@ -1202,6 +1243,13 @@ class _ReviewGroupPanelState extends State<_ReviewGroupPanel> {
                   style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
                 ),
               ),
+          ] else if (aiRetrying) ...[
+            const SizedBox(height: 2),
+            const AiStatusLine(
+              key: Key('ai-retrying'),
+              icon: Icons.hourglass_top_rounded,
+              text: 'Trying again… we’ll read it for you if the AI can.',
+            ),
           ] else if (aiChecking) ...[
             const SizedBox(height: 2),
             const AiStatusLine(

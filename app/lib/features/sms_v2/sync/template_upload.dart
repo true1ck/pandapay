@@ -85,7 +85,7 @@ class TemplateUpload {
     queue.db.execute('SAVEPOINT sms_v2_template_revoke');
     try {
       queue.db.execute(
-        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'template:refused:%' OR key='template:resend:at' OR key LIKE 'draft:%')",
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'template:refused:%' OR key LIKE 'template:retry:%' OR key='template:resend:at' OR key LIKE 'draft:%')",
         [queue.namespace],
       );
       queue.db.execute(
