@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../data/user_cards_repository.dart';
+import '../sms_v2/providers/open_questions.dart';
 
 /// The label a transaction carries so it is never mistaken for plain spending or
 /// money in: Refund, Reversal, Self transfer, Family transfer, Card bill,
@@ -139,33 +142,87 @@ class TransactionBadgePill extends StatelessWidget {
 bool txnHasAiTag(TransactionEntry entry) => entry.aiUnverified;
 
 /// The small "AI" tag beside a transaction's title. Nothing when [txnHasAiTag]
-/// is false. Tapping it opens AI auto-resolved on Needs review, where the
-/// message can be reviewed, fixed or dismissed; [onTap] replaces that.
-class TransactionAiTag extends StatelessWidget {
+/// is false, or while the message is an open question on Needs review (it has no
+/// card in AI auto-resolved then). Tapping it opens AI auto-resolved on Needs
+/// review, where the message can be reviewed, fixed or dismissed; [onTap]
+/// replaces that. The tap target is 44 dp without making the row taller (the
+/// pill is small; its hit area reaches past it).
+class TransactionAiTag extends ConsumerWidget {
   const TransactionAiTag({super.key, required this.entry, this.onTap, this.margin});
 
   final TransactionEntry entry;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry? margin;
 
+  /// The smallest tap target (Material and Apple guidance).
+  static const double minTarget = 44;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (!txnHasAiTag(entry)) return const SizedBox.shrink();
-    return GestureDetector(
-      key: Key('ai-tag-${entry.id}'),
-      behavior: HitTestBehavior.opaque,
-      onTap:
-          onTap ??
-          () => context.push('/activity/needs-review?tab=auto'),
-      child: Semantics(
-        button: true,
-        label: 'Read by AI, not verified yet. Open to review',
-        excludeSemantics: true,
-        child: TransactionBadgePill(
-          kind: TxnBadgeKind.aiUnverified,
-          margin: margin,
+    final open = ref.watch(openReviewKeysProvider).valueOrNull ?? const {};
+    if (open.contains(entry.sourceKey) || open.contains(entry.eventId)) {
+      return const SizedBox.shrink();
+    }
+    return TapTargetPadding(
+      minSize: const Size.square(minTarget),
+      child: GestureDetector(
+        key: Key('ai-tag-${entry.id}'),
+        behavior: HitTestBehavior.opaque,
+        onTap:
+            onTap ??
+            () => context.push('/activity/needs-review?tab=auto'),
+        child: Semantics(
+          button: true,
+          label: 'Read by AI, not verified yet. Open to review',
+          excludeSemantics: true,
+          child: TransactionBadgePill(
+            kind: TxnBadgeKind.aiUnverified,
+            margin: margin,
+          ),
         ),
       ),
     );
+  }
+}
+
+/// Makes [child]'s tap area at least [minSize] without changing its size or its
+/// layout: only hit testing reaches past the child's bounds.
+class TapTargetPadding extends SingleChildRenderObjectWidget {
+  const TapTargetPadding({super.key, required this.minSize, super.child});
+  final Size minSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderTapTarget(minSize);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderTapTarget renderObject) =>
+      renderObject.minSize = minSize;
+}
+
+class _RenderTapTarget extends RenderProxyBox {
+  _RenderTapTarget(this._minSize);
+  Size _minSize;
+  set minSize(Size value) {
+    if (value != _minSize) _minSize = value;
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final child = this.child;
+    if (child == null) return false;
+    // The child's own area plus whatever is needed to reach the minimum size,
+    // centred on it.
+    final extraX = (_minSize.width - size.width).clamp(0.0, double.infinity) / 2;
+    final extraY = (_minSize.height - size.height).clamp(0.0, double.infinity) / 2;
+    final reach = Rect.fromLTRB(-extraX, -extraY, size.width + extraX, size.height + extraY);
+    if (!reach.contains(position)) return false;
+    // Inside the child: normal hit testing. In the margin around it: the child
+    // takes the tap, as if it had been inside.
+    if (!(Offset.zero & size).contains(position)) {
+      return child.hitTest(result, position: size.center(Offset.zero));
+    }
+    return super.hitTest(result, position: position);
   }
 }

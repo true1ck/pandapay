@@ -12,6 +12,8 @@ import 'package:pandapay/app/providers.dart';
 import 'package:pandapay/data/local/sms_intake_repository.dart';
 import 'package:pandapay/features/sms_v2/providers/ai_status_provider.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
+import 'package:pandapay/features/auth/account_sign_out_provider.dart' show readPhoneOnlyCounts;
+import 'package:pandapay/features/sms_v2/providers/open_questions.dart' show countOpenQuestions, openReviewKeys;
 import 'package:pandapay/features/sms_v2/providers/review_question_count.dart';
 import 'package:pandapay/features/sms_v2/providers/runtime_provider.dart';
 import 'package:pandapay/features/sms_v2/storage/sync_state_store.dart';
@@ -168,6 +170,39 @@ void main() {
       );
     },
   );
+
+  test('the sign-out warning counts the same questions: a confident AI reading is not one', () async {
+    template('plain', 'h-plain', body: 'Rs.9.00 debited on 05-11-26 for something else entirely');
+    template('ai-read', 'h-ai-read');
+    aiRead('ai-read', withReading: true);
+    final open = d.database.db
+        .select("SELECT COUNT(*) AS n FROM v2_review_items WHERE status='open'")
+        .single['n'];
+    expect(open, 2);
+    expect(readPhoneOnlyCounts(d.database.db, ns).reviewItems, 1);
+    expect(countOpenQuestions(d.database.db, ns), 1);
+    // The AI was unsure: it is a question again.
+    d.database.db.execute("DELETE FROM v2_facts WHERE source_key='ai-read'");
+    d.facts.insert(
+      Fact.fromJson({
+        ...fixture('fact/movement.card_spend.json'),
+        'factId': hex(0x91234),
+        'sourceKey': 'ai-read',
+        'confidence': 0.4,
+      }),
+    );
+    expect(readPhoneOnlyCounts(d.database.db, ns).reviewItems, 2);
+  });
+
+  test('the AI tag follows the same questions: a message that is a question has no tag, a confident AI reading does', () async {
+    template('plain', 'h-plain', body: 'Rs.9.00 debited on 05-11-26 for something else entirely');
+    template('ai-read', 'h-ai-read');
+    aiRead('ai-read', withReading: true);
+    open('ev:0', 'event', {'eventId': 'event-1', 'confidence': 0.5});
+    final keys = openReviewKeys(d.database.db, ns);
+    expect(keys, containsAll(['plain', 'event-1']));
+    expect(keys, isNot(contains('ai-read')), reason: 'AI auto-resolved: its card carries the tag');
+  });
 
   test('follows an answer: resolving a question lowers it by one', () async {
     template('a', 'h-a');

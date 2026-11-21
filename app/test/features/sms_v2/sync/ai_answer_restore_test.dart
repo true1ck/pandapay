@@ -55,6 +55,22 @@ void main() {
     expect(state.get('restore:ai:at'), isNotNull);
   });
 
+  test('a question about a message an AI rule already read waits for no answer: nothing is wound back', () {
+    openTemplateItem();
+    db.execute(
+      'INSERT INTO v2_facts(namespace,fact_id,source_key,fact_type,observed_at,payload) VALUES(?,?,?,?,?,?)',
+      [ns, 'f1', 's1', 'movement', '2026-11-01T00:00:00Z', '{}'],
+    );
+    expect(restoreLostAiAnswers(db, namespace: ns, now: now), isFalse);
+    expect(parts().containsKey('a'), isTrue, reason: 'the cursor was not touched');
+    // A second, unread format is what makes it act.
+    db.execute(
+      'INSERT INTO v2_review_items VALUES(?,?,?,?,?)',
+      [ns, 's2', 'template', jsonEncode({'sourceKey': 's2'}), 'open'],
+    );
+    expect(restoreLostAiAnswers(db, namespace: ns, now: now), isTrue);
+  });
+
   test('it does not repeat within six hours, then may try again', () {
     openTemplateItem();
     expect(restoreLostAiAnswers(db, namespace: ns, now: now), isTrue);

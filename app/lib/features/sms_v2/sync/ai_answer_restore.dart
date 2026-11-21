@@ -39,8 +39,13 @@ bool restoreLostAiAnswers(
   final tries = int.tryParse(state.get('restore:ai:count') ?? '') ?? 0;
   if (tries >= maxTries) return false;
   if (_holdsAnAnswer(db, namespace)) return false;
+  // A format "waiting for an answer" is an open question with no reading. A
+  // message an AI rule already read (a question the old rule raised for every
+  // unverified reading, or one the AI is unsure about) waits for nothing.
   final open = db.select(
-    "SELECT 1 FROM v2_review_items WHERE namespace=? AND kind='template' AND status='open' LIMIT 1",
+    "SELECT 1 FROM v2_review_items r WHERE r.namespace=? AND r.kind='template' AND r.status='open' "
+    'AND NOT EXISTS (SELECT 1 FROM v2_facts f WHERE f.namespace=r.namespace '
+    "AND f.source_key=json_extract(r.payload,'\$.sourceKey')) LIMIT 1",
     [namespace],
   );
   if (open.isEmpty) return false;

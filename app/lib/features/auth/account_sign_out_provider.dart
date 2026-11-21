@@ -1,3 +1,4 @@
+import '../sms_v2/providers/open_questions.dart' show countOpenQuestions;
 import 'dart:async';
 import 'dart:io';
 
@@ -71,9 +72,11 @@ PhoneOnlyCounts readPhoneOnlyCounts(Database db, String namespace) {
   return PhoneOnlyCounts(
     smsOutbox: count('v2_outbox', 'namespace=?', [namespace]),
     receipts: _receiptsOfAccount(db, namespace, exists('transaction_attachments')),
-    reviewItems: count('v2_review_items', "namespace=? AND status='open'", [
-      namespace,
-    ]),
+    // Open questions as Needs review shows them: an AI reading the AI was sure
+    // about is hidden there and not worth a warning.
+    reviewItems: !exists('v2_review_items')
+        ? 0
+        : countOpenQuestions(db, namespace),
     messages: count('sms_captured_messages', 'namespace=?', [namespace]),
   );
 }

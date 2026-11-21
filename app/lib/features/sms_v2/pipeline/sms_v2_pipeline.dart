@@ -190,8 +190,11 @@ class SmsV2Pipeline {
                   (provisional &&
                       aiDoubtOf(result.facts, body: message.body) != null));
           // A private AI rule reports under its layout's AI id, so the console
-          // can show how the draft fares on phones; each match counts as sent to
-          // review only when it raised a question.
+          // can show how the draft fares on phones. NOTE: `toReview` used to be
+          // true for every match of an AI rule (each one raised a question); it is
+          // now true only when the match really raised one (unsure reading). Anything
+          // that reads the per-rule to_review ratio must expect that change from
+          // the build that introduced it.
           final reported = result.ruleId == null
               ? null
               : provisional
