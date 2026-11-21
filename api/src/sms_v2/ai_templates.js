@@ -50,6 +50,13 @@ function createTemplateStore({ withUserClient }) {
         return row?.summary || {};
       });
     },
+    // The person's own "Try again": how many of their failed layouts went back in the queue (0 when none could: not theirs,
+    // not failed, a failure that cannot pass, or pressed too often). Throws the database's SQLSTATE (42501 consent, 22023).
+    retry(profileId, templateHashes) {
+      return withUserClient(profileId, async (client) =>
+        Number((await client.query("SELECT pandapay.sms_v2_ai_retry_mine($1::text[]) AS n", [templateHashes])).rows[0].n),
+      );
+    },
     // 'recorded' | 'already_recorded'. Throws the database's SQLSTATE (42501 consent, P0404 not delivered).
     rejectDraft(profileId, draftId, reason) {
       return withUserClient(profileId, async (client) => {
@@ -212,6 +219,35 @@ function createDraftRejectionHandler({ store, security }) {
   };
 }
 
+const HASH = /^[0-9a-f]{64}$/;
+// POST /sms/v2/ai-status/retry {templateHashes:[...up to 20]} -> 202 {requeued:n}. Only the person's own failed layouts move,
+// and a phone that is not counted (no App Check and not a tester) moves none: the answer is the same either way, so the
+// endpoint tells a crafted client nothing about other people's layouts.
+function createAiRetryHandler({ store, security }) {
+  return async (req, res) => {
+    const hashes = req.body?.templateHashes;
+    if (
+      !req.body || typeof req.body !== "object" || Object.keys(req.body).some((key) => key !== "templateHashes") ||
+      !Array.isArray(hashes) || hashes.length < 1 || hashes.length > 20 ||
+      hashes.some((hash) => typeof hash !== "string" || !HASH.test(hash)) || new Set(hashes).size !== hashes.length
+    ) return res.status(400).json({ error: "retry_invalid" });
+    try {
+      if (denied(await security.verifyAttestation(req)))
+        return res.status(403).json({ error: "attestation_required" });
+      if (denied(await security.checkRate(req, "draft-rejections", 1)))
+        return res.status(429).json({ error: "rate_limited" });
+      if (req.smsV2Security?.sharedLearningEligible !== true) return res.status(202).json({ requeued: 0 });
+      return res.status(202).json({ requeued: await store.retry(req.userId, hashes) });
+    } catch (error) {
+      if (error.code === "42501")
+        return res.status(403).json({ error: "sms_shared_learning_consent_required" });
+      if (error.code === "22023") return res.status(400).json({ error: "retry_invalid" });
+      console.error("sms_v2 ai retry unavailable", error.code || error.name);
+      return res.status(503).json({ error: "ai_retry_unavailable" });
+    }
+  };
+}
+
 function registerTemplates(
   app,
   { requireSmsV2, requireMember, withUserClient, hooks },
@@ -234,6 +270,12 @@ function registerTemplates(
     requireSmsV2,
     requireMember,
     createDraftRejectionHandler({ store, security: hooks.security }),
+  );
+  app.post(
+    "/sms/v2/ai-status/retry",
+    requireSmsV2,
+    requireMember,
+    createAiRetryHandler({ store, security: hooks.security }),
   );
   hooks.aiResultsSince = (profileId, cursor, opts) =>
     store.results(profileId, cursor, opts);
@@ -483,6 +525,7 @@ module.exports = {
   createTemplateHandler,
   createAiStatusHandler,
   createDraftRejectionHandler,
+  createAiRetryHandler,
   registerTemplates,
   registerPrivateTemplateRoutes,
 };

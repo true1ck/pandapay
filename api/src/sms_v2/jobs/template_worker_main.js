@@ -177,6 +177,9 @@ async function main() {
           }
           // Layouts that failed through no fault of their own get another go (a few times each).
           try {
+            // Slow retry of layouts that failed for reasons that can pass (the AI was down or answered badly): 1, 3, 9 and 27 days.
+            if (typeof store.requeueStale === "function")
+              console.log(JSON.stringify({ event: "sms_v2_ai_requeue_stale", requeued: await store.requeueStale() }));
             if (typeof store.requeueFailed === "function")
               console.log(JSON.stringify({ event: "sms_v2_ai_requeue", requeued: await store.requeueFailed(provider.promptVersion ?? PROMPT_VERSION) }));
           } catch (error) {
