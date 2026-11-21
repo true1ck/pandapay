@@ -4,6 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../data/local/sms_intake_repository.dart' show smsCaptureNamespaceKey;
 
 import '../personal/owner_identity_store.dart';
 import '../../../app/providers.dart' as app;
@@ -113,9 +116,28 @@ smsV2RuntimeProvider = FutureProvider<SmsV2Runtime?>((ref) async {
 final smsV2LifecycleProvider = Provider<void>((ref) {
   var disposed = false;
   ref.onDispose(() => disposed = true);
+  // The Android background receiver has no providers: it learns which account
+  // to file a message under from this preference. The v2 refactor dropped the
+  // writer, so every message that arrived while the app was closed was
+  // silently discarded (namespace read back as 'signed-out').
+  ref.listen<String>(app.cacheNamespaceProvider, (_, next) {
+    unawaited(
+      SharedPreferences.getInstance()
+          .then((prefs) => prefs.setString(smsCaptureNamespaceKey, next))
+          .catchError((_) => false),
+    );
+  }, fireImmediately: true);
   Future<void> run({bool reconnected = false}) async {
     if (disposed) return;
     try {
+      // Catch up on anything the live receiver missed (app closed, RCS, OEM
+      // quirks). Progress is row-id based, so a pass with nothing new is one
+      // cheap query. Local only: never waits on the network.
+      try {
+        await ref.read(app.smsAutoImportProvider).captureExistingInbox();
+      } catch (_) {
+        // The live receiver and the next trigger still run.
+      }
       final runtime = await ref.read(smsV2RuntimeProvider.future);
       // Waits set while the phone had no connection say nothing about the
       // server: when it returns, everything queued is tried at once (Q-08).
