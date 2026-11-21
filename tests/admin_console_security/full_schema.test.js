@@ -58,7 +58,15 @@ test('private admin migrations coexist with the complete clean application schem
     execFileSync('psql', ['-h', socket, '-p', '55487', '-U', 'postgres', '-d', productName,
       '-X', '-q', '-v', 'ON_ERROR_STOP=1', '-f', path.resolve(__dirname, '../../db/tests', name)], { stdio: 'pipe' });
   }
-  execFileSync(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js', 'api/test/sms_v2/corrections_pg.test.js', 'api/test/sms_v2/legacy_supersede_pg.test.js', 'api/test/sms_v2/consent_ordering_pg.test.js', 'api/test/sms_v2/metrics_pg.test.js', 'api/test/sms_v2/client_metrics_pg.test.js', 'api/test/sms_v2/learning_consent_pg.test.js', 'api/test/sms_v2/settings_pg.test.js', 'api/test/sms_v2/learning_signals_pg.test.js', 'api/test/sms_v2/learning_admin_pg.test.js', 'api/test/sms_v2/alias_admin_pg.test.js', 'api/test/sms_v2/ai_learning_pg.test.js', 'api/test/sms_v2/merchant_suggestions_pg.test.js', 'api/test/sms_v2/learning_loop_e2e_pg.test.js', 'api/test/sms_v2/learning_security_pg.test.js'], {
+  // The nested suites run with stdio piped, so a failure used to show only the command line (22 Nov 2026: this job failed twice
+  // for no visible reason and passed on a re-run). Print what they said.
+  const runNested = (...args) => {
+    try { return execFileSync(...args); } catch (error) {
+      console.error(String(error.stdout ?? ''), String(error.stderr ?? ''));
+      throw error;
+    }
+  };
+  runNested(process.execPath, ['--test', '--test-concurrency=1', 'api/test/sms_v2/rules_pg.test.js', 'api/test/sms_v2/facts_pg.test.js', 'api/test/sms_v2/templates_pg.test.js', 'api/test/sms_v2/category_pg.test.js', 'api/test/sms_v2/corrections_pg.test.js', 'api/test/sms_v2/legacy_supersede_pg.test.js', 'api/test/sms_v2/consent_ordering_pg.test.js', 'api/test/sms_v2/metrics_pg.test.js', 'api/test/sms_v2/client_metrics_pg.test.js', 'api/test/sms_v2/learning_consent_pg.test.js', 'api/test/sms_v2/settings_pg.test.js', 'api/test/sms_v2/learning_signals_pg.test.js', 'api/test/sms_v2/learning_admin_pg.test.js', 'api/test/sms_v2/alias_admin_pg.test.js', 'api/test/sms_v2/ai_learning_pg.test.js', 'api/test/sms_v2/merchant_suggestions_pg.test.js', 'api/test/sms_v2/learning_loop_e2e_pg.test.js', 'api/test/sms_v2/learning_security_pg.test.js'], {
     cwd: path.resolve(__dirname, '../..'), stdio: 'pipe',
     env: {
       ...process.env,
