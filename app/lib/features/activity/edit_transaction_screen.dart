@@ -1010,6 +1010,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           helperMaxLines: 2,
         ),
         hint: const Text('Choose receiving account'),
+        borderRadius: BorderRadius.circular(16),
+        dropdownColor: BambooInk.paper,
+        focusColor: Colors.transparent,
         items: [
           for (final choice in choices.entries)
             DropdownMenuItem(
@@ -1376,6 +1379,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       initialValue: _entryKind,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Kind'),
+                      borderRadius: BorderRadius.circular(16),
+                      dropdownColor: BambooInk.paper,
+                      focusColor: Colors.transparent,
+                      menuMaxHeight: 320,
                       items: [
                         for (final kind in TxnEntryKind.values.where(
                           (kind) =>
@@ -1444,6 +1451,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         isExpanded: true,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Transfer type'),
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         items: const [
                           DropdownMenuItem(
                             value: false,
@@ -1560,6 +1570,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       initialValue: _rail,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Payment route'),
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(16),
+                      dropdownColor: BambooInk.paper,
+                      focusColor: Colors.transparent,
+                      menuMaxHeight: 320,
                       items: [
                         // A route an older entry already carries stays
                         // listed so opening it does not change it.
@@ -1582,6 +1597,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         initialValue: _userCardId,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Card'),
+                        isExpanded: true,
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         items: [
                           // Only credit cards for a credit-card payment; a
                           // card already chosen stays so it is not lost.
