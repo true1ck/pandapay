@@ -213,4 +213,28 @@ void main() {
     await _open(tester, lastDate: DateTime(2027, 12, 31));
     expect(find.text('November 2026'), findsOneWidget);
   });
+
+  testWidgets('the headline shows years when the range is not in this year', (
+    tester,
+  ) async {
+    await _open(tester);
+    // This year: weekday and day only, as before.
+    await _day(tester, '10');
+    expect(_headline(tester), isNot(contains('2026')));
+
+    // Start in an earlier year, end this year: both years are spelled out.
+    await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2024'));
+    await tester.pumpAndSettle();
+    await _day(tester, '5');
+    expect(_headline(tester), contains('2024'));
+    await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2026'));
+    await tester.pumpAndSettle();
+    await _day(tester, '10');
+    expect(_headline(tester), contains('Nov 5, 2024'));
+    expect(_headline(tester), contains('Nov 10, 2026'));
+  });
 }

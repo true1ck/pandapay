@@ -148,8 +148,14 @@ class _RangeCalendarState extends State<_RangeCalendar> {
   String _headline(MaterialLocalizations l) {
     final s = _start;
     if (s == null) return 'Start date – End date';
-    String f(DateTime d) => l.formatMediumDate(d);
     final e = _end;
+    // Weekday + day for the usual case (this year, one year). Years are added
+    // only when they matter, so "Nov 5 – Nov 10" can never hide 2024 vs 2026.
+    final withYears =
+        s.year != _today.year || (e != null && e.year != _today.year);
+    String f(DateTime d) => withYears
+        ? '${l.formatShortMonthDay(d)}, ${d.year}'
+        : l.formatMediumDate(d);
     return e == null ? '${f(s)} – End date' : '${f(s)} – ${f(e)}';
   }
 
