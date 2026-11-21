@@ -76,9 +76,9 @@ void main() {
       expect(lists.history.map((i) => i.entry.id), ['b']);
       expect(lists.history.single.byUser, isTrue);
       // Rule reads are silent; only the Gemini one (c) is listed.
-      expect(lists.auto.map((i) => i.entry.id), ['c']);
-      expect(lists.auto.single.how, 'Read by an AI rule, verified');
-      expect(lists.auto.single.source, SettledSource.ai);
+      expect(lists.autoTransactions.map((i) => i.entry.id), ['c']);
+      expect(lists.autoTransactions.single.how, 'Read by an AI rule, verified');
+      expect(lists.autoTransactions.single.source, SettledSource.ai);
     },
   );
 
@@ -100,7 +100,7 @@ void main() {
       },
       now: now,
     );
-    expect(lists.auto.single.how, 'Read by an AI rule, not yet verified');
+    expect(lists.autoTransactions.single.how, 'Read by an AI rule, not yet verified');
   });
 
   test('old, unsourced and non-v2 transactions are left out', () {
@@ -140,7 +140,7 @@ void main() {
     };
     final ai = settledLists(entries, aiFacts, now: now);
     expect(ai.auto.length, settledMaxRows + 20, reason: 'owner: show all, not a slice');
-    expect(ai.auto.first.entry.id, 't0');
+    expect((ai.auto.first as SettledItem).entry.id, 't0');
     final userFacts = {
       for (var i = 0; i < settledMaxRows + 20; i++)
         's$i': [_fact('u$i', 's$i', 'user')],
@@ -162,7 +162,7 @@ void main() {
       },
       now: now,
     );
-    expect(lists.auto.map((i) => i.entry.id), ['ai-new', 'ai-old']);
+    expect(lists.autoTransactions.map((i) => i.entry.id), ['ai-new', 'ai-old']);
     expect(lists.history, isEmpty, reason: 'an edit older than 90 days stays out of History');
   });
 
@@ -324,7 +324,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.textContaining('Filed by AI'), findsOneWidget);
+      expect(find.textContaining('messages AI read, newest first'), findsOneWidget);
       expect(find.text('Shop g'), findsOneWidget);
       expect(find.text('Read by an AI rule, verified'), findsOneWidget);
     },
@@ -344,7 +344,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('Nothing filed by AI yet'), findsOneWidget);
+    expect(find.textContaining('No message has been read by AI yet'), findsOneWidget);
+    expect(find.textContaining('open one to fix it'), findsOneWidget);
   });
 
   group('the Gemini status bar', () {
@@ -435,7 +436,11 @@ void main() {
         );
         expect(s.tone, GeminiTone.ok);
         expect(s.title, 'AI is working');
-        expect(s.detail, '1 drafting · 2 waiting · 2 answered · 0 applied here · 1 failed');
+        expect(s.detail, 'AI has not read any of your messages yet');
+        expect(
+          s.serverDetail,
+          contains('Formats: 2 answered · 1 drafting · 2 waiting · 1 failed · 0 held back'),
+        );
         expect(s.progress, isTrue);
       },
     );
@@ -477,28 +482,76 @@ void main() {
         expect(s.title, 'AI could not draft 1 format');
         // Says what happens next, so a failure is not a dead end.
         expect(s.detail, contains('stay in Needs review'));
-        expect(s.detail, contains('2 answered · 0 applied here · 1 failed'));
+        expect(s.detail, contains('AI has not read any of your messages yet'));
+        expect(s.serverDetail, contains('Formats: 2 answered'));
+        expect(s.serverDetail, contains('1 failed'));
       },
     );
 
-    test('the bar tells what Gemini answered apart from what this phone applied', () {
+    test('the main line counts messages from the phone; format counts sit apart', () {
       final s = geminiBarState(
         server: const AiServerStatus(
           countedNow: true,
           eligible: true,
-          total: 3,
+          total: 86,
           ready: 2,
           covered: 1,
         ),
         local: const AiReviewStatus(
           resolved: {'a': AiResolution(ruleId: 'AI-x', verified: true)},
         ),
-        unreadOnPhone: 0,
+        unreadOnPhone: 3,
         openItems: 0,
+        aiReadMessages: 4,
+        unreadMessages: 2,
+      );
+      expect(s.detail, 'AI read 4 of your messages · 2 could not be read yet');
+      // The server's numbers count formats, say so, and never reach the main line.
+      expect(s.detail, isNot(contains('86')));
+      expect(
+        s.serverDetail,
+        contains('Formats learned for your account: 86 (formats, not messages'),
+      );
+      expect(s.serverDetail, contains('Formats: 3 answered'));
+      expect(s.serverDetail, contains('Formats applied on this phone: 1'));
+    });
+
+    test('a failed format keeps its explanation and says the messages are retried', () {
+      final s = geminiBarState(
+        server: const AiServerStatus(
+          countedNow: true,
+          eligible: true,
+          total: 5,
+          ready: 4,
+          failed: 1,
+        ),
+        local: null,
+        unreadOnPhone: 1,
+        openItems: 2,
+        aiReadMessages: 4,
+        unreadMessages: 1,
+      );
+      expect(s.tone, GeminiTone.warn);
+      expect(
+        s.detail,
+        startsWith('AI read 4 of your messages · 1 could not be read yet, retrying\n'),
+      );
+      expect(s.detail, contains('stay in Needs review'));
+    });
+
+    test('offline and silent keep the phone numbers per message', () {
+      final s = geminiBarState(
+        server: null,
+        local: const AiReviewStatus(),
+        unreadOnPhone: 0,
+        openItems: 3,
+        aiReadMessages: 4,
+        unreadMessages: 2,
+        offline: true,
       );
       expect(
         s.detail,
-        '3 formats sent · 3 answered · 1 applied here · 0 held back',
+        contains('AI read 4 of your messages · 2 could not be read yet · 3 still need you'),
       );
     });
 
@@ -545,7 +598,9 @@ void main() {
         openItems: 0,
       );
       expect(s.title, 'AI is on');
-      expect(s.detail, '4 formats sent · 4 answered · 0 applied here · 0 held back');
+      expect(s.detail, 'AI has not read any of your messages yet');
+      expect(s.serverDetail, contains('Formats learned for your account: 4'));
+      expect(s.serverDetail, contains('0 held back'));
       expect(s.progress, isFalse);
     });
 
@@ -703,6 +758,12 @@ void main() {
       await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
       await tester.pump();
       await tester.pump();
+      expect(
+        find.textContaining(
+          'Formats learned for your account: 4 (formats, not messages',
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('50 usable, 14 failed'), findsOneWidget);
       expect(find.textContaining('46 of 50'), findsOneWidget);
       expect(find.textContaining('Formats linked to answers: 48'), findsOneWidget);

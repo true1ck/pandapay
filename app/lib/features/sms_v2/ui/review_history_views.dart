@@ -21,6 +21,7 @@ import '../storage/schema.dart';
 import '../sync/ai_server_status.dart';
 import '../sync/template_resend.dart';
 import '../ledger/providers.dart';
+import 'ai_read_summary.dart';
 import 'screen_parts.dart';
 
 /// How far back the History list reaches, and how many rows it shows. AI
@@ -52,8 +53,18 @@ SettledSource settledSourceOf(Iterable<String> ruleIds) {
   return SettledSource.rule;
 }
 
+/// One row of the AI results tab (AI auto-resolved): a transaction the AI filed
+/// ([SettledItem]) or any other message the AI read ([AiReadItem]).
+sealed class AutoItem {
+  /// When it happened, for newest-first order.
+  DateTime get occurredAt;
+
+  /// Stable id of the row (the tie-break that keeps the order the same).
+  String get orderKey;
+}
+
 /// One transaction the app settled, and who settled it.
-class SettledItem {
+class SettledItem implements AutoItem {
   const SettledItem({
     required this.entry,
     required this.byUser,
@@ -74,6 +85,49 @@ class SettledItem {
   /// A plain-words line: "Read by a rule", "Read by an AI rule", "You edited".
   final String how;
   final double? confidence;
+
+  @override
+  DateTime get occurredAt => entry.occurredAt;
+
+  @override
+  String get orderKey => entry.id;
+}
+
+/// A message an AI rule read that left no transaction (a bill reminder, a failed
+/// payment attempt, a balance or limit notice, an info message...). Listed so the
+/// person can see what the AI understood and fix it when it got it wrong.
+class AiReadItem implements AutoItem {
+  const AiReadItem({
+    required this.sourceKey,
+    required this.occurredAt,
+    required this.summary,
+    required this.unverified,
+    this.confidence,
+    this.inReview = false,
+  });
+
+  /// The message (its capture id): what Fix reopens.
+  final String sourceKey;
+
+  /// The facts' observed time (when the message arrived).
+  @override
+  final DateTime occurredAt;
+
+  /// What the AI understood, in plain words: "Bill due ₹1,179 on 15 Nov".
+  final String summary;
+
+  /// The AI rule that read it exists only on this phone, so PandaPay has not
+  /// checked it yet (its id carries `:local:`, the same test as for a transaction).
+  final bool unverified;
+
+  /// The lowest confidence among the facts the AI read from it.
+  final double? confidence;
+
+  /// The message is already an open question on Needs review.
+  final bool inReview;
+
+  @override
+  String get orderKey => sourceKey;
 }
 
 /// The transactions the person added themselves to answer a review question
@@ -141,8 +195,15 @@ class SettledLists {
     );
   }
 
-  /// Filed by a Gemini-drafted rule without asking, newest first.
-  final List<SettledItem> auto;
+  /// Everything a Gemini-drafted rule read without asking, newest first: the
+  /// transactions it filed and the messages it read that made no transaction.
+  final List<AutoItem> auto;
+
+  /// The transactions among [auto].
+  Iterable<SettledItem> get autoTransactions => auto.whereType<SettledItem>();
+
+  /// The messages among [auto] that made no transaction.
+  Iterable<AiReadItem> get autoReads => auto.whereType<AiReadItem>();
 
   /// Settled or changed by the person, newest first.
   final List<SettledItem> history;
@@ -150,18 +211,25 @@ class SettledLists {
 
 /// Splits the recent stored SMS transactions into those the engine settled by
 /// itself and those the person settled or edited by hand.
+///
+/// [openReviewSources] are the messages already open on Needs review; an AI read
+/// among them says so instead of offering Fix again.
 SettledLists settledLists(
   Iterable<TransactionEntry> transactions,
   Map<String, List<Fact>> factsBySource, {
   required DateTime now,
+  Set<String> openReviewSources = const {},
 }) {
   final cutoff = now.subtract(settledWindow);
-  final auto = <SettledItem>[];
+  final auto = <AutoItem>[];
   final history = <SettledItem>[];
+  // Messages that already have a transaction row above (whoever read them).
+  final withTransaction = <String>{};
   for (final entry in transactions) {
     if (entry.pipelineVersion != 2) continue;
     final source = entry.sourceKey;
     if (source == null || entry.eventId == null) continue;
+    withTransaction.add(source);
     // History (what the person changed) keeps its 90-day window; AI auto-resolved covers all time (owner, 21 Nov
     // 2026: the AI-read messages were older than 90 days, so the tab showed none).
     final old = entry.occurredAt.isBefore(cutoff);
@@ -206,8 +274,39 @@ SettledLists settledLists(
       auto.add(item);
     }
   }
-  int newest(SettledItem a, SettledItem b) =>
-      b.entry.occurredAt.compareTo(a.entry.occurredAt);
+  // Whatever else an AI rule read (a bill reminder, a failed attempt, a balance
+  // or limit notice, an info message...) made no transaction, so it is not in
+  // the loop above. One pass over the facts already in memory; no query.
+  for (final MapEntry(key: source, value: facts) in factsBySource.entries) {
+    if (withTransaction.contains(source) || facts.isEmpty) continue;
+    final machine = [
+      for (final f in facts)
+        if (f.provenance.engine != Engine.user) f,
+    ];
+    final ai = [
+      for (final f in machine)
+        if (f.provenance.ruleId.startsWith('AI-')) f,
+    ];
+    // Not an AI read, or the person edited it: not listed.
+    if (ai.isEmpty || machine.length != facts.length) continue;
+    auto.add(
+      AiReadItem(
+        sourceKey: source,
+        occurredAt: ai
+            .map((f) => f.observedAt)
+            .reduce((a, b) => a.isAfter(b) ? a : b),
+        summary: aiReadSummary(ai),
+        unverified: ai.any((f) => f.provenance.ruleId.contains(':local:')),
+        confidence: ai.map((f) => f.confidence).reduce((a, b) => a < b ? a : b),
+        inReview: openReviewSources.contains(source),
+      ),
+    );
+  }
+  int newest(AutoItem a, AutoItem b) {
+    final byTime = b.occurredAt.compareTo(a.occurredAt);
+    return byTime != 0 ? byTime : a.orderKey.compareTo(b.orderKey);
+  }
+
   auto.sort(newest);
   history.sort(newest);
   return SettledLists(
@@ -226,10 +325,13 @@ final settledListsProvider = FutureProvider<SettledLists>((ref) async {
   final cache = await ref.watch(app.responseCacheProvider.future);
   final outbox = await ref.watch(app.outboxRepositoryProvider.future);
   final now = DateTime.now();
+  final db = cache.financialStore.database.db;
+  SmsV2Schema.ensure(db);
   return settledLists(
     model.transactions,
     model.factsBySource,
     now: now,
+    openReviewSources: openReviewSources(db, namespace),
   ).withAdded(
     addedFromReview(
       cache.financialStore.database.db,
@@ -275,6 +377,82 @@ Future<void> reopenForReview(WidgetRef ref, TransactionEntry entry) async {
   ref.invalidate(reviewItemsProvider);
 }
 
+/// The messages that are open questions on Needs review right now. One read of
+/// the person's open review rows, once per list build (never per item).
+Set<String> openReviewSources(Database db, String namespace) {
+  final sources = <String>{};
+  for (final row in db.select(
+    "SELECT json_extract(payload, '\$.sourceKey') AS source FROM v2_review_items "
+    "WHERE namespace=? AND status='open'",
+    [namespace],
+  )) {
+    if (row['source'] case final String source) sources.add(source);
+  }
+  return sources;
+}
+
+/// Puts a message the AI read, but that made no transaction, back on Needs
+/// review as an open question. It is the question the pipeline itself raises for
+/// a message it could not read (a `template` review item keyed by the message),
+/// so the normal Fix and Not financial answers handle it, through the same
+/// personal-format and correction services. Nothing about the AI's reading is
+/// changed here. `aiHold` keeps the message from being sent to the AI again for
+/// a new rule (the same marker the pipeline uses for messages no rule can read).
+Future<void> reopenReadForReview(WidgetRef ref, String sourceKey) async {
+  final namespace = ref.read(app.cacheNamespaceProvider);
+  final cache = await ref.read(app.responseCacheProvider.future);
+  final store = cache.financialStore;
+  final db = store.database.db;
+  SmsV2Schema.ensure(db);
+  store.batch(() {
+    db.execute(
+      'INSERT INTO v2_review_items (namespace, review_id, kind, payload, status) '
+      "VALUES (?, ?, 'template', ?, 'open') "
+      "ON CONFLICT(namespace, review_id) DO UPDATE SET status='open', payload=excluded.payload",
+      [
+        namespace,
+        'reopen-read:$sourceKey',
+        jsonEncode({
+          'sourceKey': sourceKey,
+          'reason': 'reopened',
+          'aiHold': 'reopened',
+        }),
+      ],
+    );
+    store.notifyExternalChanges(namespace, const ['needs_review']);
+  });
+  ref.invalidate(reviewItemsProvider);
+}
+
+/// The sender and the first words of one message, for the card on screen.
+class AiReadPreview {
+  const AiReadPreview({required this.sender, required this.head});
+  final String sender;
+  final String head;
+}
+
+/// How much of the message a card quotes.
+const aiReadSnippetChars = 140;
+
+/// Reads one message's sender and its first [aiReadSnippetChars] characters, when
+/// its card is built (a lazy list builds only the cards on screen). One primary
+/// key lookup; the rest of the text is never read.
+final aiReadPreviewProvider = FutureProvider.autoDispose
+    .family<AiReadPreview?, String>((ref, sourceKey) async {
+      final namespace = ref.watch(app.cacheNamespaceProvider);
+      final cache = await ref.watch(app.responseCacheProvider.future);
+      final rows = cache.financialStore.database.db.select(
+        'SELECT sender, substr(body, 1, $aiReadSnippetChars) AS head '
+        'FROM sms_captured_messages WHERE namespace=? AND id=? LIMIT 1',
+        [namespace, sourceKey],
+      );
+      if (rows.isEmpty) return null;
+      return AiReadPreview(
+        sender: rows.first['sender'] as String,
+        head: rows.first['head'] as String,
+      );
+    });
+
 /// How many message formats the AI could not turn into a rule (failed, or its
 /// draft was turned down by a reviewer). Read from the phone's own sync state.
 final aiUnreadCountProvider = FutureProvider<int>((ref) async {
@@ -315,12 +493,13 @@ class SettledList extends ConsumerWidget {
       error: (_, _) =>
           SmsError(onRetry: () => ref.invalidate(settledListsProvider)),
       data: (value) {
-        final items = history ? value.history : value.auto;
+        final List<Object> items = history ? value.history : value.auto;
         if (items.isEmpty) {
           return SmsEmpty(
             history
                 ? 'Nothing settled by you yet. Messages you confirm or fix appear here, so you can change them again.'
-                : 'Nothing filed by AI yet. Messages AI sorted without asking appear here, so you can correct a wrong guess.',
+                : 'No message has been read by AI yet. When it reads one, it appears here, newest first. '
+                      'Messages that are not verified yet are marked, and you can open one to fix it.',
             icon: history ? Icons.history_rounded : Icons.auto_awesome_outlined,
           );
         }
@@ -342,10 +521,16 @@ class SettledList extends ConsumerWidget {
                 ? BambooNote(
                     history
                         ? 'Things you confirmed or fixed, last 90 days. Open one to change it again.'
-                        : 'Filed by AI without asking you, last 90 days. Open one if it is wrong.',
+                        : 'These are the messages AI read, newest first, all time. Ones marked "Not verified yet" '
+                              'are still waiting for PandaPay to check the AI\'s reading. '
+                              'Open one to fix it if the AI got it wrong.',
                     icon: Icons.info_outline_rounded,
                   )
-                : SettledCard(item: items[i - 1]),
+                : switch (items[i - 1]) {
+                    final SettledItem item => SettledCard(item: item),
+                    final AiReadItem item => AiReadCard(item: item),
+                    _ => const SizedBox.shrink(),
+                  },
           ),
         );
       },
@@ -471,6 +656,103 @@ class SettledCard extends ConsumerWidget {
   }
 }
 
+/// A message the AI read that made no transaction: what it understood, when,
+/// from whom, whether PandaPay has checked the AI's rule, and Fix.
+class AiReadCard extends ConsumerWidget {
+  const AiReadCard({super.key, required this.item});
+  final AiReadItem item;
+
+  Future<void> _fix(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await reopenReadForReview(ref, item.sourceKey);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Moved to Needs review')),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not move this one to review')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final preview = ref.watch(aiReadPreviewProvider(item.sourceKey)).valueOrNull;
+    final date = DateFormat('d MMM y').format(item.occurredAt.toLocal());
+    return BambooPanel(
+      key: Key('ai-read-${item.sourceKey}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            item.summary,
+            style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            [date, ?preview?.sender].join(' · '),
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.sm),
+          Row(
+            children: [
+              Icon(
+                item.unverified
+                    ? Icons.auto_awesome_outlined
+                    : Icons.verified_outlined,
+                size: 16,
+                color: BambooInk.ink500,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  item.unverified ? 'Not verified yet' : 'Verified',
+                  key: Key('ai-read-badge-${item.sourceKey}'),
+                  style: BambooFonts.ui(
+                    12.5,
+                    weight: FontWeight.w700,
+                    color: BambooInk.ink700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (preview != null && preview.head.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.sm),
+            Text(
+              preview.head.length >= aiReadSnippetChars
+                  ? '${preview.head.trimRight()}…'
+                  : preview.head,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+            ),
+          ],
+          const SizedBox(height: AppSpace.md),
+          if (item.inReview)
+            Text(
+              'Waiting in Needs review',
+              key: Key('ai-read-in-review-${item.sourceKey}'),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
+            )
+          else
+            BambooActionBar(
+              secondary: [
+                OutlinedButton(
+                  key: Key('fix-read-${item.sourceKey}'),
+                  style: BambooButtons.secondary,
+                  onPressed: () => _fix(context, ref),
+                  child: const Text('Fix'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// How the Gemini status bar looks.
 enum GeminiTone {
   /// Working, or idle and healthy.
@@ -489,6 +771,7 @@ class GeminiBarState {
     required this.title,
     required this.detail,
     this.progress = false,
+    this.serverDetail,
   });
   final GeminiTone tone;
   final String title;
@@ -496,23 +779,48 @@ class GeminiBarState {
 
   /// Show a moving bar: layouts are waiting or being drafted right now.
   final bool progress;
+
+  /// The server's own counts, shown under "Phone details" only. They count
+  /// message formats (a format is shared by many messages), for the whole
+  /// account and all time, so they never sit next to the per-message line.
+  final String? serverDetail;
+}
+
+/// The plain per-message line of the bar, from this phone's own data.
+String _messagesLine(int read, int notRead, {bool retrying = false}) {
+  final head = read == 0
+      ? 'AI has not read any of your messages yet'
+      : 'AI read $read of your messages';
+  if (notRead <= 0) return head;
+  return '$head · $notRead could not be read yet${retrying ? ', retrying' : ''}';
 }
 
 /// Turns what the server reports (and, when it cannot be reached, what the
 /// phone itself knows) into one honest line for the bar. Pure, so every case is
 /// tested.
+///
+/// The main line counts MESSAGES, from this phone: [aiReadMessages] the
+/// messages an AI rule read (the AI results tab), [unreadMessages] the messages
+/// still waiting for a reading in Needs review. Either falls back to the older
+/// numbers when the caller has not loaded them. The server's numbers count
+/// message FORMATS, and go to [GeminiBarState.serverDetail].
 GeminiBarState geminiBarState({
   required AiServerStatus? server,
   required AiReviewStatus? local,
   required int unreadOnPhone,
   required int openItems,
+  int? aiReadMessages,
+  int? unreadMessages,
   bool sharingOff = false,
   bool offline = false,
 }) {
   String plural(int n, String one, [String? many]) =>
       '$n ${n == 1 ? one : (many ?? '${one}s')}';
-  // What Gemini answered is not the same as what this phone has applied: show both.
+  // What Gemini answered is not the same as what this phone has applied: both
+  // are kept, under Phone details.
   final applied = local?.resolved.length ?? 0;
+  final read = aiReadMessages ?? applied;
+  final notRead = unreadMessages ?? unreadOnPhone;
   // Gemini only ever sees anonymised layouts the person agreed to share. With
   // that off nothing is sent, whatever the server says.
   if (sharingOff) {
@@ -526,7 +834,10 @@ GeminiBarState geminiBarState({
   }
   if (server == null) {
     final waiting = local?.checkingTemplates.length ?? 0;
-    final read = local?.resolved.length ?? 0;
+    final phone =
+        'AI read $read of your messages'
+        '${notRead > 0 ? ' · $notRead could not be read yet' : ''}'
+        ' · $openItems still need you';
     // No connection: say so, and say it is not Gemini or the server that is
     // at fault. Nothing is lost; the status comes back with the connection.
     if (offline) {
@@ -536,30 +847,32 @@ GeminiBarState geminiBarState({
         detail:
             "The AI status will show again when you're back online. "
             'This phone knows: '
-            '${waiting > 0 ? '$waiting waiting · ' : ''}$read read by AI'
-            '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
-            ' · $openItems still need you',
+            '${waiting > 0 ? '$waiting waiting · ' : ''}$phone',
       );
     }
     if (waiting > 0) {
       return GeminiBarState(
         tone: GeminiTone.ok,
         title: 'AI is checking ${plural(waiting, 'message format')}',
-        detail:
-            'From this phone: $waiting waiting · $read read by AI · '
-            '$openItems still need you',
+        detail: 'From this phone: $waiting waiting · $phone',
         progress: true,
       );
     }
     return GeminiBarState(
       tone: GeminiTone.unknown,
       title: 'AI status unavailable',
-      detail:
-          'Could not reach the server. This phone knows: $read read by AI'
-          '${unreadOnPhone > 0 ? ' · $unreadOnPhone could not be read' : ''}'
-          ' · $openItems still need you',
+      detail: 'Could not reach the server. This phone knows: $phone',
     );
   }
+  // The server's per-format numbers, labelled so they cannot be mistaken for
+  // messages.
+  final serverDetail =
+      'Formats learned for your account: ${server.total} '
+      '(formats, not messages; all time, all your devices)\n'
+      'Formats: ${server.ready + server.covered} answered · '
+      '${server.working} drafting · ${server.queued} waiting · '
+      '${server.failed} failed · ${server.held} held back\n'
+      'Formats applied on this phone: $applied';
   if (!server.countedNow && server.inProgress == 0) {
     return GeminiBarState(
       tone: GeminiTone.warn,
@@ -570,17 +883,16 @@ GeminiBarState geminiBarState({
                 'are sent again as soon as it is.'
           : 'AI drafts are not switched on for this phone yet, so formats '
                 'sent now would be held back. Nothing for you to do.',
+      serverDetail: serverDetail,
     );
   }
   if (server.inProgress > 0) {
     return GeminiBarState(
       tone: GeminiTone.ok,
       title: 'AI is working',
-      detail:
-          '${server.working} drafting · ${server.queued} waiting · '
-          '${server.ready + server.covered} answered · $applied applied here · '
-          '${server.failed} failed',
+      detail: _messagesLine(read, notRead, retrying: true),
       progress: true,
+      serverDetail: serverDetail,
     );
   }
   if (server.failed > 0) {
@@ -588,29 +900,30 @@ GeminiBarState geminiBarState({
       tone: GeminiTone.warn,
       title: 'AI could not draft ${plural(server.failed, 'format')}',
       detail:
-          '${server.ready + server.covered} answered · $applied applied here · '
-          '${server.failed} failed\n'
+          '${_messagesLine(read, notRead, retrying: true)}\n'
           // Held layouts are old ones this phone no longer has an open message for (it sends the open ones again by
           // itself): not a failure, so they are not counted in this red line.
           'Messages in a failed format stay in Needs review for you to '
           'answer. PandaPay tries a failed format again on its own after a '
           'hiccup on our side, and once more whenever the AI is improved.',
+      serverDetail: serverDetail,
     );
   }
   if (server.total == 0) {
-    return const GeminiBarState(
+    return GeminiBarState(
       tone: GeminiTone.ok,
       title: 'AI is on',
-      detail: 'No unreadable message formats have been sent yet.',
+      detail: read > 0
+          ? _messagesLine(read, notRead)
+          : 'No unreadable message formats have been sent yet.',
+      serverDetail: serverDetail,
     );
   }
   return GeminiBarState(
     tone: GeminiTone.ok,
     title: 'AI is on',
-    detail:
-        '${plural(server.total, 'format')} sent · '
-        '${server.ready + server.covered} answered · $applied applied here · '
-        '${server.held} held back',
+    detail: _messagesLine(read, notRead),
+    serverDetail: serverDetail,
   );
 }
 
@@ -647,8 +960,20 @@ final geminiServerStatusProvider = FutureProvider.autoDispose<AiServerStatus?>((
 /// many formats it is drafting or waiting on, how many are done or failed, and
 /// whether this phone's formats are reaching it at all.
 class GeminiStatusBar extends ConsumerStatefulWidget {
-  const GeminiStatusBar({super.key, required this.openItems});
+  const GeminiStatusBar({
+    super.key,
+    required this.openItems,
+    this.aiReadMessages,
+    this.unreadMessages,
+  });
   final int openItems;
+
+  /// Messages an AI rule read, from this phone (the AI results tab). Null until
+  /// that list has loaded.
+  final int? aiReadMessages;
+
+  /// Messages still waiting for a reading in Needs review.
+  final int? unreadMessages;
 
   @override
   ConsumerState<GeminiStatusBar> createState() => _GeminiStatusBarState();
@@ -709,6 +1034,8 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
       local: ref.watch(aiReviewStatusProvider).valueOrNull,
       unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,
       openItems: widget.openItems,
+      aiReadMessages: widget.aiReadMessages,
+      unreadMessages: widget.unreadMessages,
       // No consent record: sharing is off and nothing is sent.
       sharingOff: consent.hasValue && consent.value == null,
     );
@@ -783,7 +1110,7 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
                 ).copyWith(decoration: TextDecoration.underline),
               ),
             ),
-            if (_showDetails) const _PhoneDetails(),
+            if (_showDetails) _PhoneDetails(serverDetail: state.serverDetail),
           ],
         ),
       ),
@@ -793,7 +1120,10 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
 
 /// What this phone holds about the AI check. Counts only.
 class _PhoneDetails extends ConsumerWidget {
-  const _PhoneDetails();
+  const _PhoneDetails({this.serverDetail});
+
+  /// What the server counted (message formats, not messages), when it answered.
+  final String? serverDetail;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -807,6 +1137,7 @@ class _PhoneDetails extends ConsumerWidget {
         loading: () => Text('Reading this phone…', style: style),
         error: (_, _) => Text('Could not read this phone.', style: style),
         data: (d) => Text(
+          '${serverDetail == null ? '' : '$serverDetail\n'}'
           'AI answers saved here: ${d.answersReady} usable, ${d.answersFailed} failed\n'
           'Formats linked to answers: ${d.linksSaved}; usable answers with their link: ${d.readyWithLink} of ${d.answersReady}\n'
           'AI rules in use now: ${d.activeAiRules}\n'
