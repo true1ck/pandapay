@@ -18,6 +18,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/category_picker.dart';
 import '../../app/required_field.dart';
 import '../../app/providers.dart';
@@ -2790,7 +2791,7 @@ class _QuickAddScreenState extends ConsumerState<QuickAddScreen> {
                             _date = DateTime(now.year, now.month, now.day - 1),
                       );
                     } else {
-                      final picked = await showDatePicker(
+                      final picked = await showBambooDatePicker(
                         context: context,
                         initialDate: _date ?? now,
                         firstDate: DateTime(now.year - 5),

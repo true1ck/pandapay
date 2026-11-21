@@ -12,6 +12,7 @@ import '../../app/design/merchant_brand.dart';
 import '../../app/design/merchant_brand_tile.dart';
 import '../../app/design/party_avatar.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
 import '../../data/server_clock.dart';
@@ -957,7 +958,7 @@ class _AddSubscriptionDialogState extends State<_AddSubscriptionDialog> {
   }
 
   Future<void> _pickRenewalDate() async {
-    final picked = await showDatePicker(
+    final picked = await showBambooDatePicker(
       context: context,
       initialDate: _nextExpectedOn,
       firstDate: DateTime(2000),
@@ -1753,7 +1754,7 @@ class _SeriesCard extends ConsumerWidget {
                       style: BambooFonts.ui(12.5, color: BambooInk.ink500),
                     ),
                     onTap: () async {
-                      final picked = await showDatePicker(
+                      final picked = await showBambooDatePicker(
                         context: context,
                         initialDate:
                             next ??

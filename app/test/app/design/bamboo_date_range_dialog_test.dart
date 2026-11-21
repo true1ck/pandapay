@@ -237,4 +237,107 @@ void main() {
     expect(_headline(tester), contains('Nov 5, 2024'));
     expect(_headline(tester), contains('Nov 10, 2026'));
   });
+
+  group('single date (same calendar, one day)', () {
+    DateTime? picked;
+    var closed = false;
+
+    Future<void> openSingle(
+      WidgetTester tester, {
+      DateTime? initial,
+      DateTime? first,
+      DateTime? last,
+    }) async {
+      picked = null;
+      closed = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () async {
+                  picked = await showBambooDatePicker(
+                    context: context,
+                    firstDate: first ?? DateTime(2020),
+                    lastDate: last ?? DateTime(2026, 11, 20),
+                    initialDate: initial,
+                    currentDate: DateTime(2026, 11, 20),
+                    helpText: 'Pick day',
+                  );
+                  closed = true;
+                },
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('tap a day, press OK, get that day', (tester) async {
+      await openSingle(tester);
+      expect(find.text('Pick day'), findsOneWidget);
+      expect(
+        tester
+            .widget<TextButton>(find.widgetWithText(TextButton, 'OK'))
+            .onPressed,
+        isNull,
+        reason: 'nothing picked yet',
+      );
+      await _day(tester, '12');
+      // Only the picked day gets the dark circle: no range band, no end prompt.
+      expect(_headline(tester), isNot(contains('End date')));
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(picked, DateTime(2026, 11, 12));
+    });
+
+    testWidgets(
+      'tapping another day moves the choice, it never makes a range',
+      (tester) async {
+        await openSingle(tester, initial: DateTime(2026, 11, 3));
+        await _day(tester, '9');
+        await _day(tester, '14');
+        await tester.tap(find.text('OK'));
+        await tester.pumpAndSettle();
+        expect(picked, DateTime(2026, 11, 14));
+      },
+    );
+
+    testWidgets('opens on the initial date and Cancel returns nothing', (
+      tester,
+    ) async {
+      await openSingle(tester, initial: DateTime(2025, 6, 8));
+      expect(find.text('June 2025'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(closed, isTrue);
+      expect(picked, isNull);
+    });
+
+    testWidgets('an initial date outside the allowed days is moved inside', (
+      tester,
+    ) async {
+      await openSingle(tester, initial: DateTime(2030, 1, 1));
+      expect(find.text('November 2026'), findsOneWidget);
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(picked, DateTime(2026, 11, 20));
+    });
+
+    testWidgets('the year jump works for a single day too', (tester) async {
+      await openSingle(tester);
+      await tester.tap(find.byKey(const Key('range-calendar-month-title')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('2023'));
+      await tester.pumpAndSettle();
+      await _day(tester, '7');
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(picked, DateTime(2023, 11, 7));
+    });
+  });
 }

@@ -740,6 +740,35 @@ void main() {
     },
   );
 
+  testWidgets('Custom dates opens the one shared calendar and applies it', (
+    tester,
+  ) async {
+    final service = MemoryBridge();
+    await _pumpImport(tester, service, fromHub: true);
+    await tester.tap(find.text('Import & Sync'));
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('Custom dates'));
+    await tester.tap(find.text('Custom dates'));
+    await tester.pumpAndSettle();
+
+    // The same calendar as everywhere else, with both ends picked in it.
+    expect(find.text('Choose dates'), findsOneWidget);
+    for (final day in const ['1', '2']) {
+      await tester.tap(
+        find.descendant(of: find.byType(Dialog), matching: find.text(day)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose dates'), findsNothing);
+    // The chosen range replaces the preset label; nothing starts importing.
+    expect(find.text('Custom dates'), findsNothing);
+    expect(service.calls, isNot(contains('runShortcut')));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('processing strip leaves normal editing and navigation usable', (
     tester,
   ) async {

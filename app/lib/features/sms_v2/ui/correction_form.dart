@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/bamboo_date_range_dialog.dart';
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_category.dart';
 import '../../../app/providers.dart' as app;
@@ -75,7 +76,7 @@ class _CorrectionFormState extends ConsumerState<CorrectionForm> {
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final current = DateTime.tryParse(_value.text.trim());
-    final picked = await showDatePicker(
+    final picked = await showBambooDatePicker(
       context: context,
       initialDate: current ?? now,
       firstDate: DateTime(2000),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/category_picker.dart';
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/required_field.dart';
 import '../../app/transaction_tag_picker.dart' show TransactionTagField;
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -385,7 +386,7 @@ class VoiceEntryReview extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: () async {
         final today = DateTime(now.year, now.month, now.day);
-        final picked = await showDatePicker(
+        final picked = await showBambooDatePicker(
           context: context,
           initialDate: editor.occurredAt ?? today,
           firstDate: DateTime(now.year - 5),

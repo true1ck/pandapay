@@ -17,6 +17,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/category_picker.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../app/providers.dart';
@@ -1634,7 +1635,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                           color: BambooInk.ink500,
                         ),
                         onTap: () async {
-                          final picked = await showDatePicker(
+                          final picked = await showBambooDatePicker(
                             context: context,
                             initialDate: _occurredAt ?? DateTime.now(),
                             firstDate: DateTime(2000),

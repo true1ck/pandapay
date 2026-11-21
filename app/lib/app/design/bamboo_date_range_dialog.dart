@@ -34,6 +34,36 @@ Future<DateTimeRange?> showBambooDateRangeDialog({
   );
 }
 
+/// One calendar that picks a single day, the same calendar as the range one
+/// (slate header, month arrows, year jump, slate day circle). A drop-in for
+/// Flutter's `showDatePicker`: the same `initialDate`/`firstDate`/`lastDate`
+/// arguments, except an `initialDate` outside the allowed dates is moved inside
+/// instead of throwing.
+Future<DateTime?> showBambooDatePicker({
+  required BuildContext context,
+  required DateTime firstDate,
+  required DateTime lastDate,
+  DateTime? initialDate,
+  DateTime? currentDate,
+  String helpText = 'Select date',
+  String confirmText = 'OK',
+}) {
+  return showDialog<DateTime>(
+    context: context,
+    builder: (_) => _RangeCalendar(
+      firstDate: _dateOnly(firstDate),
+      lastDate: _dateOnly(lastDate),
+      initialRange: initialDate == null
+          ? null
+          : DateTimeRange(start: initialDate, end: initialDate),
+      currentDate: currentDate,
+      helpText: helpText,
+      confirmText: confirmText,
+      single: true,
+    ),
+  );
+}
+
 DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
 class _RangeCalendar extends StatefulWidget {
@@ -44,6 +74,7 @@ class _RangeCalendar extends StatefulWidget {
     required this.currentDate,
     required this.helpText,
     required this.confirmText,
+    this.single = false,
   });
 
   final DateTime firstDate;
@@ -52,6 +83,9 @@ class _RangeCalendar extends StatefulWidget {
   final DateTime? currentDate;
   final String helpText;
   final String confirmText;
+
+  /// Picks one day instead of a range.
+  final bool single;
 
   @override
   State<_RangeCalendar> createState() => _RangeCalendarState();
@@ -91,7 +125,12 @@ class _RangeCalendarState extends State<_RangeCalendar> {
     super.initState();
     final r = widget.initialRange;
     _start = r == null ? null : _dateOnly(r.start);
-    _end = r == null ? null : _dateOnly(r.end);
+    _end = widget.single || r == null ? null : _dateOnly(r.end);
+    if (widget.single && _start != null) {
+      // A date outside the allowed days is moved inside, not an error.
+      if (_start!.isBefore(widget.firstDate)) _start = widget.firstDate;
+      if (_start!.isAfter(widget.lastDate)) _start = widget.lastDate;
+    }
     // No earlier range: open on today's month, kept inside the allowed dates.
     final today = _today;
     final shown =
@@ -112,7 +151,10 @@ class _RangeCalendarState extends State<_RangeCalendar> {
   void _tap(DateTime day) {
     setState(() {
       final start = _start;
-      if (start == null || _end != null || day.isBefore(start)) {
+      if (widget.single) {
+        _start = day;
+        _end = null;
+      } else if (start == null || _end != null || day.isBefore(start)) {
         _start = day;
         _end = null;
       } else {
@@ -147,7 +189,9 @@ class _RangeCalendarState extends State<_RangeCalendar> {
 
   String _headline(MaterialLocalizations l) {
     final s = _start;
-    if (s == null) return 'Start date – End date';
+    if (s == null) {
+      return widget.single ? 'Select date' : 'Start date – End date';
+    }
     final e = _end;
     // Weekday + day for the usual case (this year, one year). Years are added
     // only when they matter, so "Nov 5 – Nov 10" can never hide 2024 vs 2026.
@@ -156,6 +200,7 @@ class _RangeCalendarState extends State<_RangeCalendar> {
     String f(DateTime d) => withYears
         ? '${l.formatShortMonthDay(d)}, ${d.year}'
         : l.formatMediumDate(d);
+    if (widget.single) return f(s);
     return e == null ? '${f(s)} – End date' : '${f(s)} – ${f(e)}';
   }
 
@@ -447,9 +492,11 @@ class _RangeCalendarState extends State<_RangeCalendar> {
         TextButton(
           onPressed: _start == null
               ? null
-              : () => Navigator.of(
-                  context,
-                ).pop(DateTimeRange(start: _start!, end: _end ?? _start!)),
+              : () => Navigator.of(context).pop<Object>(
+                  widget.single
+                      ? _start!
+                      : DateTimeRange(start: _start!, end: _end ?? _start!),
+                ),
           child: Text(widget.confirmText),
         ),
       ],

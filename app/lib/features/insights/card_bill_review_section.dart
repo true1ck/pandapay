@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
 import '../../data/card_bill_ledger.dart';
@@ -150,7 +151,7 @@ class _CardBillReviewSheetState extends ConsumerState<_CardBillReviewSheet> {
   }
 
   Future<void> _pickDate(TextEditingController controller) async {
-    final picked = await showDatePicker(
+    final picked = await showBambooDatePicker(
       context: context,
       initialDate: DateTime.tryParse(controller.text) ?? DateTime.now(),
       firstDate: DateTime(2000),

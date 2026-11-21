@@ -856,12 +856,11 @@ void main() {
       await tester.tap(find.text('Custom'));
       await tester.pumpAndSettle();
 
-      // Switch the Material date picker to keyboard-entry mode so a definite
-      // future date (relative to the fixed 2026-01-15 TestClock above) can be
-      // typed directly, instead of depending on the calendar's current page.
-      await tester.tap(find.byTooltip('Switch to input'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField).last, '01/20/2026');
+      // The calendar opens on the fixed 2026-01-15 TestClock month, so the
+      // 20th is a definite future date.
+      await tester.tap(
+        find.descendant(of: find.byType(Dialog), matching: find.text('20')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();

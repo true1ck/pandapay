@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../consent/sms_access_disclosure.dart';
 import 'ios_sms_intake_controller.dart';
 import 'ios_sms_intake_providers.dart';
@@ -135,12 +136,13 @@ class _IosSmsImportScreenState extends ConsumerState<_IosSmsImportView> {
   Future<void> _chooseDates() async {
     FocusManager.instance.primaryFocus?.unfocus();
     final now = DateTime.now();
-    final dates = await showDateRangePicker(
+    final dates = await showBambooDateRangeDialog(
       context: context,
       firstDate: DateTime(2000),
       lastDate: now,
-      initialDateRange:
+      initialRange:
           _custom ?? DateTimeRange(start: iosSmsMonthsAgo(now, 24), end: now),
+      helpText: 'Choose dates',
     );
     if (dates != null && mounted) {
       setState(() {

@@ -16,6 +16,7 @@ import 'insights_local_first.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/providers.dart';
 import '../../app/required_field.dart';
 import '../../data/api_exception.dart';
@@ -1452,23 +1453,11 @@ class _CardBillDetailSheetState extends ConsumerState<_CardBillDetailSheet> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showBambooDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365 * 2)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: BambooInk.slate,
-              onPrimary: BambooInk.lime,
-              onSurface: BambooInk.ink900,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
@@ -2401,23 +2390,11 @@ class _AddCommitmentSheetState extends ConsumerState<_AddCommitmentSheet> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final picked = await showBambooDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365 * 10)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: BambooInk.slate,
-              onPrimary: BambooInk.lime,
-              onSurface: BambooInk.ink900,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);
