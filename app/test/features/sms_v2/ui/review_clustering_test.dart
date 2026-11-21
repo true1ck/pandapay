@@ -389,40 +389,37 @@ void main() {
     });
   });
 
-  group('DismissedReviewList', () {
-    testWidgets('groups by format and moves a group back', (tester) async {
+  group('DismissedReviewPanel', () {
+    testWidgets('one panel per format, each with a Recover button', (tester) async {
       final moved = <int>[];
+      final bundles = bundleReviewItems([
+        item('a', 'AX-FOO-S', 'Txn of Rs.5 failed'),
+        item('b', 'AX-FOO-S', 'Txn of Rs.9 failed'),
+        item('c', 'AX-BAR-S', 'Your OTP is 1. Do not share it.'),
+      ], (_) => 'template');
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: DismissedReviewList(
-              items: [
-                item('a', 'AX-FOO-S', 'Txn of Rs.5 failed'),
-                item('b', 'AX-FOO-S', 'Txn of Rs.9 failed'),
-                item('c', 'AX-BAR-S', 'Your OTP is 1. Do not share it.'),
+            body: ListView(
+              children: [
+                for (final bundle in bundles)
+                  DismissedReviewPanel(
+                    bundle: bundle,
+                    busy: false,
+                    onRecover: () => moved.add(bundle.items.length),
+                  ),
               ],
-              onRestore: (items) => moved.add(items.length),
             ),
           ),
         ),
       );
-      expect(find.text('Move back to review'), findsNWidgets(2));
+      expect(find.text('Recover'), findsNWidgets(2));
+      expect(find.text('Dismissed from Needs review'), findsNWidgets(2));
       // Bundles are ordered by recency then key; the two-message format and
       // the one-message format each get their own button.
-      await tester.tap(find.text('Move back to review').first);
-      await tester.tap(find.text('Move back to review').last);
+      await tester.tap(find.text('Recover').first);
+      await tester.tap(find.text('Recover').last);
       expect(moved.toList()..sort(), [1, 2]);
-    });
-
-    testWidgets('says so when nothing was dismissed', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DismissedReviewList(items: const [], onRestore: (_) {}),
-          ),
-        ),
-      );
-      expect(find.text('Nothing dismissed'), findsOneWidget);
     });
   });
 

@@ -175,7 +175,6 @@ void main() {
       final items = addedFromReview(
         database.db,
         namespace: 'user:t',
-        now: DateTime.utc(2026, 11, 21),
         syncedId: (cm) => cm == 'cm-q1' ? 'server-77' : null,
       );
       expect(items.map((i) => i.entry.merchantName), ['Shop q2', 'Shop q1']);
@@ -186,7 +185,7 @@ void main() {
       expect(items.first.how, 'You added this from a message');
     });
 
-    test('older than the history window is not listed', () {
+    test('an old answered question is listed too: History reaches back all time', () {
       open('old', {'sourceKey': 'old'});
       markAnsweredByAdding(
         financial,
@@ -200,8 +199,8 @@ void main() {
         },
       );
       expect(
-        addedFromReview(database.db, namespace: 'user:t', now: DateTime.utc(2026, 11, 21)),
-        isEmpty,
+        addedFromReview(database.db, namespace: 'user:t').single.entry.occurredAt.year,
+        2026,
       );
     });
   });

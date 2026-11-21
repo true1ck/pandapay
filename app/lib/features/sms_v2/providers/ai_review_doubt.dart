@@ -14,6 +14,13 @@ class AiOpenReadings {
   /// Messages the person has to look at, and why. They stay on Needs review with
   /// the "AI suggested" badge.
   final Map<String, AiDoubt> doubtful;
+
+  /// The question is an AI reading the AI was sure about: it is not a review
+  /// left, the message is AI auto-resolved.
+  bool settles(LocalReviewItem item) {
+    final source = item.payload['sourceKey'];
+    return item.kind == 'template' && source is String && confident.contains(source);
+  }
 }
 
 /// One definition shared by the Needs review screen and the outside count, so

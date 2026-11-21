@@ -10,6 +10,7 @@ import '../storage/schema.dart';
 import '../storage/sync_state_store.dart';
 import '../sync/ai_status.dart';
 import '../ui/review_clustering.dart';
+import 'ai_review_doubt.dart';
 import 'data_providers.dart';
 
 /// "1 review left" / "38 reviews left": how the count reads everywhere outside
@@ -121,9 +122,11 @@ final reviewQuestionCountProvider = FutureProvider<int>((ref) async {
       ),
   ];
 
-  // A format the AI already read goes to "AI suggested": it is not a review
-  // left. The same test as the screen's [AiReviewStatus]: a template row whose
-  // message has a reading, read by an AI rule.
+  // A reading an AI rule made and was sure about is AI auto-resolved: it is not
+  // a review left. The same test as the screen's [AiReviewStatus]: a template
+  // row whose message has a reading, read by an AI rule, with confidence and no
+  // direction conflict ([classifyOpenAiReadings]). One the AI is unsure about
+  // stays here, with the "AI suggested" badge.
   final aiRead = AiStatusReader(SyncStateStore(db, namespace: namespace))
       .aiReadSources([
         for (final row in rows)
@@ -132,8 +135,13 @@ final reviewQuestionCountProvider = FutureProvider<int>((ref) async {
               row.payload['sourceKey'] is String)
             row.payload['sourceKey']! as String,
       ]);
+  final readings = classifyOpenAiReadings(
+    items: items,
+    aiRead: aiRead,
+    factsBySource: factsBySource,
+  );
   return reviewQuestionCount([
     for (final item in items)
-      if (!aiRead.contains(item.payload['sourceKey'])) item,
+      if (!readings.settles(item)) item,
   ], reviewKindOf);
 });

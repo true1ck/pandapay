@@ -15,6 +15,7 @@ import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/sms_v2/providers/ai_status_provider.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
 import 'package:pandapay/features/sms_v2/providers/runtime_provider.dart';
+import 'package:pandapay/features/sms_v2/storage/dismissal_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/sync/ai_server_status.dart';
 import 'package:pandapay/features/sms_v2/ui/review_history_views.dart';
@@ -74,7 +75,6 @@ TransactionEntry _entry(String id, String source, DateTime at) =>
     );
 
 void main() {
-  final now = DateTime(2026, 11, 21);
 
   // Bill due 10 Nov, an attempt, an info message, a balance, plus a transaction.
   Map<String, List<Fact>> sampleFacts() => {
@@ -167,7 +167,6 @@ void main() {
         final lists = settledLists(
           [_entry('t1', 'txn', DateTime(2026, 11, 6))],
           sampleFacts(),
-          now: now,
         );
         expect(lists.auto.length, 4);
         expect(lists.autoTransactions.map((i) => i.entry.id), ['t1']);
@@ -199,7 +198,6 @@ void main() {
           for (final r in settledLists(
             const [],
             sampleFacts(),
-            now: now,
           ).autoReads)
             r.sourceKey: r,
         };
@@ -215,14 +213,13 @@ void main() {
         final lists = settledLists(
           [_entry('t1', 'txn', DateTime(2026, 11, 6))],
           sampleFacts(),
-          now: now,
         );
         expect(lists.autoReads.map((r) => r.sourceKey), isNot(contains('txn')));
       },
     );
 
     test('rule reads and messages the person edited are not listed', () {
-      final lists = settledLists(const [], sampleFacts(), now: now);
+      final lists = settledLists(const [], sampleFacts());
       final keys = lists.autoReads.map((r) => r.sourceKey).toSet();
       expect(keys, isNot(contains('rule-bill')));
       expect(keys, isNot(contains('edited')));
@@ -241,7 +238,7 @@ void main() {
         final lists = settledLists(const [], {
           ...sampleFacts(),
           'old': [old],
-        }, now: now);
+        });
         expect(lists.autoReads.map((r) => r.sourceKey), contains('old'));
         expect(lists.auto.last.orderKey, 'old');
         expect(
@@ -251,16 +248,32 @@ void main() {
       },
     );
 
-    test('a read already open on Needs review says so', () {
+    test('a read open on Needs review is not also listed in AI auto-resolved', () {
       final lists = settledLists(
-        const [],
+        [_entry('t1', 'txn', DateTime(2026, 11, 6))],
         sampleFacts(),
-        now: now,
-        openReviewSources: {'bill'},
+        openReviewSources: {'bill', 'txn'},
       );
-      final reads = {for (final r in lists.autoReads) r.sourceKey: r};
-      expect(reads['bill']!.inReview, isTrue);
-      expect(reads['info']!.inReview, isFalse);
+      // Exactly one of Needs review / AI auto-resolved: an open question, read or transaction, is not here.
+      expect(lists.autoReads.map((r) => r.sourceKey), {'attempt', 'info'});
+      expect(lists.autoTransactions, isEmpty);
+    });
+
+    test('a read the person dismissed leaves the list and is a History row; recovering returns it', () {
+      final dismissal = AutoDismissal(
+        sourceKey: 'bill',
+        kind: AutoDismissal.kindRead,
+        dismissedAt: DateTime.utc(2026, 11, 20),
+      );
+      final lists = settledLists(const [], sampleFacts(), dismissals: [dismissal]);
+      expect(lists.autoReads.map((r) => r.sourceKey), isNot(contains('bill')));
+      expect(lists.dismissed.single.sourceKey, 'bill');
+      expect(lists.dismissed.single.title, 'Bill due ₹1,179 on 15 Nov');
+      expect(lists.historyMessages, 1);
+      // Recover removes the record: back in AI auto-resolved.
+      final back = settledLists(const [], sampleFacts());
+      expect(back.autoReads.map((r) => r.sourceKey), contains('bill'));
+      expect(back.dismissed, isEmpty);
     });
 
     test('other fact types read in plain words too', () {
@@ -275,7 +288,7 @@ void main() {
         'bal': [balance],
         'lim': [limit],
         'hold': [hold],
-      }, now: now);
+      });
       final reads = {for (final r in lists.autoReads) r.sourceKey: r.summary};
       expect(reads['bal'], startsWith('Balance ₹'));
       expect(reads['lim'], startsWith('Credit limit increased to ₹'));
@@ -341,7 +354,7 @@ void main() {
       expect(find.text('3 Nov 2026'), findsOneWidget);
     });
 
-    testWidgets('a read already waiting in Needs review offers no second Fix', (
+    testWidgets('has Fix and Dismiss; the "waiting in Needs review" state is gone', (
       tester,
     ) async {
       await pumpCard(
@@ -351,11 +364,11 @@ void main() {
           occurredAt: DateTime(2026, 11, 3),
           summary: 'Balance ₹40,200',
           unverified: false,
-          inReview: true,
         ),
       );
-      expect(find.text('Waiting in Needs review'), findsOneWidget);
-      expect(find.text('Fix'), findsNothing);
+      expect(find.text('Waiting in Needs review'), findsNothing);
+      expect(find.text('Fix'), findsOneWidget);
+      expect(find.text('Dismiss'), findsOneWidget);
     });
 
     testWidgets(
@@ -383,7 +396,7 @@ void main() {
               }),
             ],
             child: const MaterialApp(
-              home: Scaffold(body: SettledList(history: false)),
+              home: Scaffold(body: SettledList()),
             ),
           ),
         );
@@ -424,7 +437,7 @@ void main() {
             aiReadPreviewProvider.overrideWith((ref, key) async => null),
           ],
           child: const MaterialApp(
-            home: Scaffold(body: SettledList(history: false)),
+            home: Scaffold(body: SettledList()),
           ),
         ),
       );
@@ -490,11 +503,8 @@ void main() {
         // Keeps the message from being sent to the AI again for a new rule.
         'aiHold': 'reopened',
       });
-      expect(openReviewSources(db, 'user:one'), {'bill'});
-      expect(openReviewSources(db, 'user:two'), isEmpty);
       // Answered, then fixed again later: it opens once more, still one row.
       db.execute("UPDATE v2_review_items SET status='resolved'");
-      expect(openReviewSources(db, 'user:one'), isEmpty);
       await tester.runAsync(() => reopenReadForReview(ref, 'bill'));
       rows = db.select('SELECT status FROM v2_review_items');
       expect(rows.length, 1);

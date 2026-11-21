@@ -9,6 +9,8 @@ import 'package:pandapay/data/local/sms_learning_feedback.dart';
 import 'package:pandapay/features/sms_v2/pipeline/trace.dart';
 import 'package:pandapay/features/sms_v2/pipeline/sms_v2_pipeline.dart';
 import 'package:pandapay/features/sms_v2/providers/data_providers.dart';
+import 'package:pandapay/features/sms_v2/storage/event_store.dart';
+import 'package:pandapay/features/sms_v2/storage/fact_store.dart';
 import 'package:pandapay/features/sms_v2/storage/schema.dart';
 import 'package:pandapay/features/sms_v2/ui/review_controller.dart';
 import 'package:pandapay_domain/sms_v2.dart';
@@ -172,7 +174,8 @@ void main() {
     expect(status(a.id), 'open');
   });
 
-  test('a message that was read into facts is not restored here', () {
+  /// A message read into facts and then dismissed ("Not financial"), with its review question open.
+  ({LocalReviewItem item, String source}) dismissedRead() {
     final source = '1' * 64;
     final message = SmsMessage(
       sender: 'VM-HDFCBK-S',
@@ -208,9 +211,37 @@ void main() {
       message: intake.capturedById(namespace, source),
     );
     controller().apply(items: [item], kind: CorrectionKind.notFinancial);
+    return (item: item, source: source);
+  }
 
+  String? eventType(String source) {
+    final facts = FactStore(database.db, namespace: namespace).forSource(source);
+    final event = EventStore(
+      database.db,
+      namespace: namespace,
+    ).findByFactIds(facts.map((f) => f.factId)).firstOrNull;
+    return event?.type.wire;
+  }
+
+  test('a dismissed reading is put back from the copy saved when it was dismissed', () {
+    final (:item, :source) = dismissedRead();
+    expect(eventType(source), 'unknown', reason: 'dismissing turned the event into unknown');
+    expect(status(source), 'resolved');
+
+    expect(controller().restoreDismissed([item]), 1);
+    expect(status(source), 'open', reason: 'back on Needs review');
+    expect(eventType(source), isNot('unknown'), reason: 'the reading counts again');
+  });
+
+  test('a reading dismissed before the copy was kept is left as it is', () {
+    final (:item, :source) = dismissedRead();
+    database.db.execute(
+      "DELETE FROM v2_sync_state WHERE namespace=? AND key LIKE 'hidden-event:%'",
+      [namespace],
+    );
     expect(controller().restoreDismissed([item]), 0);
     expect(status(source), 'resolved');
+    expect(eventType(source), 'unknown');
   });
 
   test('items other than unknown formats are never reopened', () {

@@ -17,18 +17,17 @@ import '../../../data/user_cards_repository.dart';
 import '../providers/ai_status_provider.dart';
 import '../providers/data_providers.dart';
 import '../providers/runtime_provider.dart';
+import '../storage/dismissal_store.dart';
 import '../storage/schema.dart';
+import '../storage/sync_state_store.dart';
 import '../sync/ai_server_status.dart';
 import '../sync/template_resend.dart';
 import '../ledger/providers.dart';
 import 'ai_read_summary.dart';
+import 'auto_dismissal_actions.dart';
+import 'dismissed_reviews_view.dart';
+import 'review_clustering.dart';
 import 'screen_parts.dart';
-
-/// How far back the History list reaches, and how many rows it shows. AI
-/// auto-resolved lists every AI read, all time. Both read the in-memory ledger
-/// model that is already loaded; neither queries the database.
-const settledWindow = Duration(days: 90);
-const settledMaxRows = 200;
 
 /// Who read a transaction without asking.
 enum SettledSource {
@@ -53,8 +52,9 @@ SettledSource settledSourceOf(Iterable<String> ruleIds) {
   return SettledSource.rule;
 }
 
-/// One row of the AI results tab (AI auto-resolved): a transaction the AI filed
-/// ([SettledItem]) or any other message the AI read ([AiReadItem]).
+/// One row of AI auto-resolved: a transaction the AI filed ([SettledItem]) or any
+/// other message the AI read ([AiReadItem]). A message is here only while it is
+/// not an open question on Needs review and the person has not dismissed it.
 sealed class AutoItem {
   /// When it happened, for newest-first order.
   DateTime get occurredAt;
@@ -95,7 +95,8 @@ class SettledItem implements AutoItem {
 
 /// A message an AI rule read that left no transaction (a bill reminder, a failed
 /// payment attempt, a balance or limit notice, an info message...). Listed so the
-/// person can see what the AI understood and fix it when it got it wrong.
+/// person can see what the AI understood, fix it when it got it wrong, or
+/// dismiss it.
 class AiReadItem implements AutoItem {
   const AiReadItem({
     required this.sourceKey,
@@ -103,7 +104,6 @@ class AiReadItem implements AutoItem {
     required this.summary,
     required this.unverified,
     this.confidence,
-    this.inReview = false,
   });
 
   /// The message (its capture id): what Fix reopens.
@@ -123,11 +123,31 @@ class AiReadItem implements AutoItem {
   /// The lowest confidence among the facts the AI read from it.
   final double? confidence;
 
-  /// The message is already an open question on Needs review.
-  final bool inReview;
-
   @override
   String get orderKey => sourceKey;
+}
+
+/// A message the person dismissed from AI auto-resolved, as a History row. Its
+/// [record] says where it came from and what Recover has to put back.
+class DismissedAutoItem {
+  const DismissedAutoItem({
+    required this.record,
+    required this.title,
+    required this.occurredAt,
+    this.entry,
+  });
+
+  final AutoDismissal record;
+
+  /// The shop of a transaction, or what the AI understood from a message.
+  final String title;
+  final DateTime occurredAt;
+
+  /// The hidden transaction row (a dismissed transaction), when it is still on
+  /// the phone.
+  final TransactionEntry? entry;
+
+  String get sourceKey => record.sourceKey;
 }
 
 /// The transactions the person added themselves to answer a review question
@@ -137,10 +157,8 @@ class AiReadItem implements AutoItem {
 List<SettledItem> addedFromReview(
   Database db, {
   required String namespace,
-  required DateTime now,
   String? Function(String clientMutationId)? syncedId,
 }) {
-  final cutoff = now.subtract(settledWindow);
   final items = <SettledItem>[];
   for (final row in db.select(
     "SELECT payload FROM v2_review_items WHERE namespace=? AND status='resolved' "
@@ -151,7 +169,6 @@ List<SettledItem> addedFromReview(
       final added = ((jsonDecode(row['payload'] as String) as Map)['added'] as Map)
           .cast<String, Object?>();
       final occurredAt = DateTime.parse(added['occurredAt'] as String);
-      if (occurredAt.isBefore(cutoff)) continue;
       final mutationId = added['clientMutationId'] as String;
       final merchant = added['merchantName'] as String?;
       items.add(
@@ -182,21 +199,27 @@ List<SettledItem> addedFromReview(
 }
 
 class SettledLists {
-  const SettledLists({this.auto = const [], this.history = const []});
+  const SettledLists({
+    this.auto = const [],
+    this.history = const [],
+    this.dismissed = const [],
+  });
 
-  /// These lists with [added] in History, newest first, within the row limit.
+  /// These lists with [added] in History, newest first.
   SettledLists withAdded(List<SettledItem> added) {
     if (added.isEmpty) return this;
     final merged = [...history, ...added]
       ..sort((a, b) => b.entry.occurredAt.compareTo(a.entry.occurredAt));
     return SettledLists(
       auto: auto,
-      history: merged.take(settledMaxRows).toList(growable: false),
+      history: List.unmodifiable(merged),
+      dismissed: dismissed,
     );
   }
 
-  /// Everything a Gemini-drafted rule read without asking, newest first: the
+  /// Everything an AI rule read and was sure about, newest first: the
   /// transactions it filed and the messages it read that made no transaction.
+  /// Not the ones open on Needs review, not the ones the person dismissed.
   final List<AutoItem> auto;
 
   /// The transactions among [auto].
@@ -205,37 +228,61 @@ class SettledLists {
   /// The messages among [auto] that made no transaction.
   Iterable<AiReadItem> get autoReads => auto.whereType<AiReadItem>();
 
-  /// Settled or changed by the person, newest first.
+  /// Transactions the person confirmed, fixed or added, newest first, all time.
   final List<SettledItem> history;
+
+  /// Messages the person dismissed from AI auto-resolved, newest first. (The ones
+  /// dismissed from Needs review come from `dismissedReviewItemsProvider`.)
+  final List<DismissedAutoItem> dismissed;
+
+  /// The messages History lists from this model (without the Needs review
+  /// dismissals, which are grouped by format and counted by the screen).
+  int get historyMessages => history.length + dismissed.length;
 }
 
-/// Splits the recent stored SMS transactions into those the engine settled by
-/// itself and those the person settled or edited by hand.
+/// Sorts the stored SMS transactions and AI readings into the lists of the
+/// three-tab Needs review screen:
 ///
-/// [openReviewSources] are the messages already open on Needs review; an AI read
-/// among them says so instead of offering Fix again.
+///  * AI auto-resolved ([SettledLists.auto]): what an AI rule read, that is not
+///    an open question ([openReviewSources], the messages shown on Needs review)
+///    and not dismissed. A message is in exactly one of Needs review and AI
+///    auto-resolved.
+///  * History ([SettledLists.history], [SettledLists.dismissed]): the AI
+///    readings the person confirmed or fixed, and what they dismissed.
+///
+/// [confirmedEvents] are the ledger events the person decided (`user_confirmed`),
+/// each with its decision time. A correction does not put a user fact under the
+/// message's own source (it writes a new fact under `correction:<id>`), so the
+/// event is where a person's edit of an AI reading shows. A transaction the
+/// person dismissed and then recovered keeps the decision time its restore
+/// stamped ([AutoDismissal.restoredDecidedAt]); while the event still carries
+/// exactly that time it is AI auto-resolved again, and any later edit ends it.
 SettledLists settledLists(
   Iterable<TransactionEntry> transactions,
   Map<String, List<Fact>> factsBySource, {
-  required DateTime now,
   Set<String> openReviewSources = const {},
+  Map<String, DateTime?> confirmedEvents = const {},
+  Iterable<AutoDismissal> dismissals = const [],
 }) {
-  final cutoff = now.subtract(settledWindow);
+  final dismissalBySource = {
+    for (final dismissal in dismissals) dismissal.sourceKey: dismissal,
+  };
   final auto = <AutoItem>[];
   final history = <SettledItem>[];
+  final entriesById = <String, TransactionEntry>{};
   // Messages that already have a transaction row above (whoever read them).
   final withTransaction = <String>{};
   for (final entry in transactions) {
+    entriesById[entry.id] = entry;
     if (entry.pipelineVersion != 2) continue;
     final source = entry.sourceKey;
     if (source == null || entry.eventId == null) continue;
     withTransaction.add(source);
-    // History (what the person changed) keeps its 90-day window; AI auto-resolved covers all time (owner, 21 Nov
-    // 2026: the AI-read messages were older than 90 days, so the tab showed none).
-    final old = entry.occurredAt.isBefore(cutoff);
+    // Deleted, left out or dismissed: not an AI reading that counts any more. A
+    // dismissal is listed from its own record (History).
+    if (entry.status != 'active') continue;
     final facts = factsBySource[source] ?? const <Fact>[];
     if (facts.isEmpty) continue;
-    final byUser = facts.any((f) => f.provenance.engine == Engine.user);
     final machine = facts.firstWhere(
       (f) => f.provenance.engine != Engine.user,
       orElse: () => facts.first,
@@ -245,6 +292,23 @@ SettledLists settledLists(
         if (f.provenance.engine != Engine.user) f.provenance.ruleId,
     ];
     final reader = settledSourceOf(ruleIds);
+    var byUser = facts.any((f) => f.provenance.engine == Engine.user);
+    // The person decided an AI reading: a fix, or a confirmation. (Only AI
+    // readings are looked at here; rules and the on-device reader sort quietly.)
+    var fixedAiReading = false;
+    if (!byUser &&
+        reader == SettledSource.ai &&
+        confirmedEvents.containsKey(entry.eventId)) {
+      final restored = DateTime.tryParse(
+        dismissalBySource[source]?.restoredDecidedAt ?? '',
+      );
+      final decided = confirmedEvents[entry.eventId];
+      byUser =
+          restored == null ||
+          decided == null ||
+          !decided.isAtSameMomentAs(restored);
+      fixedAiReading = byUser;
+    }
     // An AI rule that only exists on this phone has not been checked by
     // PandaPay yet (its id carries a ':local:' suffix).
     final unverified = ruleIds.any(
@@ -255,7 +319,9 @@ SettledLists settledLists(
       byUser: byUser,
       source: reader,
       confidence: machine.confidence,
-      how: byUser
+      how: fixedAiReading
+          ? 'The AI read this; you confirmed or fixed it'
+          : byUser
           ? 'You confirmed or edited this'
           : switch (reader) {
               SettledSource.ai =>
@@ -267,10 +333,12 @@ SettledLists settledLists(
             },
     );
     // Rules and the on-device reader sort quietly: they are not listed. Only
-    // what the person changed (History) or what Gemini filed (AI auto-resolved).
+    // what the person changed (History) or what Gemini filed and is sure about
+    // (AI auto-resolved).
     if (byUser) {
-      if (!old) history.add(item);
-    } else if (reader == SettledSource.ai) {
+      history.add(item);
+    } else if (reader == SettledSource.ai &&
+        !openReviewSources.contains(source)) {
       auto.add(item);
     }
   }
@@ -279,6 +347,9 @@ SettledLists settledLists(
   // the loop above. One pass over the facts already in memory; no query.
   for (final MapEntry(key: source, value: facts) in factsBySource.entries) {
     if (withTransaction.contains(source) || facts.isEmpty) continue;
+    final dismissal = dismissalBySource[source];
+    if (dismissal != null && !dismissal.restored) continue;
+    if (openReviewSources.contains(source)) continue;
     final machine = [
       for (final f in facts)
         if (f.provenance.engine != Engine.user) f,
@@ -298,9 +369,46 @@ SettledLists settledLists(
         summary: aiReadSummary(ai),
         unverified: ai.any((f) => f.provenance.ruleId.contains(':local:')),
         confidence: ai.map((f) => f.confidence).reduce((a, b) => a < b ? a : b),
-        inReview: openReviewSources.contains(source),
       ),
     );
+  }
+  // What the person dismissed from AI auto-resolved.
+  final dismissed = <DismissedAutoItem>[];
+  for (final dismissal in dismissals) {
+    if (dismissal.restored) continue;
+    if (dismissal.isTransaction) {
+      final entry = entriesById[dismissal.entryId];
+      // Back on screen (a restore from Activity): it is not dismissed any more.
+      if (entry != null && entry.status == 'active') continue;
+      dismissed.add(
+        DismissedAutoItem(
+          record: dismissal,
+          title: (entry?.merchantName ?? '').trim().isEmpty
+              ? 'Transaction'
+              : entry!.merchantName!.trim(),
+          occurredAt: entry?.occurredAt ?? dismissal.dismissedAt,
+          entry: entry,
+        ),
+      );
+    } else {
+      final ai = [
+        for (final f in factsBySource[dismissal.sourceKey] ?? const <Fact>[])
+          if (f.provenance.engine != Engine.user &&
+              f.provenance.ruleId.startsWith('AI-'))
+            f,
+      ];
+      dismissed.add(
+        DismissedAutoItem(
+          record: dismissal,
+          title: ai.isEmpty ? 'A message the AI read' : aiReadSummary(ai),
+          occurredAt: ai.isEmpty
+              ? dismissal.dismissedAt
+              : ai
+                    .map((f) => f.observedAt)
+                    .reduce((a, b) => a.isAfter(b) ? a : b),
+        ),
+      );
+    }
   }
   int newest(AutoItem a, AutoItem b) {
     final byTime = b.occurredAt.compareTo(a.occurredAt);
@@ -309,10 +417,16 @@ SettledLists settledLists(
 
   auto.sort(newest);
   history.sort(newest);
+  dismissed.sort((a, b) {
+    final byTime = b.occurredAt.compareTo(a.occurredAt);
+    return byTime != 0 ? byTime : a.sourceKey.compareTo(b.sourceKey);
+  });
+  // Both lists are built lazily by the screen, so their length costs nothing to
+  // draw: no row cap (History used to stop at 90 days and 200 rows).
   return SettledLists(
-    // Every AI read, all time: the list is built lazily, so its length costs nothing to draw.
     auto: List.unmodifiable(auto),
-    history: history.take(settledMaxRows).toList(growable: false),
+    history: List.unmodifiable(history),
+    dismissed: List.unmodifiable(dismissed),
   );
 }
 
@@ -321,24 +435,31 @@ final settledListsProvider = FutureProvider<SettledLists>((ref) async {
   // A question answered by adding the transaction changes no ledger revision,
   // only the review table; follow it.
   ref.watch(app.financialStoreRevisionProvider('needs_review'));
+  // What is open on Needs review decides what is NOT AI auto-resolved. Both are
+  // already built for the screen this list belongs to.
+  final reviews = await ref.watch(reviewItemsProvider.future);
+  final ai = await ref.watch(aiReviewStatusProvider.future);
   final namespace = ref.watch(app.cacheNamespaceProvider);
   final cache = await ref.watch(app.responseCacheProvider.future);
   final outbox = await ref.watch(app.outboxRepositoryProvider.future);
-  final now = DateTime.now();
   final db = cache.financialStore.database.db;
   SmsV2Schema.ensure(db);
   return settledLists(
     model.transactions,
     model.factsBySource,
-    now: now,
-    openReviewSources: openReviewSources(db, namespace),
+    openReviewSources: {
+      for (final item in reviews)
+        if (!ai.settledByAi(item))
+          if (item.payload['sourceKey'] case final String source) source,
+    },
+    confirmedEvents: {
+      for (final event in model.ledger.events)
+        if (event.status == EventStatus.userConfirmed)
+          event.eventId: event.decidedAt,
+    },
+    dismissals: DismissalStore(SyncStateStore(db, namespace: namespace)).all(),
   ).withAdded(
-    addedFromReview(
-      cache.financialStore.database.db,
-      namespace: namespace,
-      now: now,
-      syncedId: outbox.syncedTransactionId,
-    ),
+    addedFromReview(db, namespace: namespace, syncedId: outbox.syncedTransactionId),
   );
 });
 
@@ -375,20 +496,6 @@ Future<void> reopenForReview(WidgetRef ref, TransactionEntry entry) async {
     store.notifyExternalChanges(namespace, const ['needs_review']);
   });
   ref.invalidate(reviewItemsProvider);
-}
-
-/// The messages that are open questions on Needs review right now. One read of
-/// the person's open review rows, once per list build (never per item).
-Set<String> openReviewSources(Database db, String namespace) {
-  final sources = <String>{};
-  for (final row in db.select(
-    "SELECT json_extract(payload, '\$.sourceKey') AS source FROM v2_review_items "
-    "WHERE namespace=? AND status='open'",
-    [namespace],
-  )) {
-    if (row['source'] case final String source) sources.add(source);
-  }
-  return sources;
 }
 
 /// Puts a message the AI read, but that made no transaction, back on Needs
@@ -477,12 +584,9 @@ int aiUnreadCountIn(Database db, String namespace) {
   return (row.first['n'] as num).toInt();
 }
 
-/// The AI auto-resolved and History tabs share this list.
+/// The AI auto-resolved tab: everything an AI rule read and was sure about.
 class SettledList extends ConsumerWidget {
-  const SettledList({super.key, required this.history});
-
-  /// True for the History tab, false for AI auto-resolved.
-  final bool history;
+  const SettledList({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -493,14 +597,12 @@ class SettledList extends ConsumerWidget {
       error: (_, _) =>
           SmsError(onRetry: () => ref.invalidate(settledListsProvider)),
       data: (value) {
-        final List<Object> items = history ? value.history : value.auto;
+        final items = value.auto;
         if (items.isEmpty) {
-          return SmsEmpty(
-            history
-                ? 'Nothing settled by you yet. Messages you confirm or fix appear here, so you can change them again.'
-                : 'No message has been read by AI yet. When it reads one, it appears here, newest first. '
-                      'Messages that are not verified yet are marked, and you can open one to fix it.',
-            icon: history ? Icons.history_rounded : Icons.auto_awesome_outlined,
+          return const SmsEmpty(
+            'No message has been read by AI and settled yet. When the AI reads one and is sure of it, '
+            'it appears here, newest first, already counted. Readings it is unsure about wait in Needs review.',
+            icon: Icons.auto_awesome_outlined,
           );
         }
         return RefreshIndicator(
@@ -518,19 +620,108 @@ class SettledList extends ConsumerWidget {
             itemCount: items.length + 1,
             separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
             itemBuilder: (context, i) => i == 0
-                ? BambooNote(
-                    history
-                        ? 'Things you confirmed or fixed, last 90 days. Open one to change it again.'
-                        : 'These are the messages AI read, newest first, all time. Ones marked "Not verified yet" '
-                              'are still waiting for PandaPay to check the AI\'s reading. '
-                              'Open one to fix it if the AI got it wrong.',
+                ? const BambooNote(
+                    'Messages the AI read and was sure of, newest first, all time. They are already counted. '
+                    '"Not verified yet" means PandaPay has not checked the AI\'s rule yet. '
+                    'Fix sends one back to Needs review. Dismiss is for something that is not a real transaction: '
+                    'it leaves your totals and moves to History, where you can bring it back.',
                     icon: Icons.info_outline_rounded,
                   )
                 : switch (items[i - 1]) {
                     final SettledItem item => SettledCard(item: item),
                     final AiReadItem item => AiReadCard(item: item),
-                    _ => const SizedBox.shrink(),
                   },
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The History tab: everything the person dismissed (from Needs review and from
+/// AI auto-resolved) and the AI readings they fixed, all time, newest first.
+/// Every dismissed row has one Recover action.
+class HistoryList extends ConsumerWidget {
+  const HistoryList({super.key, required this.onRecoverReview, this.busy = false});
+
+  /// Brings a group of messages dismissed from Needs review back to it.
+  final void Function(List<LocalReviewItem>) onRecoverReview;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lists = ref.watch(settledListsProvider);
+    final reviewDismissed =
+        ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
+    return lists.when(
+      skipLoadingOnReload: true,
+      loading: () => const SmsLoading(),
+      error: (_, _) =>
+          SmsError(onRetry: () => ref.invalidate(settledListsProvider)),
+      data: (value) {
+        final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+        // One row per format for what was dismissed from Needs review (Recover
+        // frees the format for all of its messages), one per message otherwise.
+        final rows = <({DateTime when, String key, Widget Function() build})>[
+          for (final bundle in bundleReviewItems(
+            reviewDismissed,
+            (_) => 'template',
+          ))
+            (
+              when: bundle.latest ?? epoch,
+              key: 'review:${bundle.key}',
+              build: () => DismissedReviewPanel(
+                bundle: bundle,
+                busy: busy,
+                onRecover: () => onRecoverReview(bundle.items),
+              ),
+            ),
+          for (final item in value.dismissed)
+            (
+              when: item.occurredAt,
+              key: 'auto:${item.sourceKey}',
+              build: () => DismissedAutoCard(item: item),
+            ),
+          for (final item in value.history)
+            (
+              when: item.occurredAt,
+              key: 'edited:${item.entry.id}',
+              build: () => SettledCard(item: item, inHistory: true),
+            ),
+        ]..sort((a, b) {
+            final byTime = b.when.compareTo(a.when);
+            return byTime != 0 ? byTime : a.key.compareTo(b.key);
+          });
+        if (rows.isEmpty) {
+          return const SmsEmpty(
+            'Nothing here yet. Messages you dismiss, and AI readings you fix, appear here, '
+            'so you can bring a dismissed one back.',
+            icon: Icons.history_rounded,
+          );
+        }
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(settledListsProvider);
+            ref.invalidate(dismissedReviewItemsProvider);
+            await ref.read(settledListsProvider.future);
+          },
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpace.lg,
+              AppSpace.sm,
+              AppSpace.lg,
+              AppSpace.xxl,
+            ),
+            itemCount: rows.length + 1,
+            separatorBuilder: (_, _) => const SizedBox(height: AppSpace.md),
+            itemBuilder: (context, i) => i == 0
+                ? const BambooNote(
+                    'Everything you dismissed or fixed, all time, newest first. Recover puts a dismissed message '
+                    'back where it came from. An AI reading you fixed stays as you fixed it: PandaPay cannot '
+                    'restore the AI\'s version automatically, but you can open it to change it again.',
+                    icon: Icons.info_outline_rounded,
+                  )
+                : rows[i - 1].build(),
           ),
         );
       },
@@ -545,8 +736,12 @@ final _money = NumberFormat.currency(
 );
 
 class SettledCard extends ConsumerWidget {
-  const SettledCard({super.key, required this.item});
+  const SettledCard({super.key, required this.item, this.inHistory = false});
   final SettledItem item;
+
+  /// A History row (something the person fixed): Edit only, no way back to the
+  /// AI's reading.
+  final bool inHistory;
 
   Future<void> _reopen(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -558,6 +753,22 @@ class SettledCard extends ConsumerWidget {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not move this one back')),
+      );
+    }
+  }
+
+  Future<void> _dismiss(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await dismissTransactionFromCard(ref, item.entry);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Dismissed. It is in History if you want it back.'),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not dismiss this one')),
       );
     }
   }
@@ -631,6 +842,14 @@ class SettledCard extends ConsumerWidget {
               ),
             ],
           ),
+          if (inHistory && item.byUser && item.source == SettledSource.ai) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Changed by you: the AI\'s reading cannot be restored automatically.',
+              key: Key('history-no-restore-${e.id}'),
+              style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
+            ),
+          ],
           const SizedBox(height: AppSpace.md),
           BambooActionBar(
             secondary: [
@@ -641,14 +860,22 @@ class SettledCard extends ConsumerWidget {
                 child: const Text('Edit'),
               ),
             ],
-            quiet: [
-              TextButton(
-                key: Key('reopen-${e.id}'),
-                style: BambooButtons.quiet,
-                onPressed: () => _reopen(context, ref),
-                child: const Text('Move back to review'),
-              ),
-            ],
+            quiet: inHistory
+                ? const []
+                : [
+                    TextButton(
+                      key: Key('reopen-${e.id}'),
+                      style: BambooButtons.quiet,
+                      onPressed: () => _reopen(context, ref),
+                      child: const Text('Move back to review'),
+                    ),
+                    TextButton(
+                      key: Key('dismiss-${e.id}'),
+                      style: BambooButtons.quiet,
+                      onPressed: () => _dismiss(context, ref),
+                      child: const Text('Dismiss'),
+                    ),
+                  ],
           ),
         ],
       ),
@@ -657,7 +884,7 @@ class SettledCard extends ConsumerWidget {
 }
 
 /// A message the AI read that made no transaction: what it understood, when,
-/// from whom, whether PandaPay has checked the AI's rule, and Fix.
+/// from whom, whether PandaPay has checked the AI's rule, Fix and Dismiss.
 class AiReadCard extends ConsumerWidget {
   const AiReadCard({super.key, required this.item});
   final AiReadItem item;
@@ -672,6 +899,22 @@ class AiReadCard extends ConsumerWidget {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Could not move this one to review')),
+      );
+    }
+  }
+
+  Future<void> _dismiss(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await dismissReadFromCard(ref, item.sourceKey);
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Dismissed. It is in History if you want it back.'),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not dismiss this one')),
       );
     }
   }
@@ -730,23 +973,94 @@ class AiReadCard extends ConsumerWidget {
             ),
           ],
           const SizedBox(height: AppSpace.md),
-          if (item.inReview)
-            Text(
-              'Waiting in Needs review',
-              key: Key('ai-read-in-review-${item.sourceKey}'),
-              style: BambooFonts.ui(12.5, color: BambooInk.ink700),
-            )
-          else
-            BambooActionBar(
-              secondary: [
-                OutlinedButton(
-                  key: Key('fix-read-${item.sourceKey}'),
-                  style: BambooButtons.secondary,
-                  onPressed: () => _fix(context, ref),
-                  child: const Text('Fix'),
+          BambooActionBar(
+            secondary: [
+              OutlinedButton(
+                key: Key('fix-read-${item.sourceKey}'),
+                style: BambooButtons.secondary,
+                onPressed: () => _fix(context, ref),
+                child: const Text('Fix'),
+              ),
+            ],
+            quiet: [
+              TextButton(
+                key: Key('dismiss-read-${item.sourceKey}'),
+                style: BambooButtons.quiet,
+                onPressed: () => _dismiss(context, ref),
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A History row for a message dismissed from AI auto-resolved, with Recover.
+class DismissedAutoCard extends ConsumerWidget {
+  const DismissedAutoCard({super.key, required this.item});
+  final DismissedAutoItem item;
+
+  Future<void> _recover(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final to = await recoverFromHistory(ref, item);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            to == RecoveredTo.autoResolved
+                ? 'Back in AI auto-resolved.'
+                : 'The AI no longer reads this one, so it is back in Needs review.',
+          ),
+        ),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not recover this one')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final date = DateFormat('d MMM y').format(item.occurredAt.toLocal());
+    final amount = item.entry == null
+        ? null
+        : _money.format(item.entry!.amount.paise / 100);
+    return BambooPanel(
+      key: Key('dismissed-auto-${item.sourceKey}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  item.title,
+                  style: BambooFonts.heading(15.5, color: BambooInk.ink900),
                 ),
-              ],
-            ),
+              ),
+              if (amount != null)
+                Text(
+                  amount,
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$date · Dismissed from AI auto-resolved',
+            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+          ),
+          const SizedBox(height: AppSpace.md),
+          OutlinedButton(
+            key: Key('recover-${item.sourceKey}'),
+            style: BambooButtons.secondary,
+            onPressed: () => _recover(context, ref),
+            child: const Text('Recover'),
+          ),
         ],
       ),
     );
@@ -787,10 +1101,16 @@ class GeminiBarState {
 }
 
 /// The plain per-message line of the bar, from this phone's own data.
-String _messagesLine(int read, int notRead, {bool retrying = false}) {
+String _messagesLine(
+  int read,
+  int notRead, {
+  bool retrying = false,
+  int needCheck = 0,
+}) {
   final head = read == 0
       ? 'AI has not read any of your messages yet'
-      : 'AI read $read of your messages';
+      : 'AI read $read of your messages'
+            '${needCheck > 0 ? ' · $needCheck of them need your check in Needs review' : ''}';
   if (notRead <= 0) return head;
   return '$head · $notRead could not be read yet${retrying ? ', retrying' : ''}';
 }
@@ -800,8 +1120,9 @@ String _messagesLine(int read, int notRead, {bool retrying = false}) {
 /// tested.
 ///
 /// The main line counts MESSAGES, from this phone: [aiReadMessages] the
-/// messages an AI rule read (the AI results tab), [unreadMessages] the messages
-/// still waiting for a reading in Needs review. Either falls back to the older
+/// messages an AI rule read (AI auto-resolved plus the readings it is unsure
+/// about, [aiNeedsCheck], which wait in Needs review), [unreadMessages] the
+/// messages still waiting for a reading in Needs review. Either falls back to the older
 /// numbers when the caller has not loaded them. The server's numbers count
 /// message FORMATS, and go to [GeminiBarState.serverDetail].
 GeminiBarState geminiBarState({
@@ -811,6 +1132,7 @@ GeminiBarState geminiBarState({
   required int openItems,
   int? aiReadMessages,
   int? unreadMessages,
+  int aiNeedsCheck = 0,
   bool sharingOff = false,
   bool offline = false,
 }) {
@@ -836,6 +1158,7 @@ GeminiBarState geminiBarState({
     final waiting = local?.checkingTemplates.length ?? 0;
     final phone =
         'AI read $read of your messages'
+        '${aiNeedsCheck > 0 ? ' · $aiNeedsCheck need your check' : ''}'
         '${notRead > 0 ? ' · $notRead could not be read yet' : ''}'
         ' · $openItems still need you';
     // No connection: say so, and say it is not Gemini or the server that is
@@ -890,7 +1213,7 @@ GeminiBarState geminiBarState({
     return GeminiBarState(
       tone: GeminiTone.ok,
       title: 'AI is working',
-      detail: _messagesLine(read, notRead, retrying: true),
+      detail: _messagesLine(read, notRead, retrying: true, needCheck: aiNeedsCheck),
       progress: true,
       serverDetail: serverDetail,
     );
@@ -900,7 +1223,7 @@ GeminiBarState geminiBarState({
       tone: GeminiTone.warn,
       title: 'AI could not draft ${plural(server.failed, 'format')}',
       detail:
-          '${_messagesLine(read, notRead, retrying: true)}\n'
+          '${_messagesLine(read, notRead, retrying: true, needCheck: aiNeedsCheck)}\n'
           // Held layouts are old ones this phone no longer has an open message for (it sends the open ones again by
           // itself): not a failure, so they are not counted in this red line.
           'Messages in a failed format stay in Needs review for you to '
@@ -914,7 +1237,7 @@ GeminiBarState geminiBarState({
       tone: GeminiTone.ok,
       title: 'AI is on',
       detail: read > 0
-          ? _messagesLine(read, notRead)
+          ? _messagesLine(read, notRead, needCheck: aiNeedsCheck)
           : 'No unreadable message formats have been sent yet.',
       serverDetail: serverDetail,
     );
@@ -922,7 +1245,7 @@ GeminiBarState geminiBarState({
   return GeminiBarState(
     tone: GeminiTone.ok,
     title: 'AI is on',
-    detail: _messagesLine(read, notRead),
+    detail: _messagesLine(read, notRead, needCheck: aiNeedsCheck),
     serverDetail: serverDetail,
   );
 }
@@ -965,8 +1288,12 @@ class GeminiStatusBar extends ConsumerStatefulWidget {
     required this.openItems,
     this.aiReadMessages,
     this.unreadMessages,
+    this.aiNeedsCheck = 0,
   });
   final int openItems;
+
+  /// Of [aiReadMessages], how many wait on Needs review for the person's check.
+  final int aiNeedsCheck;
 
   /// Messages an AI rule read, from this phone (the AI results tab). Null until
   /// that list has loaded.
@@ -1035,6 +1362,7 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
       unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,
       openItems: widget.openItems,
       aiReadMessages: widget.aiReadMessages,
+      aiNeedsCheck: widget.aiNeedsCheck,
       // The phone's own count of messages no rule has read yet (the same number Phone details shows). Counting the open
       // review cards here said "14 could not be read" for payment questions that are not unreadable messages.
       unreadMessages:

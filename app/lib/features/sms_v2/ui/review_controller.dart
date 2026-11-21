@@ -181,6 +181,17 @@ class ReviewController {
                   'UNKNOWN',
             );
           }
+          // "Not financial" on a message that already has a reading turns its event
+          // into "unknown". Keep the event as it was, under the same key a hidden
+          // transaction uses, so History's Recover can put the reading back.
+          if (kind == CorrectionKind.notFinancial &&
+              event != null &&
+              event.type != EventType.unknown) {
+            SyncStateStore(db, namespace: namespace).put(
+              'hidden-event:${event.eventId}',
+              jsonEncode(event.toJson()),
+            );
+          }
           service.apply(
             SmsCorrection(
               id: const Uuid().v4(),
@@ -267,9 +278,12 @@ extension ReviewRestore on ReviewController {
   /// Takes back "Not financial" for unknown-format messages: removes the
   /// ignore rule for each format and reopens the review items.
   ///
-  /// Only `template` items with no facts qualify. They have no event, so
-  /// nothing else was changed when they were dismissed. Dismissals of items
-  /// that did change an event are not reversed here. Returns how many items were reopened.
+  /// A `template` item with no facts has no event, so nothing else was changed
+  /// when it was dismissed. One that was already read (an AI reading the person
+  /// dismissed) had its event turned into "unknown": it comes back only when the
+  /// event as it was is still saved (`hidden-event:`, kept since this build); an
+  /// older dismissal has none and is left as it is. Returns how many items were
+  /// reopened.
   int restoreDismissed(Iterable<LocalReviewItem> items) {
     final db = financial.database.db;
     final feedback = SmsLearningFeedback(
@@ -285,12 +299,10 @@ extension ReviewRestore on ReviewController {
           final message = item.message?.message;
           if (item.kind != 'template' || message == null) continue;
           // A message that was read into facts had an event changed when it
-          // was dismissed; that is not undone here.
+          // was dismissed: put it back from the saved copy, or leave it.
           final source = item.payload['sourceKey'] as String? ?? item.id;
-          if (FactStore(
-            db,
-            namespace: namespace,
-          ).forSource(source).isNotEmpty) {
+          final facts = FactStore(db, namespace: namespace).forSource(source);
+          if (facts.isNotEmpty && !_restoreDismissedEvent(this, source, facts)) {
             continue;
           }
           feedback.removeFalseTransactionRule(
@@ -355,6 +367,44 @@ extension ReviewRestore on ReviewController {
     });
     return reopened;
   }
+}
+
+/// Puts back the event a "Not financial" turned into "unknown", from the copy
+/// saved when it was dismissed. False when there is none (or it is gone).
+bool _restoreDismissedEvent(
+  ReviewController c,
+  String source,
+  List<Fact> facts,
+) {
+  final db = c.financial.database.db;
+  final event = EventStore(
+    db,
+    namespace: c.namespace,
+  ).findByFactIds(facts.map((f) => f.factId)).firstOrNull;
+  if (event == null) return false;
+  final raw = SyncStateStore(
+    db,
+    namespace: c.namespace,
+  ).get('hidden-event:${event.eventId}');
+  if (raw == null) return false;
+  final previous = Event.fromJson(
+    (jsonDecode(raw) as Map).cast<String, Object?>(),
+  );
+  if (previous.type == EventType.unknown) return false;
+  // The same restore Activity uses for a hidden transaction.
+  c.apply(
+    items: [
+      LocalReviewItem(
+        id: 'restore:$source',
+        kind: 'event',
+        payload: {'sourceKey': source, 'eventId': event.eventId},
+      ),
+    ],
+    kind: CorrectionKind.wrongKind,
+    corrected: {'eventType': previous.type.wire},
+    confirm: true,
+  );
+  return true;
 }
 
 /// Loads the sharing opt-in even when no screen is watching it. Reading an
