@@ -11,6 +11,7 @@ import '../sms_v2/providers/data_providers.dart';
 import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:flutter/material.dart';
+import '../../app/design/merchant_brand.dart';
 import '../../app/design/sheet_select_field.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -980,6 +981,14 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
         (entry.source != 'sms' && entry.source != 'sms_bulk') ||
         (_entryKind != TxnEntryKind.spend &&
             _entryKind != TxnEntryKind.transfer)) {
+      return const SizedBox.shrink();
+    }
+    // A payment to a recognised merchant (Zomato, Amazon...) is an expense,
+    // never a move between the person's own accounts. Keep the field when
+    // the row is already a transfer or already marked.
+    if (_entryKind == TxnEntryKind.spend &&
+        _selfTransfer == null &&
+        MerchantBrand.forName(entry.merchantName) != null) {
       return const SizedBox.shrink();
     }
     final accounts =
