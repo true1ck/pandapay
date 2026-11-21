@@ -36,6 +36,7 @@ const {
   runResilientLoop,
   openPatiently,
 } = require("./worker_resilience");
+const { createOutageRecovery } = require("./outage_recovery");
 
 // One pass of the worker: a layout first; when none is waiting, a shop left in
 // "Other" (only if the admin switched shop suggestions on).
@@ -141,6 +142,12 @@ async function main() {
   );
   let lastCleanup = 0;
   let consecutiveBusy = 0;
+  // Layouts held back by an AI service outage are released as soon as the service answers again (not after 24 h).
+  const recovery = createOutageRecovery({
+    store,
+    probe: typeof provider.isUp === "function" ? () => provider.isUp() : null,
+    log,
+  });
   try {
     return await runResilientLoop({
       once,
@@ -153,6 +160,8 @@ async function main() {
       afterCycle: async (result) => {
         // A durable job that was rescheduled has its own due time, so only an unscheduled busy answer is waited out here.
         consecutiveBusy = result.status === "provider_busy" && !result.rescheduled ? consecutiveBusy + 1 : 0;
+        // Looks at most every 2 minutes and never throws (jobs/outage_recovery.js).
+        await recovery.check();
         if (result.status === "idle" && Date.now() - lastCleanup > 3600000) {
           lastCleanup = Date.now();
           try {

@@ -344,3 +344,19 @@ test("provider model ids with an @ prefix (Cloudflare) are accepted and recorded
   assert.equal((await runWorkerCycle({ layoutStore: store, provider, config })).status, "ready");
   assert.equal(store.finished[0].model, model);
 });
+
+test("isUp asks the service's /healthz, without the token, and is true only for a 200", async () => {
+  const seen = [];
+  const make = (answer) => createAiServiceProvider({ env, fetchImpl: async (url, options = {}) => {
+    seen.push({ url: String(url), headers: options.headers ?? {} });
+    if (answer instanceof Error) throw answer;
+    return new Response("ok", { status: answer });
+  } });
+  assert.equal(await make(200).isUp(), true);
+  assert.equal(new URL(seen[0].url).pathname, "/healthz");
+  assert.equal(new URL(seen[0].url).origin, new URL(env.SMS_V2_AI_SERVICE_URL).origin);
+  assert.equal(JSON.stringify(seen[0].headers).includes(env.SMS_V2_AI_SERVICE_TOKEN), false, "the token is never sent to the health check");
+  assert.equal(await make(503).isUp(), false);
+  assert.equal(await make(404).isUp(), false);
+  assert.equal(await make(new Error("ECONNRESET")).isUp(), false);
+});

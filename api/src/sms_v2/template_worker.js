@@ -652,10 +652,26 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
     ? (operation) => transaction(operation)
     : (operation) => withAdminClient(adminId, "learning.publish", operation);
   const currentConsent = `pandapay.sms_v2_ai_consent_people(t.template_hash)>0`;
+  // Held back for more than 2 minutes only because the AI service was down: a systemic failure (never a bad draft),
+  // still queued, with current consent. jobs/outage_recovery.js makes these due once the service answers again.
+  const outageDeferred = `t.ai_status='queued' AND t.failure_detail[1]='systemic'
+    AND t.failure_code IN ('provider_unavailable','draft_infrastructure_exhausted')
+    AND t.ai_run_after > clock_timestamp() + interval '2 minutes' AND ${currentConsent}`;
   return {
     // Admin-set values, read fresh at each loop (settings.js).
     settings() {
       return tx((client) => readSettings(client, { force: true }));
+    },
+    outageDeferredCount() {
+      return tx(async (client) =>
+        Number((await client.query(`SELECT count(*)::int AS n FROM sms_v2_unknown_templates t WHERE ${outageDeferred}`)).rows[0].n));
+    },
+    // Makes the outage-held layouts due now. Their tries and cycles are untouched, so the usual limits still apply.
+    releaseAfterOutage() {
+      return tx(async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext('sms_v2_template_results'))");
+        return (await client.query(`UPDATE sms_v2_unknown_templates t SET ai_run_after=clock_timestamp() WHERE ${outageDeferred}`)).rowCount;
+      });
     },
     // Drops Gemini's raw draft once an admin decision is final (approved and
     // published a week ago, or rejected), keeping the decision record. Returns

@@ -91,6 +91,17 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
     get promptVersion() {
       return pinnedVersion ?? seenVersion ?? DEFAULT_PROMPT_VERSION;
     },
+    // True when the service answers its health check with a 200 (used to release layouts held back by an outage,
+    // jobs/outage_recovery.js). The token is never sent here; any error or other status counts as down.
+    async isUp() {
+      try {
+        const response = await fetchImpl(new URL("/healthz", endpoint), { method: "GET", signal: AbortSignal.timeout(15_000) });
+        await response.body?.cancel?.().catch(() => {});
+        return response.status === 200;
+      } catch {
+        return false;
+      }
+    },
     async generateLayout({ senderBrand, redactedBody, signal, routing }) {
       assertLayout({ senderBrand, redactedBody });
       const requestId = randomUUID();
