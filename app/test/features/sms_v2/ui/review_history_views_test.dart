@@ -751,7 +751,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.byKey(const Key('gemini-phone-details')), findsNothing);
-      await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
+      await tester.longPress(find.byKey(const Key('gemini-phone-details-toggle')));
       await tester.pump();
       await tester.pump();
       expect(
@@ -771,7 +771,7 @@ void main() {
         find.textContaining('Last sync problem: SqliteException: refused here'),
         findsOneWidget,
       );
-      await tester.tap(find.byKey(const Key('gemini-phone-details-toggle')));
+      await tester.longPress(find.byKey(const Key('gemini-phone-details-toggle')));
       await tester.pump();
       expect(find.byKey(const Key('gemini-phone-details')), findsNothing);
     });

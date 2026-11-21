@@ -166,8 +166,9 @@ List<SettledItem> addedFromReview(
     [namespace],
   )) {
     try {
-      final added = ((jsonDecode(row['payload'] as String) as Map)['added'] as Map)
-          .cast<String, Object?>();
+      final added =
+          ((jsonDecode(row['payload'] as String) as Map)['added'] as Map)
+              .cast<String, Object?>();
       final occurredAt = DateTime.parse(added['occurredAt'] as String);
       final mutationId = added['clientMutationId'] as String;
       final merchant = added['merchantName'] as String?;
@@ -177,7 +178,9 @@ List<SettledItem> addedFromReview(
             id: syncedId?.call(mutationId) ?? 'local-outbox:$mutationId',
             amount: Money.fromPaise((added['amountMinor'] as num).toInt()),
             occurredAt: occurredAt.toLocal(),
-            merchantName: merchant == null || merchant.isEmpty ? null : merchant,
+            merchantName: merchant == null || merchant.isEmpty
+                ? null
+                : merchant,
             instrumentKnown: false,
             entryKind: added['entryKind'] == 'income'
                 ? TxnEntryKind.income
@@ -523,7 +526,11 @@ final settledListsProvider = FutureProvider<SettledLists>((ref) async {
     }
   }
   return lists.withAdded(
-    addedFromReview(db, namespace: namespace, syncedId: outbox.syncedTransactionId),
+    addedFromReview(
+      db,
+      namespace: namespace,
+      syncedId: outbox.syncedTransactionId,
+    ),
   );
 });
 
@@ -714,7 +721,11 @@ class SettledList extends ConsumerWidget {
 /// AI auto-resolved) and the AI readings they fixed, all time, newest first.
 /// Every dismissed row has one Recover action.
 class HistoryList extends ConsumerWidget {
-  const HistoryList({super.key, required this.onRecoverReview, this.busy = false});
+  const HistoryList({
+    super.key,
+    required this.onRecoverReview,
+    this.busy = false,
+  });
 
   /// Brings a group of messages dismissed from Needs review back to it.
   final void Function(List<LocalReviewItem>) onRecoverReview;
@@ -734,36 +745,37 @@ class HistoryList extends ConsumerWidget {
         final epoch = DateTime.fromMillisecondsSinceEpoch(0);
         // One row per format for what was dismissed from Needs review (Recover
         // frees the format for all of its messages), one per message otherwise.
-        final rows = <({DateTime when, String key, Widget Function() build})>[
-          for (final bundle in bundleReviewItems(
-            reviewDismissed,
-            (_) => 'template',
-          ))
-            (
-              when: bundle.latest ?? epoch,
-              key: 'review:${bundle.key}',
-              build: () => DismissedReviewPanel(
-                bundle: bundle,
-                busy: busy,
-                onRecover: () => onRecoverReview(bundle.items),
-              ),
-            ),
-          for (final item in value.dismissed)
-            (
-              when: item.occurredAt,
-              key: 'auto:${item.sourceKey}',
-              build: () => DismissedAutoCard(item: item),
-            ),
-          for (final item in value.history)
-            (
-              when: item.occurredAt,
-              key: 'edited:${item.entry.id}',
-              build: () => SettledCard(item: item, inHistory: true),
-            ),
-        ]..sort((a, b) {
-            final byTime = b.when.compareTo(a.when);
-            return byTime != 0 ? byTime : a.key.compareTo(b.key);
-          });
+        final rows =
+            <({DateTime when, String key, Widget Function() build})>[
+              for (final bundle in bundleReviewItems(
+                reviewDismissed,
+                (_) => 'template',
+              ))
+                (
+                  when: bundle.latest ?? epoch,
+                  key: 'review:${bundle.key}',
+                  build: () => DismissedReviewPanel(
+                    bundle: bundle,
+                    busy: busy,
+                    onRecover: () => onRecoverReview(bundle.items),
+                  ),
+                ),
+              for (final item in value.dismissed)
+                (
+                  when: item.occurredAt,
+                  key: 'auto:${item.sourceKey}',
+                  build: () => DismissedAutoCard(item: item),
+                ),
+              for (final item in value.history)
+                (
+                  when: item.occurredAt,
+                  key: 'edited:${item.entry.id}',
+                  build: () => SettledCard(item: item, inHistory: true),
+                ),
+            ]..sort((a, b) {
+              final byTime = b.when.compareTo(a.when);
+              return byTime != 0 ? byTime : a.key.compareTo(b.key);
+            });
         if (rows.isEmpty) {
           return const SmsEmpty(
             'Nothing here yet. Messages you dismiss, and AI readings you fix, appear here, '
@@ -887,108 +899,112 @@ class SettledCard extends ConsumerWidget {
     final category = e.categoryName ?? e.subcategoryName;
     final date = DateFormat('d MMM y').format(e.occurredAt.toLocal());
     void edit() => context.push('/activity/${e.id}/edit', extra: e);
-    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
-      key: Key('settled-${e.id}'),
-      onTap: edit,
-      semanticLabel: 'Open $title',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: BambooFonts.heading(16, color: BambooInk.ink900),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [date, ?category].join(' · '),
-                      style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-                    ),
-                    if (txnBadgeKind(e) case final badge?)
-                      TransactionBadgePill(kind: badge),
-                  ],
+    return _BusyGuard(
+      builder: (context, busy, run) => BambooPanel(
+        key: Key('settled-${e.id}'),
+        onTap: edit,
+        semanticLabel: 'Open $title',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: BambooFonts.heading(16, color: BambooInk.ink900),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        [date, ?category].join(' · '),
+                        style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                      ),
+                      if (txnBadgeKind(e) case final badge?)
+                        TransactionBadgePill(kind: badge),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: AppSpace.sm),
+                const SizedBox(width: AppSpace.sm),
+                Text(
+                  _money.format(e.amount.paise / 100),
+                  style: BambooFonts.heading(16, color: BambooInk.ink900),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              children: [
+                Icon(
+                  item.byUser
+                      ? Icons.person_outline_rounded
+                      : switch (item.source) {
+                          SettledSource.ai => Icons.auto_awesome_outlined,
+                          SettledSource.onDevice => Icons.smartphone_rounded,
+                          SettledSource.rule => Icons.rule_rounded,
+                        },
+                  size: 16,
+                  color: BambooInk.ink500,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    item.how,
+                    style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+                  ),
+                ),
+              ],
+            ),
+            if (inHistory &&
+                item.byUser &&
+                item.source == SettledSource.ai) ...[
+              const SizedBox(height: 4),
               Text(
-                _money.format(e.amount.paise / 100),
-                style: BambooFonts.heading(16, color: BambooInk.ink900),
+                'Changed by you: the AI\'s reading cannot be restored automatically.',
+                key: Key('history-no-restore-${e.id}'),
+                style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
               ),
             ],
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Row(
-            children: [
-              Icon(
-                item.byUser
-                    ? Icons.person_outline_rounded
-                    : switch (item.source) {
-                        SettledSource.ai => Icons.auto_awesome_outlined,
-                        SettledSource.onDevice => Icons.smartphone_rounded,
-                        SettledSource.rule => Icons.rule_rounded,
-                      },
-                size: 16,
-                color: BambooInk.ink500,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  item.how,
-                  style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            const SizedBox(height: AppSpace.md),
+            BambooActionBar(
+              secondary: [
+                OutlinedButton(
+                  key: Key('edit-${e.id}'),
+                  style: BambooButtons.secondary,
+                  onPressed: edit,
+                  child: const Text('Edit'),
                 ),
-              ),
-            ],
-          ),
-          if (inHistory && item.byUser && item.source == SettledSource.ai) ...[
-            const SizedBox(height: 4),
-            Text(
-              'Changed by you: the AI\'s reading cannot be restored automatically.',
-              key: Key('history-no-restore-${e.id}'),
-              style: BambooFonts.ui(12, color: BambooInk.ink500, height: 1.4),
+              ],
+              quiet: inHistory
+                  ? const []
+                  : [
+                      TextButton(
+                        key: Key('reopen-${e.id}'),
+                        style: BambooButtons.quiet,
+                        onPressed: busy
+                            ? null
+                            : () => run(() => _reopen(context, ref)),
+                        child: const Text('Move back to review'),
+                      ),
+                      TextButton(
+                        key: Key('dismiss-${e.id}'),
+                        style: BambooButtons.quiet,
+                        onPressed: busy
+                            ? null
+                            : () => run(() => _dismiss(context, ref)),
+                        child: const Text('Dismiss'),
+                      ),
+                    ],
             ),
           ],
-          const SizedBox(height: AppSpace.md),
-          BambooActionBar(
-            secondary: [
-              OutlinedButton(
-                key: Key('edit-${e.id}'),
-                style: BambooButtons.secondary,
-                onPressed: edit,
-                child: const Text('Edit'),
-              ),
-            ],
-            quiet: inHistory
-                ? const []
-                : [
-                    TextButton(
-                      key: Key('reopen-${e.id}'),
-                      style: BambooButtons.quiet,
-                      onPressed: busy
-                          ? null
-                          : () => run(() => _reopen(context, ref)),
-                      child: const Text('Move back to review'),
-                    ),
-                    TextButton(
-                      key: Key('dismiss-${e.id}'),
-                      style: BambooButtons.quiet,
-                      onPressed: busy
-                          ? null
-                          : () => run(() => _dismiss(context, ref)),
-                      child: const Text('Dismiss'),
-                    ),
-                  ],
-          ),
-        ],
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -1030,81 +1046,89 @@ class AiReadCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final preview = ref.watch(aiReadPreviewProvider(item.sourceKey)).valueOrNull;
+    final preview = ref
+        .watch(aiReadPreviewProvider(item.sourceKey))
+        .valueOrNull;
     final date = DateFormat('d MMM y').format(item.occurredAt.toLocal());
-    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
-      key: Key('ai-read-${item.sourceKey}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            item.summary,
-            style: BambooFonts.heading(15.5, color: BambooInk.ink900),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            [date, ?preview?.sender].join(' · '),
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.sm),
-          Row(
-            children: [
-              Icon(
-                item.unverified
-                    ? Icons.auto_awesome_outlined
-                    : Icons.verified_outlined,
-                size: 16,
-                color: BambooInk.ink500,
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  item.unverified ? 'Not verified yet' : 'Verified',
-                  key: Key('ai-read-badge-${item.sourceKey}'),
-                  style: BambooFonts.ui(
-                    12.5,
-                    weight: FontWeight.w700,
-                    color: BambooInk.ink700,
+    return _BusyGuard(
+      builder: (context, busy, run) => BambooPanel(
+        key: Key('ai-read-${item.sourceKey}'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              item.summary,
+              style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              [date, ?preview?.sender].join(' · '),
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.sm),
+            Row(
+              children: [
+                Icon(
+                  item.unverified
+                      ? Icons.auto_awesome_outlined
+                      : Icons.verified_outlined,
+                  size: 16,
+                  color: BambooInk.ink500,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    item.unverified ? 'Not verified yet' : 'Verified',
+                    key: Key('ai-read-badge-${item.sourceKey}'),
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w700,
+                      color: BambooInk.ink700,
+                    ),
                   ),
+                ),
+              ],
+            ),
+            if (preview != null && preview.head.isNotEmpty) ...[
+              const SizedBox(height: AppSpace.sm),
+              Text(
+                preview.head.length >= aiReadSnippetChars
+                    ? '${preview.head.trimRight()}…'
+                    : preview.head,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: BambooFonts.ui(
+                  12.5,
+                  color: BambooInk.ink500,
+                  height: 1.4,
                 ),
               ),
             ],
-          ),
-          if (preview != null && preview.head.isNotEmpty) ...[
-            const SizedBox(height: AppSpace.sm),
-            Text(
-              preview.head.length >= aiReadSnippetChars
-                  ? '${preview.head.trimRight()}…'
-                  : preview.head,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: BambooFonts.ui(12.5, color: BambooInk.ink500, height: 1.4),
+            const SizedBox(height: AppSpace.md),
+            BambooActionBar(
+              secondary: [
+                OutlinedButton(
+                  key: Key('fix-read-${item.sourceKey}'),
+                  style: BambooButtons.secondary,
+                  onPressed: busy ? null : () => run(() => _fix(context, ref)),
+                  child: const Text('Fix'),
+                ),
+              ],
+              quiet: [
+                TextButton(
+                  key: Key('dismiss-read-${item.sourceKey}'),
+                  style: BambooButtons.quiet,
+                  onPressed: busy
+                      ? null
+                      : () => run(() => _dismiss(context, ref)),
+                  child: const Text('Dismiss'),
+                ),
+              ],
             ),
           ],
-          const SizedBox(height: AppSpace.md),
-          BambooActionBar(
-            secondary: [
-              OutlinedButton(
-                key: Key('fix-read-${item.sourceKey}'),
-                style: BambooButtons.secondary,
-                onPressed: busy ? null : () => run(() => _fix(context, ref)),
-                child: const Text('Fix'),
-              ),
-            ],
-            quiet: [
-              TextButton(
-                key: Key('dismiss-read-${item.sourceKey}'),
-                style: BambooButtons.quiet,
-                onPressed: busy
-                    ? null
-                    : () => run(() => _dismiss(context, ref)),
-                child: const Text('Dismiss'),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -1140,44 +1164,44 @@ class DismissedAutoCard extends ConsumerWidget {
     final amount = item.entry == null
         ? null
         : _money.format(item.entry!.amount.paise / 100);
-    return _BusyGuard(builder: (context, busy, run) => BambooPanel(
-      key: Key('dismissed-auto-${item.sourceKey}'),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+    return _BusyGuard(
+      builder: (context, busy, run) => BambooPanel(
+        key: Key('dismissed-auto-${item.sourceKey}'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: BambooFonts.heading(15.5, color: BambooInk.ink900),
+                  ),
                 ),
-              ),
-              if (amount != null)
-                Text(
-                  amount,
-                  style: BambooFonts.heading(16, color: BambooInk.ink900),
-                ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '$date · Dismissed from AI auto-resolved',
-            style: BambooFonts.ui(12.5, color: BambooInk.ink500),
-          ),
-          const SizedBox(height: AppSpace.md),
-          OutlinedButton(
-            key: Key('recover-${item.sourceKey}'),
-            style: BambooButtons.secondary,
-            onPressed: busy
-                ? null
-                : () => run(() => _recover(context, ref)),
-            child: const Text('Recover'),
-          ),
-        ],
+                if (amount != null)
+                  Text(
+                    amount,
+                    style: BambooFonts.heading(16, color: BambooInk.ink900),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$date · Dismissed from AI auto-resolved',
+              style: BambooFonts.ui(12.5, color: BambooInk.ink500),
+            ),
+            const SizedBox(height: AppSpace.md),
+            OutlinedButton(
+              key: Key('recover-${item.sourceKey}'),
+              style: BambooButtons.secondary,
+              onPressed: busy ? null : () => run(() => _recover(context, ref)),
+              child: const Text('Recover'),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -1272,7 +1296,8 @@ GeminiBarState geminiBarState({
     final waiting = local?.checkingTemplates.length ?? 0;
     final phone =
         'AI read $read of your messages'
-        '${aiNeedsCheck > 0 ? ' · $aiNeedsCheck ' '${aiNeedsCheck == 1 ? 'needs' : 'need'} your check' : ''}'
+        '${aiNeedsCheck > 0 ? ' · $aiNeedsCheck '
+                  '${aiNeedsCheck == 1 ? 'needs' : 'need'} your check' : ''}'
         '${notRead > 0 ? ' · $notRead could not be read yet' : ''}'
         ' · $openItems still need you';
     // No connection: say so, and say it is not Gemini or the server that is
@@ -1327,7 +1352,12 @@ GeminiBarState geminiBarState({
     return GeminiBarState(
       tone: GeminiTone.ok,
       title: 'AI is working',
-      detail: _messagesLine(read, notRead, retrying: true, needCheck: aiNeedsCheck),
+      detail: _messagesLine(
+        read,
+        notRead,
+        retrying: true,
+        needCheck: aiNeedsCheck,
+      ),
       progress: true,
       serverDetail: serverDetail,
     );
@@ -1509,25 +1539,31 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(
-                  warn ? Icons.error_outline_rounded : Icons.auto_awesome,
-                  size: 16,
-                  color: color,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    state.title,
-                    style: BambooFonts.ui(
-                      13.5,
-                      weight: FontWeight.w700,
-                      color: warn ? BambooInk.clayInk : BambooInk.ink900,
+            // The technical counts are for support, not for people: a long press on the title opens them.
+            GestureDetector(
+              key: const Key('gemini-phone-details-toggle'),
+              behavior: HitTestBehavior.opaque,
+              onLongPress: () => setState(() => _showDetails = !_showDetails),
+              child: Row(
+                children: [
+                  Icon(
+                    warn ? Icons.error_outline_rounded : Icons.auto_awesome,
+                    size: 16,
+                    color: color,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      state.title,
+                      style: BambooFonts.ui(
+                        13.5,
+                        weight: FontWeight.w700,
+                        color: warn ? BambooInk.clayInk : BambooInk.ink900,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -1542,20 +1578,6 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
               const SizedBox(height: 8),
               const LinearProgressIndicator(minHeight: 3),
             ],
-            const SizedBox(height: 6),
-            GestureDetector(
-              key: const Key('gemini-phone-details-toggle'),
-              behavior: HitTestBehavior.opaque,
-              onTap: () => setState(() => _showDetails = !_showDetails),
-              child: Text(
-                _showDetails ? 'Hide phone details' : 'Phone details',
-                style: BambooFonts.ui(
-                  12,
-                  weight: FontWeight.w700,
-                  color: warn ? BambooInk.clayInk : BambooInk.ink500,
-                ).copyWith(decoration: TextDecoration.underline),
-              ),
-            ),
             if (_showDetails) _PhoneDetails(serverDetail: state.serverDetail),
           ],
         ),
