@@ -1032,8 +1032,68 @@ List<Commitment> billsFromFacts(
       out.add(bill);
     }
   }
-  return out;
+  return mergeCrossSenderBills(out);
 }
+
+/// Two senders announcing one bill (the issuer's own statement and a bill-pay
+/// app's reminder for it) are one bill. Bills merge when the amount and the due
+/// day agree and the names are related ([_relatedBillNames]); the entry that
+/// knows the instrument digits (else the more confident one) is kept. Paid on
+/// either side keeps the merged bill paid. Same amount and day with unrelated
+/// names stay apart: two genuine bills can coincide.
+List<Commitment> mergeCrossSenderBills(List<Commitment> bills) {
+  final kept = <Commitment>[];
+  for (final bill in bills) {
+    final amount = bill.amount?.paise;
+    final at = amount == null
+        ? -1
+        : kept.indexWhere(
+            (k) =>
+                k.amount?.paise == amount &&
+                k.dueOn.year == bill.dueOn.year &&
+                k.dueOn.month == bill.dueOn.month &&
+                k.dueOn.day == bill.dueOn.day &&
+                _relatedBillNames(k.title, bill.title),
+          );
+    if (at < 0) {
+      kept.add(bill);
+      continue;
+    }
+    final other = kept[at];
+    final hasDigits = bill.identifier != null;
+    final otherHasDigits = other.identifier != null;
+    var winner = hasDigits != otherHasDigits
+        ? (hasDigits ? bill : other)
+        : (bill.confidence > other.confidence ? bill : other);
+    final paid = bill.status == CommitmentStatus.paid
+        ? bill
+        : other.status == CommitmentStatus.paid
+        ? other
+        : null;
+    if (paid != null && winner.status != CommitmentStatus.paid) {
+      winner = winner.copyWith(
+        status: CommitmentStatus.paid,
+        paidOn: paid.paidOn,
+        linkedTransactionId: paid.linkedTransactionId,
+      );
+    }
+    kept[at] = winner;
+  }
+  return kept;
+}
+
+/// Names that point at one biller: one contains the other once the generic
+/// word "bill" is dropped ("goa" in "goaelectricity", "axis" in "axisbankcc").
+bool _relatedBillNames(String a, String b) {
+  String base(String t) => t
+      .toLowerCase()
+      .replaceAll(RegExp(r'\bbill\b'), '')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  final x = base(a), y = base(b);
+  if (x.length < 3 || y.length < 3) return false;
+  return x.contains(y) || y.contains(x);
+}
+
 Commitment _commitment(
   _BillRecord record, {
   Map<String, String> transactionIdByEvent = const {},

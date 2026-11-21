@@ -586,8 +586,24 @@ class _DueList extends ConsumerWidget {
         !receiptsAsync.isFirstLoad &&
         !centralAsync.isFirstLoad &&
         (!_showCardBillReview || !reviewAsync.isFirstLoad);
+    // A card statement already shown as a card row (same card digits, due day
+    // and amount) is not listed a second time as a commitment.
+    bool isCardRow(Commitment c) {
+      final digits = RegExp(r'(\d{4})$').firstMatch(c.identifier ?? '')?.group(1);
+      if (digits == null || c.amount == null) return false;
+      return cardRows.any((row) {
+        final due = row.bill?.amountDue;
+        return row.card.last4 == digits &&
+            due != null &&
+            due.paise == c.amount!.paise &&
+            row.dueOn.year == c.dueOn.year &&
+            row.dueOn.month == c.dueOn.month &&
+            row.dueOn.day == c.dueOn.day;
+      });
+    }
+
     final visibleCommitments = commitments
-        .where((c) => _matchesCommitment(c, filter))
+        .where((c) => _matchesCommitment(c, filter) && !isCardRow(c))
         .toList()
       ..sort(
         (a, b) => filter.isUpcoming
