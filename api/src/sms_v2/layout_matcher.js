@@ -132,17 +132,42 @@ const fillSynthetic = (layout) => fillWith(layout, FILLS[0]);
 const fillTags = (sample) =>
   typeof sample === "string" ? sample.replace(/<([A-Z][A-Z_]*)>/g, (_text, key) => FILLS[0][key] || "SYNTHETIC") : sample;
 
-// Two bodies the pattern must read and two it must not: the same text with the first, and then the last,
-// word of the layout changed. A layout with no letters at all cannot be learned.
+// Two bodies the pattern must read and two it must not: the layout with a word of its FIXED text changed, the first
+// word and then the last. The change is made in the layout, between the tags, and only then are the values filled in.
+// (It was made on the filled text with `\bword\b`, which did nothing when the word touched a value or a blank, as in
+// "[IN<REF>]", "#rd" or "##:##PM": the "negative" equalled the positive, the pattern read it, and the layout failed
+// example_mismatch for ANY answer. 21 Nov 2026: 4 formats, 47 attempts.) A layout with no letters cannot be learned.
 function exampleBodies(layout) {
   const positives = [fillWith(layout, FILLS[0]), fillWith(layout, FILLS[1])];
   // A layout with no values prints the same text twice; stray spaces are allowed around a message.
   if (positives[1] === positives[0]) positives[1] = `${positives[0]} `;
-  const words = (layout.replace(/<[A-Z][A-Z_]*>/g, " ").match(/[A-Za-z]{2,}/g) || []).filter(Boolean);
-  if (!words.length) throw new LayoutError("layout_has_no_words");
-  const swap = (word, to) => positives[0].replace(new RegExp(`\\b${word}\\b`, "gi"), to);
-  const negatives = [swap(words[0], "zqx"), swap(words.at(-1), "zqy")];
-  return { positives, negatives };
+  const parts = layout.split(/(<[A-Z][A-Z_]*>)/); // odd entries are the tags
+  const spots = [];
+  parts.forEach((text, index) => {
+    if (index % 2 === 1) return;
+    for (const match of text.matchAll(/[A-Za-z]{2,}/g)) spots.push({ index, at: match.index, length: match[0].length });
+  });
+  if (!spots.length) throw new LayoutError("layout_has_no_words");
+  const change = (spot, to) =>
+    fillWith(
+      parts.map((text, index) => (index === spot.index ? text.slice(0, spot.at) + to + text.slice(spot.at + spot.length) : text)).join(""),
+      FILLS[0],
+    );
+  return { positives, negatives: [change(spots[0], "zqx"), change(spots.at(-1), "zqy")] };
+}
+
+// The examples of a layout, checked against its own pattern: both positives read, both negatives refused and different
+// from the positives. A layout for which that cannot be shown is one our own checks would fail whatever an AI answers,
+// so it is refused here, with its own code, before any AI call is spent on it.
+function checkedExamples(layout, matcher) {
+  const examples = exampleBodies(layout);
+  const regex = new RegExp(matcher.pattern, matcher.flags);
+  const sound =
+    examples.positives.every((body) => regex.test(body)) &&
+    examples.negatives.every((body) => !examples.positives.includes(body) && !regex.test(body)) &&
+    new Set(examples.negatives).size === 2;
+  if (!sound) throw new LayoutError("layout_examples_unsound");
+  return examples;
 }
 
 module.exports = {
@@ -158,4 +183,5 @@ module.exports = {
   fillSynthetic,
   fillTags,
   exampleBodies,
+  checkedExamples,
 };

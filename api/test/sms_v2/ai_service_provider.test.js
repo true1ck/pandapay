@@ -360,3 +360,54 @@ test("isUp asks the service's /healthz, without the token, and is true only for 
   assert.equal(await make(404).isUp(), false);
   assert.equal(await make(new Error("ECONNRESET")).isUp(), false);
 });
+
+// 21 Nov 2026: after Gemini's draft was rejected the worker asked for "a later route than gemini". The service had only
+// Gemini, so it answered 502 invalid_provider_output at once with nothing billed, and that was stored as "answer_not_json"
+// (23 attempts, 272 ms each, 0 tokens). It is the service saying there is no route left, not a model that wrote bad JSON.
+test("a routed call with no route left is named so, not stored as a bad JSON answer", async () => {
+  const store = makeStore();
+  store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 1 });
+  let calls = 0;
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async () => {
+      calls += 1;
+      const options = { headers: { "x-ai-routing": "ordered-v1" } };
+      if (calls === 1) {
+        const draft = answer();
+        draft.emit[0].attrs.direction = "sideways";
+        return serviceJson({ answer: draft, ...usage, provider: "gemini", model: config.model, routeHadInfrastructureFailure: false }, options);
+      }
+      return serviceJson({ error: { code: "invalid_provider_output" } }, { ...options, status: 502 });
+    },
+  });
+  await runWorkerCycle({ layoutStore: store, provider, config });
+  const noRoute = store.attempts.find((entry) => entry.errorKind === "no_route_left");
+  assert.ok(noRoute, `attempts: ${JSON.stringify(store.attempts.map((a) => [a.outcome, a.errorKind, a.errorCodes]))}`);
+  assert.deepEqual(noRoute.errorCodes, ["ai_service_no_route_left"]);
+  assert.equal(store.attempts.some((entry) => entry.errorCodes?.includes("answer_not_json")), false);
+});
+
+test("a real bad-JSON answer (a draft was billed) is still stored as one", async () => {
+  const store = makeStore();
+  store.claim = async () => ({ ...template, ai_drafting_version: "test-v1", ai_job_attempts: 3 });
+  const provider = createAiServiceProvider({
+    env,
+    fetchImpl: async () => serviceJson({ error: { code: "invalid_provider_output" }, ...usage }, { status: 502, headers: { "x-ai-routing": "ordered-v1" } }),
+  });
+  await runWorkerCycle({ layoutStore: store, provider, config });
+  assert.ok(store.attempts.some((entry) => entry.errorKind === "json_invalid" && entry.errorCodes?.includes("answer_not_json")));
+});
+
+test("the service's own error code is logged when it answers an error, so an outage can be told from a bad key or model", async () => {
+  const logs = [];
+  const provider = createAiServiceProvider({
+    env,
+    logger: (entry) => logs.push(entry),
+    fetchImpl: async () => Response.json({ error: { code: "provider_misconfigured" } }, { status: 503, headers: { "Retry-After": "300" } }),
+  });
+  await assert.rejects(provider.generateLayout({ senderBrand: "TESTBK", redactedBody: "<AMT> paid to <PARTY>." }), /ai_service_unavailable/);
+  assert.equal(logs.at(-1).httpStatus, 503);
+  assert.equal(logs.at(-1).serviceError, "provider_misconfigured");
+  assert.equal(JSON.stringify(logs).includes(env.SMS_V2_AI_SERVICE_TOKEN), false);
+});

@@ -5,7 +5,7 @@ const { validateRequest, validateBundle } = require("./contracts");
 const { lintPattern } = require("./rules_admin_route");
 const { redactionError, sampleError } = require("./ai_templates");
 const { readSettings, DEFAULT_AI_MODEL, envNumber } = require("./settings");
-const { LayoutError, FILLS, buildMatcher, slotValues, exampleBodies, fillWith, fillSynthetic, fillTags } = require("./layout_matcher");
+const { LayoutError, FILLS, buildMatcher, slotValues, exampleBodies, checkedExamples, fillWith, fillSynthetic, fillTags } = require("./layout_matcher");
 const { sanityErrors, isDoubtful, DOUBTFUL_CONFIDENCE } = require("./draft_sanity");
 const { PROMPT_VERSION, SMS_PLACEHOLDERS, SMS_DOMAIN_RULES, buildPrompt } = require("./ai_prompt");
 
@@ -921,7 +921,10 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
 function failureOf(error) {
   if (error instanceof ProviderBusyError)
     return { kind: error.systemic ? "systemic" : "provider_busy", codes: [error.message], status: error.status ?? null };
-  if (error instanceof SyntaxError) return { kind: "json_invalid", codes: ["answer_not_json"], status: null };
+  if (error instanceof SyntaxError)
+    return error.noRouteLeft
+      ? { kind: "no_route_left", codes: ["ai_service_no_route_left"], status: null }
+      : { kind: "json_invalid", codes: ["answer_not_json"], status: null };
   if (error instanceof AnswerError || error instanceof LayoutError) return { kind: "answer_invalid", codes: [error.code], status: null };
   return { kind: "provider_error", codes: [String(error?.message ?? "provider_error").slice(0, 60)], status: null };
 }
@@ -989,7 +992,8 @@ async function runTemplateWorkerOnce({
     try {
       if (layoutOnly) provider.assertLayout?.(layout);
       matcher = buildMatcher(template.redacted_body);
-      exampleBodies(template.redacted_body);
+      // Our own pattern and examples must agree before an AI call is spent (a layout they cannot agree on fails for any answer).
+      checkedExamples(template.redacted_body, matcher);
     } catch (error) {
       // A layout too garbled to learn (too many name slots, no words): say so, never guess.
       const code = error instanceof LayoutError ? error.code : "layout_invalid";

@@ -188,3 +188,50 @@ test("a realistic bank layout (one name, one phone number) is read fast and far 
   assert.equal(reads(matcher, "Rs 1 debited from A/c xx12 to a on 1/1/26. ".repeat(40) + "end"), false);
   assert.ok(Date.now() - started < 100, `took ${Date.now() - started} ms`);
 });
+
+// A "negative" example is the layout with a word of its fixed text changed. It used to be made by swapping the first and
+// last letter-word of the FILLED text with `\bword\b`, which silently did nothing when the word touched a value or a
+// blank ("[IN<REF>]", "#rd", "PD<REF>", "##:##PM"): the "negative" then equalled the positive, the pattern read it, and
+// the layout failed example_mismatch for ANY answer, however often it was retried (21 Nov 2026: 4 formats, 47 attempts).
+test("examples stay sound when a fixed word touches a value or a blank", () => {
+  for (const layout of [
+    "Account No. <PARTY> DEBIT with amount <AMT> on <DATE>. Balance: <AMT>. [IN<REF>]",
+    "#rd <PARTY> Dividend of <AMT> per share for <PARTY> ####-## by <PARTY> Ltd. has been credited in your bank account on <DATE>. <PARTY>",
+    "Dear Swiggy customer, your refund reference number for <AMT> is PD<REF>-R#-R#. <URL>",
+    "Flipkart Refund Processed: Refund of <AMT> for <PARTY>... is successfully transferred and will be credited to your account by <DATE> ##:##PM.",
+    "<AMT>PM <PARTY>",
+    "OTP<REF> is your code",
+  ]) {
+    const matcher = buildMatcher(layout);
+    const { positives, negatives } = exampleBodies(layout);
+    assert.equal(new Set(positives).size, 2, layout);
+    assert.equal(new Set(negatives).size, 2, `two different negatives for: ${layout}`);
+    for (const body of positives) assert.ok(reads(matcher, body), `${layout} should read: ${body}`);
+    for (const body of negatives) {
+      assert.ok(!positives.includes(body), `a negative must differ from the positives: ${body}`);
+      assert.equal(reads(matcher, body), false, `${layout} should not read: ${body}`);
+    }
+  }
+});
+
+test("every layout in the shared corpus gets sound examples (so no layout fails our own checks whatever the AI answers)", () => {
+  for (const { layout } of corpus) {
+    let matcher;
+    try { matcher = buildMatcher(layout); } catch (error) { assert.ok(error instanceof LayoutError); continue; }
+    let examples;
+    try { examples = exampleBodies(layout); } catch (error) { assert.ok(error instanceof LayoutError); continue; }
+    for (const body of examples.positives) assert.ok(reads(matcher, body), `${layout} should read: ${body}`);
+    for (const body of examples.negatives) assert.equal(reads(matcher, body), false, `${layout} should not read: ${body}`);
+  }
+});
+
+test("a layout whose examples cannot be made sound is refused with its own code, before any AI call", () => {
+  const { checkedExamples } = require("../../src/sms_v2/layout_matcher");
+  assert.equal(typeof checkedExamples, "function");
+  const layout = "Account No. <PARTY> DEBIT on <DATE> [IN<REF>]";
+  const matcher = buildMatcher(layout);
+  assert.deepEqual(Object.keys(checkedExamples(layout, matcher)).sort(), ["negatives", "positives"]);
+  // a matcher that reads everything can never have a negative: our own check refuses it
+  const readsEverything = { pattern: "[\\s\\S]*", flags: "i" };
+  throwsCode(() => checkedExamples(layout, readsEverything), "layout_examples_unsound");
+});

@@ -108,6 +108,8 @@ function createAiServiceProvider({ env = process.env, fetchImpl = fetch, logger 
       const started = performance.now();
       let response;
       let outcome = "ok";
+      // The service's own error code on an error answer (never text from the layout), for the log.
+      let serviceError = null;
       const busy = (code, fallbackDelayMs, isConfigFault = false) => new ProviderBusyError(code, {
         status: response?.status,
         retryAfterMs: providerDelayMs("", response?.headers) || fallbackDelayMs,
@@ -154,7 +156,10 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
           throw configFault("ai_service_routing_unavailable");
         }
         if (!response.ok && ![422, 502].includes(response.status)) {
-          await response.body?.cancel();
+          // Say why: 503 is both "the AI provider is overloaded" and "the provider refused our key or model", and the
+          // worker used to keep only the status.
+          const code = (await readJson(response))?.error?.code;
+          serviceError = typeof code === "string" && /^[a-z_]{1,40}$/.test(code) ? code : null;
           // Any 5xx (a proxy gives 520-524 when the service is slow or restarting) is the service being unavailable, not a bad setup.
           if ([408, 425, 429].includes(response.status) || response.status >= 500)
             throw busy("ai_service_unavailable", 15000);
@@ -172,6 +177,9 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
           if (body?.error?.code !== "invalid_provider_output") throw busy("ai_service_unavailable", 15000);
           if (!versionOk(response)) throw configFault("ai_service_prompt_version_mismatch");
           throw Object.assign(new SyntaxError("ai_service_invalid_provider_output"), {
+            // A call that asked for a LATER route and was answered at once with nothing billed means the service has no
+            // route left to try: no AI wrote anything, so it is not a bad answer (it used to be stored as answer_not_json).
+            noRouteLeft: needsOrderedEndpoint && !usage,
             // A routed call cannot tell which route's tokens these were, so only an unrouted call reports them.
             usage: !routing && usage && MODEL_ID.test(body.model ?? "") ? { ...usage, model: body.model } : null,
           });
@@ -206,6 +214,7 @@ ${routing.afterProvider ?? ""}|${skipProviders.join(",")}` : ""}`).digest("hex")
           outcome,
           httpStatus: response?.status ?? null,
           latencyMs: Math.round(performance.now() - started),
+          ...(serviceError ? { serviceError } : {}),
         });
       }
     },
