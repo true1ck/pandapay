@@ -20,6 +20,7 @@ import '../storage/outbox_store.dart';
 import '../storage/schema.dart';
 import '../storage/stats_store.dart';
 import '../storage/sync_state_store.dart';
+import 'ai_doubt.dart';
 import 'receipt_review.dart';
 import 'trace.dart';
 
@@ -176,9 +177,21 @@ class SmsV2Pipeline {
                 rule.id == result.ruleId &&
                 rule.status == RuleStatus.provisional,
           );
+          // Does the reading need the person? The AI-drafted (provisional) rule's
+          // matches used to ALL go to review; now only the ones the AI is unsure
+          // about do: low confidence, or a direction that contradicts the
+          // message. A confident reading is applied and listed under AI
+          // auto-resolved (see ai_doubt.dart). Any rule's low confidence still asks.
+          final unsureReading =
+              result.outcome != InterpretOutcome.unknown &&
+              (result.facts.any(
+                    (fact) => fact.confidence < kAiConfidenceFloor,
+                  ) ||
+                  (provisional &&
+                      readingContradictsWording(message.body, result.facts)));
           // A private AI rule reports under its layout's AI id, so the console
-          // can show how the draft fares on phones. Its matches always go to
-          // review, so each one is counted as sent to review.
+          // can show how the draft fares on phones; each match counts as sent to
+          // review only when it raised a question.
           final reported = result.ruleId == null
               ? null
               : provisional
@@ -190,9 +203,7 @@ class SmsV2Pipeline {
               ruleId: reported,
               ruleVersion: result.ruleVersion!,
               toReview:
-                  provisional ||
-                  result.outcome == InterpretOutcome.unknown ||
-                  result.facts.any((fact) => fact.confidence < .7),
+                  result.outcome == InterpretOutcome.unknown || unsureReading,
             );
           }
           interpreted.add((message, outcome));
@@ -233,8 +244,7 @@ class SmsV2Pipeline {
             }
           } else {
             incoming.addAll(result.facts);
-            if (result.facts.any((fact) => fact.confidence < .7) ||
-                provisional) {
+            if (unsureReading) {
               review.add(
                 _templateReview(
                   message,
