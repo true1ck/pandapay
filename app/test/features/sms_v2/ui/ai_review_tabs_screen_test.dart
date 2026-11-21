@@ -294,6 +294,29 @@ void main() {
     expect(find.textContaining('all time'), findsOneWidget);
   });
 
+  testWidgets('until the AI status is known, older AI-read questions are not shown as questions', (tester) async {
+    tall(tester);
+    final gate = Completer<AiReviewStatus>();
+    await tester.pumpWidget(
+      _screen(
+        reviews: [unsure, sure, unread],
+        ai: aiStatus,
+        settled: settled,
+        extra: [aiReviewStatusProvider.overrideWith((ref) => gate.future)],
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsWidgets, reason: 'loading');
+    expect(find.textContaining('Bill due Rs.349'), findsNothing, reason: 'the confident one is never shown as a question');
+    expect(find.textContaining('Bill due Rs.1,179'), findsNothing);
+    expect(find.text('Needs review'), findsNWidgets(2), reason: 'title and tab, with no count before the status is known');
+    gate.complete(aiStatus);
+    await tester.pumpAndSettle();
+    expect(find.text('Needs review (2)'), findsOneWidget);
+    expect(find.textContaining('Bill due Rs.349'), findsNothing);
+    expect(find.textContaining('Bill due Rs.1,179'), findsOneWidget);
+  });
+
   testWidgets('an empty History says what will appear there', (tester) async {
     tall(tester);
     await tester.pumpWidget(

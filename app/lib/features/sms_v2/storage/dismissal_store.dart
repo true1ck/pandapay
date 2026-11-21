@@ -10,6 +10,10 @@ import 'sync_state_store.dart';
 /// the same place the phone keeps its other small per-message markers (`trace:`,
 /// `hidden-event:`). Nothing here is a schema change: an install that never
 /// dismissed anything has no such row, and an older build ignores the rows.
+///
+/// These records are per device: v2_sync_state is not synced, so what History
+/// lists as dismissed is what was dismissed on this phone. (The dismissed
+/// transaction itself is hidden through the ordinary ignore path, which syncs.)
 class AutoDismissal {
   const AutoDismissal({
     required this.sourceKey,

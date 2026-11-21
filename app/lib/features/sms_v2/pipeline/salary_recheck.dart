@@ -87,8 +87,10 @@ class SalaryRecheck {
       "AND source_key IN (SELECT source_key FROM sms_source_decisions "
       "WHERE namespace = ? AND decision = 'matched') "
       "AND json_extract(payload, '\$.attrs.evidenceOnly') IS NULL "
-      // A private or published AI-drafted rule always sends its matches to review
-      // (that is how a person checks the draft): never withdraw those.
+      // An AI-drafted rule's readings are never withdrawn here: they are taken back
+      // only when the server rejects the draft (AiWithdrawal), and the person
+      // checks the draft's readings in AI auto-resolved or, when the AI is unsure
+      // (low confidence, or a reading that contradicts its message), on Needs review.
       "AND COALESCE(json_extract(payload, '\$.provenance.ruleId'), '') NOT LIKE 'AI-%' "
       "AND COALESCE(json_extract(payload, '\$.provenance.ruleId'), '') NOT LIKE '%:local:%' ";
 

@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/activity/transaction_badge.dart';
 import 'package:pandapay/features/sms_v2/ledger/projection_writer.dart';
+import 'package:pandapay/features/sms_v2/providers/open_questions.dart';
 import 'package:pandapay_domain/pandapay_domain.dart' show Money;
 import 'package:pandapay_domain/sms_v2.dart';
 
@@ -88,9 +90,13 @@ void main() {
   });
 
   group('TransactionAiTag', () {
-    Widget host(Widget child, {GoRouter? router}) => router == null
-        ? MaterialApp(home: Scaffold(body: child))
-        : MaterialApp.router(routerConfig: router);
+    Widget host(Widget child, {GoRouter? router, Set<String> open = const {}}) => ProviderScope(
+      key: UniqueKey(),
+      overrides: [openReviewKeysProvider.overrideWith((ref) async => open)],
+      child: router == null
+          ? MaterialApp(home: Scaffold(body: Center(child: child)))
+          : MaterialApp.router(routerConfig: router),
+    );
 
     testWidgets('shows "AI" for a tagged transaction and nothing otherwise', (tester) async {
       await tester.pumpWidget(
@@ -108,6 +114,44 @@ void main() {
       expect(find.text('AI'), findsOneWidget);
       expect(find.byKey(const Key('ai-tag-v2:e1')), findsOneWidget);
       expect(find.byKey(const Key('ai-tag-v2:plain')), findsNothing);
+    });
+
+    testWidgets('no tag while the message is an open question on Needs review (it has no card in AI auto-resolved)', (tester) async {
+      final tagged = TransactionEntry.fromJson({
+        ..._entry(ai: true).toJson(),
+        'source_key': 'src-1',
+        'event_id': 'ev-1',
+      });
+      await tester.pumpWidget(host(TransactionAiTag(entry: tagged), open: {'src-1'}));
+      await tester.pumpAndSettle();
+      expect(find.text('AI'), findsNothing);
+      await tester.pumpWidget(host(TransactionAiTag(entry: tagged), open: {'ev-1'}));
+      await tester.pumpAndSettle();
+      expect(find.text('AI'), findsNothing);
+      await tester.pumpWidget(host(TransactionAiTag(entry: tagged), open: {'another'}));
+      await tester.pumpAndSettle();
+      expect(find.text('AI'), findsOneWidget);
+    });
+
+    testWidgets('the tap target is 44 dp, and the tag takes no more room than its pill', (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        host(TransactionAiTag(entry: _entry(ai: true), onTap: () => taps++)),
+      );
+      await tester.pumpAndSettle();
+      final pill = tester.getRect(find.byType(TransactionBadgePill));
+      final taken = tester.getSize(find.byType(TapTargetPadding));
+      expect(taken.width, closeTo(pill.width, 0.01), reason: 'layout is unchanged');
+      expect(taken.height, closeTo(pill.height, 0.01));
+      expect(pill.height, lessThan(44));
+      // Just outside the pill, inside the 44 dp square around it.
+      await tester.tapAt(pill.center + Offset(0.0, 21.0));
+      expect(taps, 1);
+      await tester.tapAt(pill.center + Offset(-20.0, 0.0));
+      expect(taps, 2);
+      // Beyond it: nothing.
+      await tester.tapAt(pill.center + Offset(0.0, 40.0));
+      expect(taps, 2);
     });
 
     testWidgets('tapping it calls onTap', (tester) async {

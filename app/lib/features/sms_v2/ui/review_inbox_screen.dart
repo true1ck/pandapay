@@ -491,8 +491,11 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
     final review = ref.watch(reviewItemsProvider);
     final dismissed =
         ref.watch(dismissedReviewItemsProvider).valueOrNull ?? const [];
-    final ai =
-        ref.watch(aiReviewStatusProvider).valueOrNull ?? const AiReviewStatus();
+    final aiAsync = ref.watch(aiReviewStatusProvider);
+    final ai = aiAsync.valueOrNull ?? const AiReviewStatus();
+    // Until the AI status is known, questions an older build raised for every
+    // AI reading cannot be told from real ones: show loading, not all of them.
+    final aiKnown = aiAsync.hasValue || aiAsync.hasError;
     // What the person still has to answer, as questions: a format shared by
     // many messages is one question. An AI reading the AI was sure about is not
     // a question: it is AI auto-resolved.
@@ -537,7 +540,7 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                     ButtonSegment(
                       value: 0,
                       label: Text(
-                        'Needs review${review.valueOrNull == null ? '' : ' (${reviewQuestionCount(openItems, reviewKindOf)})'}',
+                        'Needs review${review.valueOrNull == null || !aiKnown ? '' : ' (${reviewQuestionCount(openItems, reviewKindOf)})'}',
                       ),
                     ),
                     ButtonSegment(
@@ -573,6 +576,8 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
                   ? const SettledList()
                   : _tab == 2
                   ? HistoryList(onRecoverReview: _restore, busy: _saving)
+                  : !aiKnown
+                  ? const SmsLoading()
                   : review.when(
                       skipLoadingOnReload: true,
                       skipLoadingOnRefresh: true,
