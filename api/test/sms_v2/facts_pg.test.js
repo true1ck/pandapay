@@ -620,8 +620,9 @@ test('sync returns contract-shaped documents and never another profile\'s rows',
   const s = cardSpend();
   await ingest(a, s.body);
   const mine = await withUserClient(a, (client) => storage.readChanges(client, a, {}));
-  assert.deepEqual(mine.instruments, [s.inst]);
-  assert.deepEqual(mine.events, [s.e]);
+  // Storage carries decidedAt (81b567c8); the sync route strips it for clients that do not announce `decided-at`.
+  assert.deepEqual(mine.instruments, [{ ...s.inst, decidedAt: null }]);
+  assert.deepEqual(mine.events, [{ ...s.e, decidedAt: null }]); // f9d51f30, stripped the same way for older clients
   assert.deepEqual(mine.ledger, [s.l]);
   assert.equal(mine.facts[0].factId, s.f.factId);
   assert.deepEqual(mine.facts[0].evidence, []);
