@@ -31,11 +31,12 @@ const INSTRUMENT_DOC = `jsonb_build_object(
   'creditLimitSource', credit_limit_source, 'creditLimitAt', ${ts('credit_limit_at')},
   'availableMinor', available_minor, 'availableAt', ${ts('available_at')}, 'pointsBalance', points_balance,
   'pointsAt', ${ts('points_at')}, 'firstSeenAt', ${ts('first_seen_at')}, 'lastSeenAt', ${ts('last_seen_at')},
-  'evidenceCount', evidence_count)`;
+  'evidenceCount', evidence_count, 'decidedAt', ${ts('decided_at')})`;
 
 const EVENT_DOC = `jsonb_build_object(
   'eventId', event_id, 'type', type, 'status', status, 'legs', legs, 'linkRuleId', link_rule_id,
-  'confidence', confidence, 'occurredAt', ${ts('occurred_at')}, 'amountMinor', amount_minor)`;
+  'confidence', confidence, 'occurredAt', ${ts('occurred_at')}, 'amountMinor', amount_minor,
+  'decidedAt', ${ts('decided_at')})`;
 
 const FACT_DOC = `(payload - 'senderBrand' - 'bodyHash') || jsonb_build_object(
   'contractVersion', contract_version, 'factId', fact_id, 'sourceKey', source_key,
@@ -74,11 +75,37 @@ function pickLatest(exVal, exAt, incVal, incAt) {
   return [incVal, incAt ?? null];
 }
 
-/** Merges an uploaded instrument into the stored one (same instrumentId). */
+// A phone's clock may run ahead; a decision stamped further ahead than this is
+// treated as made now, so one bad clock cannot win every later conflict.
+const DECIDED_SKEW_MS = 5 * 60 * 1000;
+function clampDecidedAt(v, now = Date.now()) {
+  if (v === null || v === undefined) return null;
+  return Date.parse(v) > now + DECIDED_SKEW_MS ? new Date(now + DECIDED_SKEW_MS).toISOString() : v;
+}
+
+/**
+ * Merges an uploaded instrument into the stored one (same instrumentId).
+ *
+ * `decidedAt` is the time of the user's last explicit choice on the phone. The
+ * later user choice wins, including undoing a "not mine"; a choice older than
+ * the stored one (a stale device) loses. Without a `decidedAt` (an older app,
+ * or an automatic change) the old rule applies: detection never undoes a
+ * decision.
+ */
 function mergeInstrument(ex, inc) {
   const m = { ...inc };
-  // Detection is automatic; confirmed/rejected are explicit user decisions.
-  if (inc.status === 'detected' && ex.status !== 'detected') m.status = ex.status;
+  const incAt = clampDecidedAt(inc.decidedAt);
+  const exAt = ex.decidedAt ?? null;
+  if (incAt && (!exAt || later(incAt, exAt))) {
+    m.decidedAt = incAt;
+  } else if (incAt) {
+    m.status = ex.status;
+    m.decidedAt = exAt;
+  } else {
+    // Detection is automatic; confirmed/rejected are explicit user decisions.
+    if (inc.status === 'detected' && ex.status !== 'detected') m.status = ex.status;
+    m.decidedAt = exAt;
+  }
   const exUser = ex.creditLimitSource === 'user';
   const incUser = inc.creditLimitSource === 'user';
   let limit;
@@ -115,13 +142,25 @@ const STATUS_NEXT = Object.freeze({
  * the stored legs followed by any new ones. Returns {ok, merged, changed} or
  * {ok:false, code}.
  */
+// The stored document always says "decidedAt": null; an event nobody decided on is merged without the key
+// so it stays identical to what was uploaded. Compared with the key normalised.
+const withDecidedAt = (doc, at) => { const { decidedAt, ...rest } = doc; return at ? { ...rest, decidedAt: at } : rest; };
+const sameEvent = (a, b) => sameDoc({ ...a, decidedAt: a.decidedAt ?? null }, { ...b, decidedAt: b.decidedAt ?? null });
+
 function mergeEvent(ex, inc) {
-  if (!ex) return { ok: true, merged: inc, changed: true };
+  if (!ex) return { ok: true, merged: withDecidedAt(inc, inc.status === 'user_confirmed' ? clampDecidedAt(inc.decidedAt) : null), changed: true };
   if (!STATUS_NEXT[ex.status].has(inc.status)) {
     return { ok: false, code: ex.status === 'user_confirmed' ? 'event_status_locked' : 'event_status_transition_invalid' };
   }
   if (inc.status === 'user_confirmed') {
-    return { ok: true, merged: inc, changed: !sameDoc(inc, ex) };
+    // Two confirmations of the same event: the later dated decision wins, a stale
+    // device's older one does not replace it. Without a date on either side the
+    // newest upload wins, as before decidedAt existed.
+    const incAt = clampDecidedAt(inc.decidedAt);
+    const exAt = ex.status === 'user_confirmed' ? ex.decidedAt ?? null : null;
+    if (incAt && exAt && !later(incAt, exAt)) return { ok: true, merged: ex, changed: false };
+    const merged = withDecidedAt(inc, incAt ?? exAt);
+    return { ok: true, merged, changed: !sameEvent(merged, ex) };
   }
   const roleById = new Map(ex.legs.map((l) => [l.factId, l.role]));
   const legs = ex.legs.map((l) => ({ factId: l.factId, role: l.role }));
@@ -133,8 +172,8 @@ function mergeEvent(ex, inc) {
       return { ok: false, code: 'event_leg_role_conflict' };
     }
   }
-  const merged = { ...inc, legs };
-  return { ok: true, merged, changed: !sameDoc(merged, ex) };
+  const merged = withDecidedAt({ ...inc, legs }, null);
+  return { ok: true, merged, changed: !sameEvent(merged, ex) };
 }
 
 /** The amount an own -> own ledger entry must equal, or null when unconstrained. */
@@ -156,19 +195,19 @@ const instrumentRow = (i) => ({
   display_name: i.displayName, status: i.status, user_card_id: i.userCardId, parent_instrument_id: i.parentInstrumentId,
   aliases: i.aliases, credit_limit_minor: i.creditLimitMinor, credit_limit_source: i.creditLimitSource, credit_limit_at: i.creditLimitAt,
   available_minor: i.availableMinor, available_at: i.availableAt, points_balance: i.pointsBalance, points_at: i.pointsAt,
-  first_seen_at: i.firstSeenAt, last_seen_at: i.lastSeenAt, evidence_count: i.evidenceCount,
+  first_seen_at: i.firstSeenAt, last_seen_at: i.lastSeenAt, evidence_count: i.evidenceCount, decided_at: i.decidedAt ?? null,
 });
 const INSTRUMENT_COLS = `instrument_id uuid, kind text, issuer_slug text, mask_digits text, mask_length int, display_name text,
   status text, user_card_id uuid, parent_instrument_id uuid, aliases jsonb, credit_limit_minor bigint, credit_limit_source text,
   credit_limit_at timestamptz, available_minor bigint, available_at timestamptz, points_balance bigint, points_at timestamptz,
-  first_seen_at timestamptz, last_seen_at timestamptz, evidence_count int`;
+  first_seen_at timestamptz, last_seen_at timestamptz, evidence_count int, decided_at timestamptz`;
 
 const eventRow = (e) => ({
   event_id: e.eventId, type: e.type, status: e.status, legs: e.legs, link_rule_id: e.linkRuleId, confidence: e.confidence,
-  occurred_at: e.occurredAt, amount_minor: e.amountMinor,
+  occurred_at: e.occurredAt, amount_minor: e.amountMinor, decided_at: e.decidedAt ?? null,
 });
 const EVENT_COLS = `event_id text, type text, status text, legs jsonb, link_rule_id text, confidence float8,
-  occurred_at timestamptz, amount_minor bigint`;
+  occurred_at timestamptz, amount_minor bigint, decided_at timestamptz`;
 
 const endpointCols = (side, e) => ({
   [`${side}_instrument_id`]: e.instrumentId ?? null,
@@ -276,7 +315,8 @@ async function upsertInstruments(client, profileId, instruments, results, linked
 
   const toInsert = [];
   const toUpdate = [];
-  for (const inst of live) {
+  for (const raw of live) {
+    const inst = raw.decidedAt ? { ...raw, decidedAt: clampDecidedAt(raw.decidedAt) } : raw;
     const ex = existing.get(inst.instrumentId);
     if (!ex) { toInsert.push(inst); continue; }
     const merged = mergeInstrument(ex, inst);
@@ -294,10 +334,10 @@ async function upsertInstruments(client, profileId, instruments, results, linked
       client,
       `INSERT INTO sms_v2_instruments (instrument_id, profile_id, kind, issuer_slug, mask_digits, mask_length, display_name, status,
          user_card_id, parent_instrument_id, aliases, credit_limit_minor, credit_limit_source, credit_limit_at, available_minor,
-         available_at, points_balance, points_at, first_seen_at, last_seen_at, evidence_count, updated_at)
+         available_at, points_balance, points_at, first_seen_at, last_seen_at, evidence_count, decided_at, updated_at)
        SELECT r.instrument_id, $1, r.kind, r.issuer_slug, r.mask_digits, r.mask_length, r.display_name, r.status, r.user_card_id,
               r.parent_instrument_id, r.aliases, r.credit_limit_minor, r.credit_limit_source, r.credit_limit_at, r.available_minor,
-              r.available_at, r.points_balance, r.points_at, r.first_seen_at, r.last_seen_at, r.evidence_count, clock_timestamp()
+              r.available_at, r.points_balance, r.points_at, r.first_seen_at, r.last_seen_at, r.evidence_count, r.decided_at, clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${INSTRUMENT_COLS})
        ON CONFLICT (instrument_id) DO NOTHING
        RETURNING instrument_id AS id`,
@@ -317,7 +357,7 @@ async function upsertInstruments(client, profileId, instruments, results, linked
               credit_limit_source = r.credit_limit_source, credit_limit_at = r.credit_limit_at,
               available_minor = r.available_minor, available_at = r.available_at, points_balance = r.points_balance,
               points_at = r.points_at, first_seen_at = r.first_seen_at, last_seen_at = r.last_seen_at,
-              evidence_count = r.evidence_count, updated_at = clock_timestamp()
+              evidence_count = r.evidence_count, decided_at = r.decided_at, updated_at = clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${INSTRUMENT_COLS})
         WHERE i.instrument_id = r.instrument_id AND i.profile_id = $1`,
       [profileId, J(toUpdate.map(instrumentRow))],
@@ -406,8 +446,8 @@ async function upsertEvents(client, profileId, events, results) {
   if (toInsert.length) {
     const inserted = await insertNew(
       client,
-      `INSERT INTO sms_v2_events (event_id, profile_id, type, status, legs, link_rule_id, confidence, occurred_at, amount_minor, updated_at)
-       SELECT r.event_id, $1, r.type, r.status, r.legs, r.link_rule_id, r.confidence, r.occurred_at, r.amount_minor, clock_timestamp()
+      `INSERT INTO sms_v2_events (event_id, profile_id, type, status, legs, link_rule_id, confidence, occurred_at, amount_minor, decided_at, updated_at)
+       SELECT r.event_id, $1, r.type, r.status, r.legs, r.link_rule_id, r.confidence, r.occurred_at, r.amount_minor, r.decided_at, clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${EVENT_COLS})
        ON CONFLICT (event_id) DO NOTHING
        RETURNING event_id AS id`,
@@ -422,7 +462,7 @@ async function upsertEvents(client, profileId, events, results) {
     await client.query(
       `UPDATE sms_v2_events e
           SET type = r.type, status = r.status, legs = r.legs, link_rule_id = r.link_rule_id, confidence = r.confidence,
-              occurred_at = r.occurred_at, amount_minor = r.amount_minor, updated_at = clock_timestamp()
+              occurred_at = r.occurred_at, amount_minor = r.amount_minor, decided_at = r.decided_at, updated_at = clock_timestamp()
          FROM jsonb_to_recordset($2::jsonb) AS r(${EVENT_COLS})
         WHERE e.event_id = r.event_id AND e.profile_id = $1`,
       [profileId, J(toUpdate.map(eventRow))],
@@ -1280,7 +1320,7 @@ async function readChanges(client, profileId, cursor, hookCursors = {}, { limit 
 
 module.exports = {
   ingestBatch, readChanges, encodeCursor, decodeCursor, SYNC_LIMIT, SYNC_PAGE_DEFAULT, syncPageSize,
-  mergeInstrument, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
+  mergeInstrument, clampDecidedAt, mergeEvent, ownEntryLegAmounts, projectTransactions, takeProfileLock,
   resolveUnknownInstruments, projectStaleInstrumentRows, followPrintedCards, printedCardRulesOut,
   projectRowsOfLinkedInstruments,
 };

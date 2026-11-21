@@ -28,6 +28,7 @@ final class Event extends JsonValue {
     required this.confidence,
     required this.occurredAt,
     required this.amountMinor,
+    this.decidedAt,
   }) : legs = List.unmodifiable(legs);
 
   /// Parses and validates [json]; throws a [ContractException] on violations.
@@ -43,6 +44,9 @@ final class Event extends JsonValue {
       confidence: (json['confidence'] as num).toDouble(),
       occurredAt: parseUtc(json['occurredAt'] as String),
       amountMinor: (json['amountMinor'] as num).toInt(),
+      decidedAt: json['decidedAt'] == null
+          ? null
+          : parseUtc(json['decidedAt'] as String),
     );
   }
 
@@ -60,7 +64,14 @@ final class Event extends JsonValue {
   final DateTime occurredAt;
   final int amountMinor;
 
-  /// A copy with legs, status, link rule, confidence or amounts replaced.
+  /// When the user last decided about this event (a correction or a confirmed
+  /// receipt), on the phone's server-adjusted clock. Null for automatic
+  /// changes and for decisions made before this field existed. When two
+  /// devices both confirmed it differently, the later `decidedAt` wins.
+  final DateTime? decidedAt;
+
+  /// A copy with legs, status, link rule, confidence, amounts or decision time
+  /// replaced.
   Event copyWith({
     EventType? type,
     EventStatus? status,
@@ -69,6 +80,7 @@ final class Event extends JsonValue {
     double? confidence,
     DateTime? occurredAt,
     int? amountMinor,
+    DateTime? decidedAt,
   }) =>
       Event(
         eventId: eventId,
@@ -79,6 +91,7 @@ final class Event extends JsonValue {
         confidence: confidence ?? this.confidence,
         occurredAt: occurredAt ?? this.occurredAt,
         amountMinor: amountMinor ?? this.amountMinor,
+        decidedAt: decidedAt ?? this.decidedAt,
       );
 
   @override
@@ -91,6 +104,9 @@ final class Event extends JsonValue {
         'confidence': confidence,
         'occurredAt': formatUtc(occurredAt),
         'amountMinor': amountMinor,
+        // Omitted when unset, so an event nobody decided on is byte-identical
+        // to what older builds and the server already know.
+        if (decidedAt != null) 'decidedAt': formatUtc(decidedAt!),
       };
 
   /// Checks this event against the contract.

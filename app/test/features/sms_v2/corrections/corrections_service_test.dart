@@ -106,6 +106,26 @@ void main() {
     ),
   );
 
+  test('a correction is dated so it outranks an older one from another phone', () {
+    final decided = DateTime.utc(2026, 11, 20, 9);
+    CorrectionsService(
+      financial: financial,
+      namespace: 'user:a',
+      bundle: bundle,
+      clock: () => decided,
+    ).apply(correction(CorrectionKind.wrongAmount, {'amountMinor': 12300}));
+    final changed = EventStore(db.db, namespace: 'user:a').get(event.eventId)!;
+    expect(changed.status, EventStatus.userConfirmed);
+    expect(changed.decidedAt, decided);
+    // The date travels to the server inside the queued event.
+    final queued = OutboxStore(db.db, namespace: 'user:a')
+        .due(DateTime.utc(2027))
+        .where((r) => r.kind == 'event')
+        .map((r) => jsonDecode(r.payload) as Map)
+        .toList();
+    expect(queued.last['decidedAt'], '2026-11-20T09:00:00Z');
+  });
+
   test(
     'amount correction replaces the event leg, updates the screen and queues no private values',
     () {

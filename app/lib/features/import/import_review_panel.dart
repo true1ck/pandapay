@@ -499,6 +499,9 @@ class _ImportReviewPanelState extends ConsumerState<ImportReviewPanel> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               DropdownButtonFormField<String>(
+                                borderRadius: BorderRadius.circular(16),
+                                dropdownColor: BambooInk.paper,
+                                focusColor: Colors.transparent,
                                 key: ValueKey('destination:$account'),
                                 initialValue: session.destinations[account],
                                 isExpanded: true,
@@ -1597,6 +1600,9 @@ class _EditImportRowState extends State<_EditImportRow> {
                       ),
                       fieldGap,
                       DropdownButtonFormField<String>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         isExpanded: true,
                         initialValue: _kind,
                         decoration: const InputDecoration(
@@ -1657,6 +1663,9 @@ class _EditImportRowState extends State<_EditImportRow> {
                       ),
                       fieldGap,
                       DropdownButtonFormField<String?>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         key: ValueKey('import-edit-category-$_kind'),
                         isExpanded: true,
                         initialValue: _selectedCategoryId,
@@ -1736,6 +1745,9 @@ class _EditImportRowState extends State<_EditImportRow> {
                       ),
                       fieldGap,
                       DropdownButtonFormField<TxnInstrument?>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         isExpanded: true,
                         initialValue: _instrument,
                         decoration: const InputDecoration(
@@ -1767,6 +1779,9 @@ class _EditImportRowState extends State<_EditImportRow> {
                       ),
                       fieldGap,
                       DropdownButtonFormField<String?>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         key: ValueKey('import-edit-rail-$_instrument'),
                         isExpanded: true,
                         initialValue: _rail,

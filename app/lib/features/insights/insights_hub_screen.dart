@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/design/display_text.dart';
 import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
@@ -580,31 +581,20 @@ class _PeriodChips extends ConsumerWidget {
   Future<void> _chooseCustomRange(BuildContext context, WidgetRef ref) async {
     final now = ref.read(clockProvider).now();
     final current = ref.read(insightsCustomRangeProvider);
-    final firstDate = DateTime(2020);
-    final today = DateTime(now.year, now.month, now.day);
-    DateTime clamp(DateTime d, DateTime lo) =>
-        d.isBefore(lo) ? lo : (d.isAfter(today) ? today : d);
-    // Same start-then-end calendar dialogs as Spend trends' custom range,
-    // instead of the full-screen range picker no other Insights screen uses.
-    final start = await showDatePicker(
+    // One calendar: tap the start day, then the end day.
+    final picked = await showBambooDateRangeDialog(
       context: context,
-      firstDate: firstDate,
-      lastDate: today,
-      initialDate: clamp(current?.from ?? today, firstDate),
-      helpText: 'Select start date',
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month, now.day),
+      initialRange: current == null
+          ? null
+          : DateTimeRange(start: current.from, end: current.to),
+      helpText: 'Choose insight dates',
     );
-    if (start == null || !context.mounted) return;
-    final end = await showDatePicker(
-      context: context,
-      firstDate: start,
-      lastDate: today,
-      initialDate: clamp(current?.to ?? today, start),
-      helpText: 'Select end date',
-    );
-    if (end == null || !context.mounted) return;
+    if (picked == null || !context.mounted) return;
     ref.read(insightsCustomRangeProvider.notifier).state = InsightsDateRange(
-      from: start,
-      to: end,
+      from: picked.start,
+      to: picked.end,
     );
     ref.read(insightsPeriodProvider.notifier).state = InsightsPeriod.custom;
   }

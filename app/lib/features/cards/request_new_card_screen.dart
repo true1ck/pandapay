@@ -166,6 +166,9 @@ class _RequestNewCardScreenState extends ConsumerState<RequestNewCardScreen> {
         ),
         const SizedBox(height: AppSpace.lg),
         DropdownButtonFormField<CardNetwork>(
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: BambooInk.paper,
+          focusColor: Colors.transparent,
           initialValue: _networkGuess,
           style: BambooFonts.ui(14.5, color: BambooInk.ink900),
           decoration: inputDecoration('Network (if known)'),

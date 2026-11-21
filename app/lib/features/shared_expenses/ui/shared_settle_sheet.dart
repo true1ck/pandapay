@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../../app/design/app_theme.dart';
 import '../../../app/required_field.dart';
 import '../../../app/design/bamboo_components.dart';
+import '../../../app/design/bamboo_date_range_dialog.dart';
 import '../../../data/upi_payment_service.dart';
 import '../composer/shared_amount_input.dart';
 import '../composer/shared_editor.dart';
@@ -343,6 +344,9 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
     String? selected,
     ValueChanged<String?> choose,
   ) => DropdownButtonFormField<String>(
+    borderRadius: BorderRadius.circular(16),
+    dropdownColor: BambooInk.paper,
+    focusColor: Colors.transparent,
     key: ValueKey('$label:$selected'),
     initialValue: selected,
     isExpanded: true,
@@ -639,7 +643,7 @@ class _SharedSettleSheetState extends State<SharedSettleSheet> {
                     onTap: _sealed || _saving
                         ? null
                         : () async {
-                            final date = await showDatePicker(
+                            final date = await showBambooDatePicker(
                               context: context,
                               initialDate: _paidOn,
                               firstDate: DateTime(2000),

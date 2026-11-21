@@ -44,7 +44,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   }
 
   @override
-  Future<void> ignoreTransaction(String id, {required String reason}) async {
+  Future<void> ignoreTransaction(String id, {required String reason, DateTime? editedAt, void Function()? onStale}) async {
     if (failIgnore) {
       throw ApiException(
         'POST /transactions/:id/ignore failed: 500 {"error":"internal_error"}',
@@ -66,7 +66,7 @@ class _FakeUserCardsRepository implements UserCardsRepository {
   }
 
   @override
-  Future<void> updateTransactionNote(String id, String? note) async {
+  Future<void> updateTransactionNote(String id, String? note, {DateTime? editedAt, void Function()? onStale}) async {
     lastNote = note;
     entry = TransactionEntry(
       id: entry.id,

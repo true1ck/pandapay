@@ -13,7 +13,41 @@ String _m(int minor) => Money.fromPaise(minor).format(compact: true);
 /// one line. Additive lines under the Home spend card; same Totals as Activity.
 class MoneyFlowLines extends StatelessWidget {
   final Totals totals;
-  const MoneyFlowLines({super.key, required this.totals});
+
+  /// The period the totals cover (the report's start, and its end, which is
+  /// exclusive). A tapped line opens Activity on exactly this period, as Spend
+  /// Trends does, so the list adds up to the number that was tapped. Without
+  /// them Activity opens on all time.
+  final DateTime? periodStart;
+  final DateTime? periodEnd;
+  const MoneyFlowLines({
+    super.key,
+    required this.totals,
+    this.periodStart,
+    this.periodEnd,
+  });
+
+  /// `/activity?type=<type>` plus this period's first and last day.
+  String _activityPath(String type) {
+    final start = periodStart;
+    final end = periodEnd;
+    if (start == null || end == null) return '/activity?type=$type';
+    String day(DateTime v) {
+      final d = v.toLocal();
+      return '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
+    }
+
+    return Uri(
+      path: '/activity',
+      queryParameters: {
+        'type': type,
+        'from': day(start),
+        'to': day(end.subtract(const Duration(days: 1))),
+      },
+    ).toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,9 +78,13 @@ class MoneyFlowLines extends StatelessWidget {
           InkWell(
             key: head == 'Investments'
                 ? const Key('home_investments_line')
+                : head.startsWith('Money in')
+                ? const Key('home_money_in_line')
                 : null,
             onTap: head == 'Investments'
-                ? () => context.push('/activity?type=investments')
+                ? () => context.push(_activityPath('investments'))
+                : head.startsWith('Money in')
+                ? () => context.push(_activityPath('moneyIn'))
                 : null,
             child: Padding(
               padding: const EdgeInsets.only(top: 4, bottom: 4),

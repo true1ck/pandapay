@@ -1,6 +1,7 @@
 const { createStatementImportHandler, statementImportResponseRow } = require('./statement_import');
 const { safeErrorCode } = require('./safeErrorCode');
 const selfTransfers = require('./self_transfer');
+const { parseEditTime, isStaleEdit, stampClockSql, notStaleSql } = require('./edit_time');
 require('dotenv').config();
 const crypto = require('crypto');
 const express = require('express');
@@ -5137,6 +5138,7 @@ app.get('/transactions', requireAuth, async (req, res) => {
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note, t.edited_at,
+                t.note_edited_at, t.exclusion_edited_at, t.state_edited_at,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr, t.exclude_from_spend,
                 (SELECT o.metadata->'selfTransferRule' FROM transaction_observations o
@@ -5232,6 +5234,7 @@ app.get('/transactions/:id', requireAuth, async (req, res) => {
                 COALESCE(parent_sc.name, parent_uc.name, sc.name, ucat.name) AS category_name,
                 CASE WHEN ucat.parent_category_id IS NOT NULL OR ucat.parent_user_category_id IS NOT NULL THEN ucat.name END AS subcategory_name,
                 t.rail, t.payment_method, t.status, t.source, t.note, t.edited_at,
+                t.note_edited_at, t.exclusion_edited_at, t.state_edited_at,
                 t.instrument, t.entry_kind, t.reward_state,
                 t.expected_value_inr, t.exclude_from_spend,
                 COALESCE(t.source_account_last4,
@@ -6338,17 +6341,28 @@ app.patch('/transactions/:id/note', requireAuth, async (req, res) => {
   if (typeof note === 'string' && note.length > 2000) {
     return res.status(400).json({ error: 'note must be 2000 characters or fewer' });
   }
+  const { time: editTime, error: editError } = parseEditTime((req.body || {}).editedAt);
+  if (editError) return res.status(400).json({ error: editError });
   try {
-    const result = await withUserClient(req.userId, (client) =>
-      client.query(
-        `UPDATE transactions SET note = $1
-          WHERE id = $2 AND profile_id = $3
+    const result = await withUserClient(req.userId, async (client) => {
+      // A note written later (another device) already stands: this older one
+      // changes nothing. Only the note's own clock is compared, so an edit-form
+      // change made in between never makes a note look stale.
+      const updated = await client.query(
+        `UPDATE transactions SET note = $1, ${stampClockSql('note_edited_at', '$4')}
+          WHERE id = $2 AND profile_id = $3 AND ${notStaleSql('note_edited_at', '$4')}
           RETURNING id, note`,
-        [note === '' ? null : note, req.params.id, req.userId]
-      )
-    );
-    if (result.rows.length === 0) return res.status(404).json({ error: 'transaction not found' });
-    res.json({ transaction: result.rows[0] });
+        [note === '' ? null : note, req.params.id, req.userId, editTime]
+      );
+      if (updated.rows.length > 0) return { transaction: updated.rows[0] };
+      const current = await client.query(
+        `SELECT id, note FROM transactions WHERE id = $1 AND profile_id = $2`,
+        [req.params.id, req.userId]
+      );
+      return current.rows.length === 0 ? null : { transaction: current.rows[0], stale: true };
+    });
+    if (!result) return res.status(404).json({ error: 'transaction not found' });
+    res.json(result);
   } catch (err) {
     console.error('PATCH /transactions/:id/note error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
@@ -6378,26 +6392,36 @@ app.put('/transactions/:id/spend-exclusion', requireAuth, async (req, res) => {
   if (!UUID_RE.test(String(req.params.id || ''))) {
     return res.status(400).json({ error: 'id must be a valid UUID' });
   }
+  const { time: editTime, error: editError } = parseEditTime((req.body || {}).editedAt);
+  if (editError) return res.status(400).json({ error: editError });
   try {
     const result = await withUserClient(req.userId, async (client) => {
       const existing = await client.query(
-        `SELECT entry_kind FROM transactions WHERE id = $1 AND profile_id = $2`,
+        `SELECT entry_kind, exclude_from_spend, exclusion_edited_at FROM transactions WHERE id = $1 AND profile_id = $2`,
         [req.params.id, req.userId]
       );
       if (existing.rows.length === 0) return { status: 404, error: 'transaction not found' };
       if (existing.rows[0].entry_kind !== 'spend') {
         return { status: 409, error: 'only a spend transaction can be left out of spending' };
       }
+      // A newer choice (another device) already stands: this older one changes nothing.
+      if (isStaleEdit(editTime, existing.rows[0].exclusion_edited_at)) {
+        return {
+          status: 200,
+          stale: true,
+          transaction: { id: req.params.id, exclude_from_spend: existing.rows[0].exclude_from_spend },
+        };
+      }
       const updated = await client.query(
-        `UPDATE transactions SET exclude_from_spend = $1
+        `UPDATE transactions SET exclude_from_spend = $1, ${stampClockSql('exclusion_edited_at', '$4')}
           WHERE id = $2 AND profile_id = $3
           RETURNING id, exclude_from_spend`,
-        [excluded, req.params.id, req.userId]
+        [excluded, req.params.id, req.userId, editTime]
       );
       return { status: 200, transaction: updated.rows[0] };
     });
     if (result.status !== 200) return res.status(result.status).json({ error: result.error });
-    res.json({ transaction: result.transaction });
+    res.json(result.stale ? { transaction: result.transaction, stale: true } : { transaction: result.transaction });
   } catch (err) {
     console.error('PUT /transactions/:id/spend-exclusion error', safeErrorCode(err));
     res.status(500).json({ error: 'internal_error' });
@@ -6433,6 +6457,8 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
   if (!reason || !IGNORE_REASONS.includes(reason)) {
     return res.status(400).json({ error: `reason must be one of: ${IGNORE_REASONS.join(', ')}` });
   }
+  const { time: editTime, error: editError } = parseEditTime((req.body || {}).editedAt);
+  if (editError) return res.status(400).json({ error: editError });
   try {
     const result = await withUserClient(req.userId, async (client) => {
       // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
@@ -6441,7 +6467,7 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
       ]);
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail, merchant_name,
-                status, note, instrument, entry_kind, state_applied, is_backfill
+                status, note, instrument, entry_kind, state_applied, is_backfill, state_edited_at
            FROM transactions WHERE id = $1 AND profile_id = $2 FOR UPDATE`,
         [req.params.id, req.userId]
       );
@@ -6449,6 +6475,11 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
       const txn = existing.rows[0];
       if (txn.status !== 'active') {
         return { status: 409, error: `transaction is already '${txn.status}'` };
+      }
+      // A later restore (another device) already stands: this older delete
+      // changes nothing and reverses no card state.
+      if (isStaleEdit(editTime, txn.state_edited_at)) {
+        return { status: 200, stale: true, transaction: { id: txn.id, status: txn.status, note: txn.note } };
       }
 
       const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
@@ -6465,9 +6496,9 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
       const noteTag = deleted ? '[deleted]' : `[ignored: ${reason}]`;
       const newNote = txn.note ? `${noteTag} ${txn.note}` : noteTag;
       const updated = await client.query(
-        `UPDATE transactions SET status = $1, note = $2, state_applied = false
+        `UPDATE transactions SET status = $1, note = $2, state_applied = false, ${stampClockSql('state_edited_at', '$4')}
           WHERE id = $3 RETURNING id, status, note`,
-        [deleted ? 'deleted' : 'ignored', newNote, txn.id]
+        [deleted ? 'deleted' : 'ignored', newNote, txn.id, editTime]
       );
       return { status: 200, transaction: updated.rows[0] };
     });
@@ -6486,6 +6517,8 @@ app.post('/transactions/:id/ignore', requireAuth, async (req, res) => {
  * caps, milestones, points, and fee-waiver progress all move together.
  */
 app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
+  const { time: editTime, error: editError } = parseEditTime((req.body || {}).editedAt);
+  if (editError) return res.status(400).json({ error: editError });
   try {
     const result = await withUserClient(req.userId, async (client) => {
       // card-rewards (WP8, C8 D23d): ingest lock before the row lock.
@@ -6495,7 +6528,7 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
       const existing = await client.query(
         `SELECT id, user_card_id, amount_inr, occurred_at, category_id, rail,
                 merchant_name, status, note, instrument, entry_kind,
-                state_applied, is_backfill
+                state_applied, is_backfill, state_edited_at
            FROM transactions
           WHERE id = $1 AND profile_id = $2
             AND (status = 'deleted' OR status = 'ignored')
@@ -6504,6 +6537,11 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
       );
       if (existing.rows.length === 0) return { status: 404, error: 'deleted transaction not found' };
       const txn = existing.rows[0];
+      // A later delete (another device) already stands: this older restore
+      // changes nothing and re-applies no card state.
+      if (isStaleEdit(editTime, txn.state_edited_at)) {
+        return { status: 200, stale: true, transaction: { id: txn.id, status: txn.status, note: txn.note } };
+      }
       const movesCardState = txn.instrument === 'credit_card' && txn.entry_kind === 'spend' && Boolean(txn.user_card_id);
       if (movesCardState && txn.state_applied !== true) {
         const card = await loadUserCardForState(client, req.userId, txn.user_card_id);
@@ -6525,9 +6563,9 @@ app.post('/transactions/:id/restore', requireAuth, async (req, res) => {
         .trim() || null;
       const updated = await client.query(
         `UPDATE transactions
-            SET status = 'active', note = $1, state_applied = $2
+            SET status = 'active', note = $1, state_applied = $2, ${stampClockSql('state_edited_at', '$4')}
           WHERE id = $3 RETURNING id, status, note`,
-        [restoredNote, movesCardState, txn.id]
+        [restoredNote, movesCardState, txn.id, editTime]
       );
       return { status: 200, transaction: updated.rows[0] };
     });

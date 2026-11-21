@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
@@ -175,7 +176,10 @@ class SyncPull {
             headers: {
               ...await headers(),
               // CCR-003: this build reads a category on refund ledger entries.
-              'X-Sms-Contract-Features': 'refund-category,draft-feedback',
+              // `decided-at`: this build reads when the user last decided about
+              // an instrument or an event (`decidedAt`).
+              'X-Sms-Contract-Features':
+                  'refund-category,draft-feedback,decided-at',
             },
           )
           .timeout(const Duration(seconds: 30));
@@ -374,6 +378,46 @@ class SyncPull {
     [namespace, id],
   ).isNotEmpty;
 
+  /// Whether the server's copy of an instrument replaces a local one that has
+  /// not been sent yet. The later explicit choice by the user wins; the
+  /// pending local change is then dropped, because the server already holds a
+  /// newer decision.
+  ///
+  /// Without a `decidedAt` on the server's copy (a server or an app from
+  /// before it existed) a local dated choice is kept, and an undated local
+  /// change yields only to a "not mine", as before.
+  @visibleForTesting
+  static bool incomingDecisionBeatsLocalEdit(
+    Instrument incoming,
+    Instrument? local,
+  ) {
+    final incomingAt = incoming.decidedAt;
+    final localAt = local?.decidedAt;
+    if (incomingAt != null) return localAt == null || incomingAt.isAfter(localAt);
+    if (localAt != null) return false;
+    return incoming.status == InstrumentStatus.rejected;
+  }
+
+  /// Whether the server's copy of an event replaces a local one that has not
+  /// been sent yet. Only a user confirmation can: the later `decidedAt` wins,
+  /// and the pending local change is then dropped because the server already
+  /// holds a newer decision.
+  ///
+  /// Without a `decidedAt` on the server's copy a local dated decision is
+  /// kept; with neither side dated the server's confirmation wins, as before
+  /// `decidedAt` existed.
+  @visibleForTesting
+  static bool incomingEventDecisionBeatsLocalEdit(
+    Event incoming,
+    Event? local,
+  ) {
+    if (incoming.status != EventStatus.userConfirmed) return false;
+    final incomingAt = incoming.decidedAt;
+    final localAt = local?.decidedAt;
+    if (incomingAt != null) return localAt == null || incomingAt.isAfter(localAt);
+    return localAt == null;
+  }
+
   /// Applies one page. Returns the events the page named.
   Set<String> _apply(Map<String, Object?> body) {
     final clocks = (body['updatedAt'] as Map?) ?? const {};
@@ -426,15 +470,19 @@ class SyncPull {
               conflict.instrumentId != incoming.instrumentId) {
             _adopt(conflict, incoming.instrumentId);
           }
-          if ((incoming.status == InstrumentStatus.rejected ||
-                  !_dirty(
-                    'v2_instruments',
-                    'instrument_id',
-                    incoming.instrumentId,
+          final locallyEdited = _dirty(
+            'v2_instruments',
+            'instrument_id',
+            incoming.instrumentId,
+          );
+          if ((!locallyEdited ||
+                  incomingDecisionBeatsLocalEdit(
+                    incoming,
+                    _instruments.get(incoming.instrumentId),
                   )) &&
               newer('instruments', incoming.instrumentId)) {
             _instruments.upsert(incoming, dirty: false);
-            if (incoming.status == InstrumentStatus.rejected) {
+            if (locallyEdited || incoming.status == InstrumentStatus.rejected) {
               _db.execute('DELETE FROM v2_outbox WHERE namespace=? AND id=?', [
                 namespace,
                 'instrument:${incoming.instrumentId}',
@@ -449,10 +497,13 @@ class SyncPull {
             (json as Map).cast<String, Object?>(),
           );
           touchedEvents.add(incoming.eventId);
-          if (incoming.status == EventStatus.userConfirmed &&
-                  newer('events', incoming.eventId) ||
-              !_dirty('v2_events', 'event_id', incoming.eventId) &&
-                  newer('events', incoming.eventId)) {
+          final eventEdited = _dirty('v2_events', 'event_id', incoming.eventId);
+          if ((!eventEdited ||
+                  incomingEventDecisionBeatsLocalEdit(
+                    incoming,
+                    _events.get(incoming.eventId),
+                  )) &&
+              newer('events', incoming.eventId)) {
             _events.upsert(
               incoming,
               dirty: false,
@@ -580,6 +631,9 @@ class SyncPull {
     'availableAt',
     'pointsBalance',
     'pointsAt',
+    // When the user decided changes no ledger row; the status itself is what
+    // moves the ledger, and it is still part of the hash.
+    'decidedAt',
   };
 
   String _projectionContext(Iterable<Instrument> instruments) {

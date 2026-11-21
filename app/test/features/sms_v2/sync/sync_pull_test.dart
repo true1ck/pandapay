@@ -196,7 +196,10 @@ void main() {
         return response();
       });
       await puller(client: client).pull();
-      expect(sentFeatures, everyElement('refund-category,draft-feedback'));
+      expect(
+        sentFeatures,
+        everyElement('refund-category,draft-feedback,decided-at'),
+      );
       final ledger = LedgerStore(database.db, namespace: 'target');
       final refund = EventStore(database.db, namespace: 'target')
           .listSince(DateTime.utc(2026))
@@ -293,6 +296,94 @@ void main() {
     );
   });
 
+  group('the later user decision wins over an unsent local change', () {
+    Instrument instrument({
+      InstrumentStatus status = InstrumentStatus.confirmed,
+      DateTime? decidedAt,
+    }) => Instrument(
+      instrumentId: '11111111-1111-4111-8111-111111111111',
+      kind: InstrumentKind.bankAccount,
+      issuerSlug: 'hdfc',
+      maskDigits: '1234',
+      displayName: 'HDFC',
+      status: status,
+      firstSeenAt: DateTime.utc(2026, 11, 1),
+      lastSeenAt: DateTime.utc(2026, 11, 2),
+      evidenceCount: 1,
+      decidedAt: decidedAt,
+    );
+    final earlier = DateTime.utc(2026, 11, 20, 9);
+    final later = DateTime.utc(2026, 11, 20, 10);
+
+    test('by decidedAt, and by the old rule when a side has none', () {
+      bool beats(Instrument incoming, Instrument? local) =>
+          SyncPull.incomingDecisionBeatsLocalEdit(incoming, local);
+      final rejected = InstrumentStatus.rejected;
+      // Both dated: the later one wins.
+      expect(
+        beats(
+          instrument(status: rejected, decidedAt: earlier),
+          instrument(decidedAt: later),
+        ),
+        isFalse,
+      );
+      expect(
+        beats(
+          instrument(status: rejected, decidedAt: later),
+          instrument(decidedAt: earlier),
+        ),
+        isTrue,
+      );
+      // A dated server decision beats an undated automatic local change.
+      expect(
+        beats(instrument(decidedAt: earlier), instrument()),
+        isTrue,
+      );
+      // A local dated choice is kept against an undated server copy.
+      expect(
+        beats(instrument(status: rejected), instrument(decidedAt: earlier)),
+        isFalse,
+      );
+      // Neither side dated: only "not mine" overrides, as before decidedAt.
+      expect(beats(instrument(status: rejected), instrument()), isTrue);
+      expect(beats(instrument(), instrument()), isFalse);
+    });
+
+    test('a restore not yet sent survives an older "not mine" from the server',
+        () async {
+      final client = MockClient((_) async => response());
+      await puller(client: client).pull();
+      final incoming = (body['instruments'] as List).single as Map;
+      final id = incoming['instrumentId'] as String;
+      final store = InstrumentStore(database.db, namespace: 'target');
+      // The user restored it on this phone; the change is still waiting to send.
+      store.upsert(
+        store.get(id)!.copyWith(
+          status: InstrumentStatus.confirmed,
+          decidedAt: later,
+        ),
+      );
+      incoming['status'] = 'rejected';
+      incoming['decidedAt'] = '2026-11-20T09:00:00Z';
+      body['events'] = [];
+      body['ledger'] = [];
+      body['facts'] = [];
+      body['cursor'] = 'page-stale-reject';
+      (body['updatedAt'] as Map)['instruments'] = {id: '2026-11-21T08:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.status, InstrumentStatus.confirmed);
+      expect(store.dirty().map((i) => i.instrumentId), contains(id));
+
+      // A later decision from another device does replace it.
+      incoming['decidedAt'] = '2026-11-20T11:00:00Z';
+      body['cursor'] = 'page-newer-reject';
+      (body['updatedAt'] as Map)['instruments'] = {id: '2026-11-21T09:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.status, InstrumentStatus.rejected);
+      expect(store.dirty().map((i) => i.instrumentId), isNot(contains(id)));
+    });
+  });
+
   test(
     'an instrument-only rejection clears old money without ledger tombstones',
     () async {
@@ -352,6 +443,97 @@ void main() {
       expect(store.get(event.eventId)!.confidence, .8);
     },
   );
+  group('the later user decision wins over an unsent local event change', () {
+    Event event({
+      EventStatus status = EventStatus.userConfirmed,
+      DateTime? decidedAt,
+    }) => Event(
+      eventId: 'a' * 64,
+      type: EventType.unknown,
+      status: status,
+      legs: [EventLeg(factId: 'a' * 64, role: LegRole.debitLeg)],
+      confidence: 1,
+      occurredAt: DateTime.utc(2026, 11, 1),
+      amountMinor: 1000,
+      decidedAt: decidedAt,
+    );
+    final earlier = DateTime.utc(2026, 11, 20, 9);
+    final later = DateTime.utc(2026, 11, 20, 10);
+
+    test('by decidedAt, and as before when a side has none', () {
+      bool beats(Event incoming, Event? local) =>
+          SyncPull.incomingEventDecisionBeatsLocalEdit(incoming, local);
+      // Only a user confirmation can replace an unsent local change.
+      expect(
+        beats(event(status: EventStatus.complete), event(decidedAt: earlier)),
+        isFalse,
+      );
+      // Both dated: the later wins; an equal time does not replace.
+      expect(beats(event(decidedAt: later), event(decidedAt: earlier)), isTrue);
+      expect(beats(event(decidedAt: earlier), event(decidedAt: later)), isFalse);
+      expect(beats(event(decidedAt: later), event(decidedAt: later)), isFalse);
+      // Dated server decision over an undated local change.
+      expect(beats(event(decidedAt: earlier), event()), isTrue);
+      expect(
+        beats(event(decidedAt: earlier), event(status: EventStatus.complete)),
+        isTrue,
+      );
+      // A local dated decision is kept against an undated server copy.
+      expect(beats(event(), event(decidedAt: earlier)), isFalse);
+      // Neither dated: the server's confirmation wins, as before.
+      expect(beats(event(), event()), isTrue);
+      expect(beats(event(), null), isTrue);
+    });
+
+    test('a newer unsent confirmation survives an older one from the server, '
+        'and an even newer one replaces it', () async {
+      final client = MockClient((_) async => response());
+      await puller(client: client).pull();
+      final store = EventStore(database.db, namespace: 'target');
+      final queue = OutboxStore(database.db, namespace: 'target');
+      final stored = store.listSince(DateTime.utc(1900)).single;
+      final id = stored.eventId;
+      // The person corrected this event on this phone; it is still waiting to send.
+      final mine = stored.copyWith(
+        status: EventStatus.userConfirmed,
+        type: EventType.unknown,
+        decidedAt: later,
+      );
+      store.upsert(mine, fromUser: true);
+      queue.enqueue('event', id, mine.toJson());
+
+      final incoming = (body['events'] as List).single as Map;
+      incoming['status'] = 'user_confirmed';
+      incoming['decidedAt'] = '2026-11-20T09:00:00Z';
+      body['ledger'] = [];
+      body['facts'] = [];
+      body['instruments'] = [];
+      body['cursor'] = 'page-older-decision';
+      (body['updatedAt'] as Map)['events'] = {id: '2026-11-21T08:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.type, EventType.unknown);
+      expect(store.get(id)!.decidedAt, later);
+      expect(
+        queue.due(DateTime.utc(2027)).where((r) => r.id == 'event:$id'),
+        isNotEmpty,
+        reason: 'the unsent decision stays queued',
+      );
+
+      incoming['decidedAt'] = '2026-11-20T11:00:00Z';
+      incoming['type'] = stored.type.wire;
+      body['cursor'] = 'page-newer-decision';
+      (body['updatedAt'] as Map)['events'] = {id: '2026-11-21T09:00:00Z'};
+      await puller(client: client).pull();
+      expect(store.get(id)!.type, stored.type);
+      expect(store.get(id)!.decidedAt, DateTime.utc(2026, 11, 20, 11));
+      expect(
+        queue.due(DateTime.utc(2027)).where((r) => r.id == 'event:$id'),
+        isEmpty,
+        reason: 'the server already holds a newer decision',
+      );
+    });
+  });
+
   test(
     'instrument conflict adoption rewrites child parents and personal bindings',
     () async {

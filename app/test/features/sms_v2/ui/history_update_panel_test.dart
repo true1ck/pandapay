@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -108,4 +109,40 @@ void main() {
       expect(ledger.list().single.category, 'groceries');
     },
   );
+
+  testWidgets('Choose dates opens one calendar and shows the chosen period', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          app.cacheNamespaceProvider.overrideWithValue('user:history-calendar'),
+          smsV2RuntimeProvider.overrideWith(
+            (_) => Completer<SmsV2Runtime>().future,
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: HistoryUpdatePanel(onApplied: () {}),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('All retained history'), findsOneWidget);
+    await tester.tap(find.text('Choose dates'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose period'), findsOneWidget);
+    for (var i = 0; i < 2; i++) {
+      await tester.tap(
+        find.descendant(of: find.byType(Dialog), matching: find.text('1')),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(find.text('All retained history'), findsNothing);
+    expect(find.textContaining(' – '), findsOneWidget);
+  });
 }

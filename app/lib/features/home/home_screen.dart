@@ -730,7 +730,11 @@ class _HomeSpendHeadlineState extends ConsumerState<_HomeSpendHeadline> {
                   ],
                 ),
                 if (report.totals != null) ...[
-                  MoneyFlowLines(totals: report.totals!),
+                  MoneyFlowLines(
+                    totals: report.totals!,
+                    periodStart: report.periodStart,
+                    periodEnd: report.periodEnd,
+                  ),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: GestureDetector(

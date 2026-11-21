@@ -237,6 +237,95 @@ test('automatic detection cannot undo an explicit instrument decision', () => {
   assert.equal(storage.mergeInstrument({ ...detected, status: 'rejected' }, { ...detected, status: 'confirmed' }).status, 'confirmed');
 });
 
+// ---------- event merge: the later dated user decision wins ----------
+
+const confirmed = (o = {}) => mkEvent('user_confirmed', [debit, credit], o);
+
+test('two dated confirmations of one event: the later wins, an older or equal one does not', () => {
+  const stored = confirmed({ type: 'card_bill_payment', decidedAt: '2026-11-20T09:00:00Z' });
+  const later = storage.mergeEvent(stored, confirmed({ type: 'unknown', decidedAt: '2026-11-20T10:00:00Z' }));
+  assert.equal(later.ok, true);
+  assert.equal(later.changed, true);
+  assert.equal(later.merged.type, 'unknown');
+  assert.equal(later.merged.decidedAt, '2026-11-20T10:00:00Z');
+  for (const decidedAt of ['2026-11-20T08:00:00Z', '2026-11-20T09:00:00Z']) {
+    const stale = storage.mergeEvent(stored, confirmed({ type: 'unknown', decidedAt }));
+    assert.equal(stale.ok, true);
+    assert.equal(stale.changed, false, 'a stale device does not replace the later decision');
+    assert.equal(stale.merged.type, 'card_bill_payment');
+  }
+});
+
+test('a dated confirmation beats an undated one; an undated one still replaces as before', () => {
+  const undated = confirmed({ type: 'card_bill_payment' });
+  const dated = storage.mergeEvent(undated, confirmed({ type: 'unknown', decidedAt: '2026-11-20T09:00:00Z' }));
+  assert.equal(dated.merged.type, 'unknown');
+  assert.equal(dated.merged.decidedAt, '2026-11-20T09:00:00Z');
+  const stored = confirmed({ type: 'card_bill_payment', decidedAt: '2026-11-20T09:00:00Z' });
+  const old = storage.mergeEvent(stored, confirmed({ type: 'unknown' }));
+  assert.equal(old.changed, true, "an older app's confirmation still replaces");
+  assert.equal(old.merged.decidedAt, '2026-11-20T09:00:00Z', 'the stored decision time is not erased');
+});
+
+test('a confirmation is locked against any non-user status, dated or not', () => {
+  const stored = confirmed({ decidedAt: '2026-11-20T09:00:00Z' });
+  for (const status of ['awaiting_leg', 'ambiguous', 'complete']) {
+    const r = storage.mergeEvent(stored, mkEvent(status, [debit, credit], { decidedAt: '2026-11-21T09:00:00Z' }));
+    assert.deepEqual([r.ok, r.code], [false, 'event_status_locked']);
+  }
+});
+
+test('only a confirmed event carries a decision time; a future one is clamped', () => {
+  const first = storage.mergeEvent(undefined, confirmed({ decidedAt: '2026-11-20T09:00:00Z' }));
+  assert.equal(first.merged.decidedAt, '2026-11-20T09:00:00Z');
+  const auto = storage.mergeEvent(undefined, mkEvent('complete', [debit, credit], { decidedAt: '2026-11-20T09:00:00Z' }));
+  assert.equal('decidedAt' in auto.merged, false, 'an automatic event never records a user decision');
+  const grown = storage.mergeEvent(mkEvent('awaiting_leg', [debit]), mkEvent('complete', [debit, credit], { decidedAt: '2026-11-20T09:00:00Z' }));
+  assert.equal('decidedAt' in grown.merged, false);
+  const future = storage.mergeEvent(undefined, confirmed({ decidedAt: '2099-01-01T00:00:00Z' }));
+  assert.ok(Date.parse(future.merged.decidedAt) < Date.now() + 6 * 60 * 1000, 'clamped to now + 5 minutes');
+});
+
+test('an event without a decision time is unchanged by a repeat upload', () => {
+  const stored = { ...confirmed(), decidedAt: null }; // the database always reports the key
+  assert.equal(storage.mergeEvent(stored, confirmed()).changed, false);
+  const plain = { ...mkEvent('complete', [debit, credit]), decidedAt: null };
+  assert.equal(storage.mergeEvent(plain, mkEvent('complete', [debit, credit])).changed, false);
+});
+
+test('the later dated user decision wins, even undoing "not mine"', () => {
+  const base = h.instrument({ status: 'rejected' });
+  const stored = { ...base, decidedAt: '2026-11-20T09:00:00Z' };
+  // The user restored it afterwards, on this or another phone.
+  const restored = storage.mergeInstrument(stored, { ...base, status: 'confirmed', decidedAt: '2026-11-20T10:00:00Z' });
+  assert.equal(restored.status, 'confirmed');
+  assert.equal(restored.decidedAt, '2026-11-20T10:00:00Z');
+  // ...even back to "waiting", which the undated rule would refuse.
+  assert.equal(storage.mergeInstrument(stored, { ...base, status: 'detected', decidedAt: '2026-11-20T10:00:00Z' }).status, 'detected');
+  // A phone that decided earlier (stale device) does not undo the later choice.
+  const stale = storage.mergeInstrument(stored, { ...base, status: 'confirmed', decidedAt: '2026-11-20T08:00:00Z' });
+  assert.equal(stale.status, 'rejected');
+  assert.equal(stale.decidedAt, '2026-11-20T09:00:00Z');
+});
+
+test('an undated write keeps the old rule and never erases the stored decision time', () => {
+  const base = h.instrument({ status: 'detected' });
+  const stored = { ...base, status: 'rejected', decidedAt: '2026-11-20T09:00:00Z' };
+  const auto = storage.mergeInstrument(stored, base);
+  assert.equal(auto.status, 'rejected', 'detection cannot undo a decision');
+  assert.equal(auto.decidedAt, '2026-11-20T09:00:00Z');
+  // An older app confirming (no decidedAt) is still accepted, as before.
+  assert.equal(storage.mergeInstrument(stored, { ...base, status: 'confirmed' }).status, 'confirmed');
+  assert.equal(storage.mergeInstrument({ ...base, decidedAt: null }, base).decidedAt, null);
+});
+
+test('a decision time far in the future is treated as made now', () => {
+  const now = Date.parse('2026-11-20T10:00:00Z');
+  assert.equal(storage.clampDecidedAt('2026-11-20T10:04:00Z', now), '2026-11-20T10:04:00Z');
+  assert.equal(storage.clampDecidedAt('2027-01-01T00:00:00Z', now), '2026-11-20T10:05:00.000Z');
+  assert.equal(storage.clampDecidedAt(null, now), null);
+});
+
 // ---------- cursors ----------
 
 test('cursors round-trip and reject anything else', () => {

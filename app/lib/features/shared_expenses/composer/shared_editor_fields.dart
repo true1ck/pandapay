@@ -111,6 +111,9 @@ class SharedEditorFields extends StatelessWidget {
                     !editor.members.any((m) => m.id == editor.singlePayer),
                 message: 'Choose who paid',
                 child: DropdownButtonFormField<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   key: ValueKey('${editor.contextId}:${editor.singlePayer}'),
                   initialValue:
                       editor.members.any((m) => m.id == editor.singlePayer)

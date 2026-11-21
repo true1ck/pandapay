@@ -12,13 +12,13 @@ class _Server extends UserCardsRepository {
   final List<String> calls = [];
 
   @override
-  Future<void> ignoreTransaction(String id, {required String reason}) async {
+  Future<void> ignoreTransaction(String id, {required String reason, DateTime? editedAt, void Function()? onStale}) async {
     calls.add('ignore $id $reason');
     if (ignoreError != null) throw ignoreError!;
   }
 
   @override
-  Future<void> restoreTransaction(String id) async {
+  Future<void> restoreTransaction(String id, {DateTime? editedAt, void Function()? onStale}) async {
     calls.add('restore $id');
     if (restoreError != null) throw restoreError!;
   }

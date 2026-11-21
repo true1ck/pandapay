@@ -1,0 +1,505 @@
+import 'package:flutter/material.dart';
+
+import 'app_theme.dart';
+
+/// One calendar that picks a date range: tap the start day, then the end day.
+///
+/// Looks like the app's single-date calendar (slate header, month arrows,
+/// slate day circles) so every date prompt reads as the same calendar. Flutter's
+/// own `showDateRangePicker` is a different, full-screen scrolling layout, and
+/// the stock month calendar has no range mode, hence this widget.
+///
+/// Tapping a day on or after the start sets the end; tapping before the start,
+/// or after a finished range, starts a new range. Apply stays disabled until a
+/// start day exists, and a lone start day applies as a one-day range.
+Future<DateTimeRange?> showBambooDateRangeDialog({
+  required BuildContext context,
+  required DateTime firstDate,
+  required DateTime lastDate,
+  DateTimeRange? initialRange,
+  DateTime? currentDate,
+  String helpText = 'Select dates',
+  String confirmText = 'Apply',
+}) {
+  return showDialog<DateTimeRange>(
+    context: context,
+    builder: (_) => _RangeCalendar(
+      firstDate: _dateOnly(firstDate),
+      lastDate: _dateOnly(lastDate),
+      initialRange: initialRange,
+      currentDate: currentDate,
+      helpText: helpText,
+      confirmText: confirmText,
+    ),
+  );
+}
+
+/// One calendar that picks a single day, the same calendar as the range one
+/// (slate header, month arrows, year jump, slate day circle). A drop-in for
+/// Flutter's `showDatePicker`: the same `initialDate`/`firstDate`/`lastDate`
+/// arguments, except an `initialDate` outside the allowed dates is moved inside
+/// instead of throwing.
+Future<DateTime?> showBambooDatePicker({
+  required BuildContext context,
+  required DateTime firstDate,
+  required DateTime lastDate,
+  DateTime? initialDate,
+  DateTime? currentDate,
+  String helpText = 'Select date',
+  String confirmText = 'OK',
+}) {
+  return showDialog<DateTime>(
+    context: context,
+    builder: (_) => _RangeCalendar(
+      firstDate: _dateOnly(firstDate),
+      lastDate: _dateOnly(lastDate),
+      initialRange: initialDate == null
+          ? null
+          : DateTimeRange(start: initialDate, end: initialDate),
+      currentDate: currentDate,
+      helpText: helpText,
+      confirmText: confirmText,
+      single: true,
+    ),
+  );
+}
+
+DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+class _RangeCalendar extends StatefulWidget {
+  const _RangeCalendar({
+    required this.firstDate,
+    required this.lastDate,
+    required this.initialRange,
+    required this.currentDate,
+    required this.helpText,
+    required this.confirmText,
+    this.single = false,
+  });
+
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final DateTimeRange? initialRange;
+  final DateTime? currentDate;
+  final String helpText;
+  final String confirmText;
+
+  /// Picks one day instead of a range.
+  final bool single;
+
+  @override
+  State<_RangeCalendar> createState() => _RangeCalendarState();
+}
+
+class _RangeCalendarState extends State<_RangeCalendar> {
+  static const _rows = 6; // fixed, so the dialog never changes height
+  static const _cell = 44.0;
+
+  late DateTime? _start;
+  late DateTime? _end;
+  late DateTime _month;
+  bool _pickingYear = false;
+  ScrollController? _yearScroll;
+
+  @override
+  void dispose() {
+    _yearScroll?.dispose();
+    super.dispose();
+  }
+
+  void _setPickingYear(bool on) {
+    _yearScroll?.dispose();
+    _yearScroll = null;
+    if (on) {
+      // Open the list with the shown year about one row from the top.
+      final row = (_month.year - widget.firstDate.year) ~/ 3;
+      _yearScroll = ScrollController(
+        initialScrollOffset: (row * 48.0 - 48.0).clamp(0, 1e9),
+      );
+    }
+    setState(() => _pickingYear = on);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.initialRange;
+    _start = r == null ? null : _dateOnly(r.start);
+    _end = widget.single || r == null ? null : _dateOnly(r.end);
+    if (widget.single && _start != null) {
+      // A date outside the allowed days is moved inside, not an error.
+      if (_start!.isBefore(widget.firstDate)) _start = widget.firstDate;
+      if (_start!.isAfter(widget.lastDate)) _start = widget.lastDate;
+    }
+    // No earlier range: open on today's month, kept inside the allowed dates.
+    final today = _today;
+    final shown =
+        _start ??
+        (today.isBefore(widget.firstDate)
+            ? widget.firstDate
+            : today.isAfter(widget.lastDate)
+            ? widget.lastDate
+            : today);
+    _month = DateTime(shown.year, shown.month);
+  }
+
+  DateTime get _today => _dateOnly(widget.currentDate ?? DateTime.now());
+
+  bool _enabled(DateTime d) =>
+      !d.isBefore(widget.firstDate) && !d.isAfter(widget.lastDate);
+
+  void _tap(DateTime day) {
+    setState(() {
+      final start = _start;
+      if (widget.single) {
+        _start = day;
+        _end = null;
+      } else if (start == null || _end != null || day.isBefore(start)) {
+        _start = day;
+        _end = null;
+      } else {
+        _end = day;
+      }
+    });
+  }
+
+  bool get _canGoBack => DateTime(
+    _month.year,
+    _month.month,
+  ).isAfter(DateTime(widget.firstDate.year, widget.firstDate.month));
+
+  bool get _canGoForward => DateTime(
+    _month.year,
+    _month.month,
+  ).isBefore(DateTime(widget.lastDate.year, widget.lastDate.month));
+
+  void _page(int delta) =>
+      setState(() => _month = DateTime(_month.year, _month.month + delta));
+
+  /// Jumps to [year], keeping the month where the range allows it.
+  void _pickYear(int year) {
+    var next = DateTime(year, _month.month);
+    final first = DateTime(widget.firstDate.year, widget.firstDate.month);
+    final last = DateTime(widget.lastDate.year, widget.lastDate.month);
+    if (next.isBefore(first)) next = first;
+    if (next.isAfter(last)) next = last;
+    _month = next;
+    _setPickingYear(false);
+  }
+
+  String _headline(MaterialLocalizations l) {
+    final s = _start;
+    if (s == null) {
+      return widget.single ? 'Select date' : 'Start date – End date';
+    }
+    final e = _end;
+    // Weekday + day for the usual case (this year, one year). Years are added
+    // only when they matter, so "Nov 5 – Nov 10" can never hide 2024 vs 2026.
+    final withYears =
+        s.year != _today.year || (e != null && e.year != _today.year);
+    String f(DateTime d) => withYears
+        ? '${l.formatShortMonthDay(d)}, ${d.year}'
+        : l.formatMediumDate(d);
+    if (widget.single) return f(s);
+    return e == null ? '${f(s)} – End date' : '${f(s)} – ${f(e)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = MaterialLocalizations.of(context);
+    return Dialog(
+      backgroundColor: BambooInk.paper,
+      surfaceTintColor: Colors.transparent,
+      clipBehavior: Clip.antiAlias,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _header(l),
+            _monthBar(l),
+            if (_pickingYear)
+              _years()
+            else ...[
+              _weekdays(l),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: _grid(l),
+              ),
+            ],
+            _actions(l),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _header(MaterialLocalizations l) => Container(
+    color: BambooInk.slate,
+    padding: const EdgeInsets.fromLTRB(24, 16, 24, 14),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.helpText,
+          style: BambooFonts.ui(
+            12.5,
+            weight: FontWeight.w600,
+            color: BambooInk.lime,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          _headline(l),
+          key: const Key('range-calendar-headline'),
+          style: BambooFonts.heading(22, color: BambooInk.lime),
+        ),
+      ],
+    ),
+  );
+
+  Widget _monthBar(MaterialLocalizations l) => Padding(
+    padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+    child: Row(
+      children: [
+        IconButton(
+          tooltip: l.previousMonthTooltip,
+          onPressed: !_pickingYear && _canGoBack ? () => _page(-1) : null,
+          icon: const Icon(Icons.chevron_left),
+        ),
+        Expanded(
+          child: InkWell(
+            key: const Key('range-calendar-month-title'),
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => _setPickingYear(!_pickingYear),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    l.formatMonthYear(_month),
+                    style: BambooFonts.ui(
+                      14.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink900,
+                    ),
+                  ),
+                  Icon(
+                    _pickingYear ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                    color: BambooInk.ink900,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          tooltip: l.nextMonthTooltip,
+          onPressed: !_pickingYear && _canGoForward ? () => _page(1) : null,
+          icon: const Icon(Icons.chevron_right),
+        ),
+      ],
+    ),
+  );
+
+  /// A scrollable grid of years, same height as the weekday row plus day grid
+  /// so the dialog does not change size.
+  Widget _years() {
+    final first = widget.firstDate.year;
+    final count = widget.lastDate.year - first + 1;
+    const rowHeight = 48.0;
+    return SizedBox(
+      height: 32 + _rows * _cell,
+      child: GridView.builder(
+        key: const Key('range-calendar-years'),
+        controller: _yearScroll,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisExtent: rowHeight,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 8,
+        ),
+        itemCount: count,
+        itemBuilder: (context, i) {
+          final year = first + i;
+          final current = year == _month.year;
+          return InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () => _pickYear(year),
+            child: Container(
+              alignment: Alignment.center,
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              decoration: ShapeDecoration(
+                shape: const StadiumBorder(),
+                color: current ? BambooInk.slate : null,
+              ),
+              child: Text(
+                '$year',
+                style: BambooFonts.ui(
+                  14.5,
+                  weight: current ? FontWeight.w700 : FontWeight.w500,
+                  color: current ? BambooInk.lime : BambooInk.ink900,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _weekdays(MaterialLocalizations l) {
+    final first = l.firstDayOfWeekIndex;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          for (var i = 0; i < 7; i++)
+            Expanded(
+              child: SizedBox(
+                height: 32,
+                child: Center(
+                  child: Text(
+                    l.narrowWeekdays[(first + i) % 7],
+                    style: BambooFonts.ui(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: BambooInk.ink500,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _grid(MaterialLocalizations l) {
+    final days = DateUtils.getDaysInMonth(_month.year, _month.month);
+    final offset = DateUtils.firstDayOffset(_month.year, _month.month, l);
+    return Column(
+      children: [
+        for (var r = 0; r < _rows; r++)
+          Row(
+            children: [
+              for (var c = 0; c < 7; c++)
+                Expanded(child: _dayCell(l, r * 7 + c - offset + 1, days)),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _dayCell(MaterialLocalizations l, int dayOfMonth, int daysInMonth) {
+    if (dayOfMonth < 1 || dayOfMonth > daysInMonth) {
+      return const SizedBox(height: _cell);
+    }
+    final day = DateTime(_month.year, _month.month, dayOfMonth);
+    final enabled = _enabled(day);
+    final start = _start;
+    final end = _end;
+    final isStart = start != null && day == start;
+    final isEnd = end != null && day == end;
+    final selected = isStart || isEnd;
+    final inside =
+        start != null && end != null && day.isAfter(start) && day.isBefore(end);
+    final today = day == _today;
+    // The soft band runs between the two end circles, half-width on each end.
+    final bandLeft = inside || (isEnd && start != end);
+    final bandRight = inside || (isStart && end != null && start != end);
+
+    return Semantics(
+      button: true,
+      selected: selected,
+      enabled: enabled,
+      label: l.formatFullDate(day),
+      excludeSemantics: true,
+      onTap: enabled ? () => _tap(day) : null,
+      child: SizedBox(
+        height: _cell,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            if (bandLeft || bandRight)
+              Positioned.fill(
+                top: 4,
+                bottom: 4,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: ColoredBox(
+                        color: bandLeft ? BambooInk.wash : Colors.transparent,
+                      ),
+                    ),
+                    Expanded(
+                      child: ColoredBox(
+                        color: bandRight ? BambooInk.wash : Colors.transparent,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            InkResponse(
+              onTap: enabled ? () => _tap(day) : null,
+              customBorder: const CircleBorder(),
+              child: Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: selected ? BambooInk.slate : null,
+                  border: today && !selected
+                      ? Border.all(color: BambooInk.slate)
+                      : null,
+                ),
+                child: Text(
+                  '$dayOfMonth',
+                  style: BambooFonts.ui(
+                    14,
+                    weight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: !enabled
+                        ? BambooInk.ink500.withValues(alpha: 0.5)
+                        : selected
+                        ? BambooInk.lime
+                        : BambooInk.ink900,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _actions(MaterialLocalizations l) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l.cancelButtonLabel),
+        ),
+        TextButton(
+          onPressed: _start == null
+              ? null
+              : () => Navigator.of(context).pop<Object>(
+                  widget.single
+                      ? _start!
+                      : DateTimeRange(start: _start!, end: _end ?? _start!),
+                ),
+          child: Text(widget.confirmText),
+        ),
+      ],
+    ),
+  );
+}

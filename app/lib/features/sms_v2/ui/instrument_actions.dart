@@ -3,6 +3,7 @@ import 'package:pandapay_domain/sms_v2.dart';
 import 'package:pandapay_domain/sms_v2_ledger.dart';
 
 import '../../../data/local/financial_store.dart';
+import '../../../data/server_clock.dart';
 import '../../../data/user_cards_repository.dart';
 import '../category/category_snapshot.dart';
 import '../instruments/card_linker.dart';
@@ -21,6 +22,7 @@ class InstrumentActions {
     required this.namespace,
     this.bundle,
     this.catalogue = const [],
+    this.clock,
   });
   final FinancialStore financial;
   final String namespace;
@@ -30,6 +32,14 @@ class InstrumentActions {
   /// null and skip loading the rule bundle.
   final RuleBundle? bundle;
   final List<CardProduct> catalogue;
+
+  /// The time stamped on a choice. Defaults to the server-adjusted phone clock;
+  /// tests pass their own.
+  final DateTime Function()? clock;
+
+  /// Stamped on every explicit choice by the user (never on automatic changes),
+  /// so the latest choice wins when devices disagree.
+  DateTime _decidedNow() => (clock ?? ServerClock.instance.now)().toUtc();
 
   /// Confirms [id] as the user's own.
   ///
@@ -41,7 +51,10 @@ class InstrumentActions {
   /// user, never "confirmed" without a wallet card behind it.
   CardLinkResult? confirm(String id) {
     final current = _owned(id);
-    final next = current.copyWith(status: InstrumentStatus.confirmed);
+    final next = current.copyWith(
+      status: InstrumentStatus.confirmed,
+      decidedAt: _decidedNow(),
+    );
     if (current.kind != InstrumentKind.creditCard) {
       _write(next);
       return null;
@@ -73,10 +86,19 @@ class InstrumentActions {
   /// messages made it look like. Archived, not rejected, so its transactions
   /// stay in the ledger and later messages still resolve to it quietly.
   void archive(String id) =>
-      _write(_owned(id).copyWith(status: InstrumentStatus.archived));
+      _write(
+        _owned(id).copyWith(
+          status: InstrumentStatus.archived,
+          decidedAt: _decidedNow(),
+        ),
+      );
 
-  void reject(String id) =>
-      _write(_owned(id).copyWith(status: InstrumentStatus.rejected));
+  void reject(String id) => _write(
+    _owned(id).copyWith(
+      status: InstrumentStatus.rejected,
+      decidedAt: _decidedNow(),
+    ),
+  );
 
   /// Undoes [reject]: the account is the user's again and its movements show in
   /// the ledger again.
@@ -106,6 +128,7 @@ class InstrumentActions {
       instrument.copyWith(
         status: InstrumentStatus.confirmed,
         userCardId: card.id,
+        decidedAt: _decidedNow(),
       ),
     );
   }

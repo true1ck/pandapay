@@ -239,6 +239,9 @@ class _CardDetailsSetupScreenState
                   children: [
                     Expanded(
                       child: DropdownButtonFormField<int>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         initialValue: _statementDay,
                         decoration: const InputDecoration(
                           labelText: 'Statement day',
@@ -254,6 +257,9 @@ class _CardDetailsSetupScreenState
                     const SizedBox(width: AppSpace.md),
                     Expanded(
                       child: DropdownButtonFormField<int>(
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         initialValue: _dueDay,
                         decoration: const InputDecoration(
                           labelText: 'Due day',

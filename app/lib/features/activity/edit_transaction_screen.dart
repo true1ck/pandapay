@@ -8,6 +8,7 @@ import '../sms_v2/similar/similar_offer_sheet.dart';
 import '../sms_v2/ui/review_controller.dart';
 import '../sms_v2/ui/transaction_actions.dart';
 import '../sms_v2/providers/data_providers.dart';
+import '../sms_v2/providers/runtime_provider.dart' show smsV2RuntimeProvider;
 import 'package:pandapay_domain/sms_v2.dart' as v2;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +17,7 @@ import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
 import '../../app/design/widgets.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/category_picker.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../app/providers.dart';
@@ -214,6 +216,27 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
   /// The row is marked as read on this phone but its stored reading is gone.
   bool _readingMissing = false;
   bool _readingChecked = false;
+  bool _recoveryTried = false;
+
+  /// A row seen on this phone first (it came from another phone) can reach the
+  /// transactions list before its reading is pulled. Pull once, quietly, then
+  /// look again; the screen keeps working either way.
+  Future<void> _recoverReading() async {
+    if (_recoveryTried) return;
+    _recoveryTried = true;
+    try {
+      final runtime = ref.read(smsV2RuntimeProvider).valueOrNull;
+      if (runtime == null) return;
+      await runtime.sync().timeout(const Duration(seconds: 30));
+    } catch (_) {
+      // Offline or busy: the entry stays as it is and the notice explains.
+    }
+    if (!mounted) return;
+    setState(() {
+      _readingChecked = false;
+      _readingMissing = false;
+    });
+  }
 
   /// Looks the stored reading up once the phone's database is available (it can
   /// still be loading when the screen first opens from a tapped row).
@@ -241,6 +264,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
       // server copy on a new phone, or a row left after a re-read). Corrections
       // need the reading, so the save must not try them.
       _readingMissing = stored == null;
+      if (_readingMissing) _recoverReading();
     } catch (_) {
       // Without it the choice just starts on "between my accounts".
     }
@@ -986,6 +1010,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
           helperMaxLines: 2,
         ),
         hint: const Text('Choose receiving account'),
+        borderRadius: BorderRadius.circular(16),
+        dropdownColor: BambooInk.paper,
+        focusColor: Colors.transparent,
         items: [
           for (final choice in choices.entries)
             DropdownMenuItem(
@@ -1352,6 +1379,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       initialValue: _entryKind,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Kind'),
+                      borderRadius: BorderRadius.circular(16),
+                      dropdownColor: BambooInk.paper,
+                      focusColor: Colors.transparent,
+                      menuMaxHeight: 320,
                       items: [
                         for (final kind in TxnEntryKind.values.where(
                           (kind) =>
@@ -1420,6 +1451,9 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         isExpanded: true,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Transfer type'),
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         items: const [
                           DropdownMenuItem(
                             value: false,
@@ -1536,6 +1570,11 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                       initialValue: _rail,
                       style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                       decoration: inputDecoration('Payment route'),
+                      isExpanded: true,
+                      borderRadius: BorderRadius.circular(16),
+                      dropdownColor: BambooInk.paper,
+                      focusColor: Colors.transparent,
+                      menuMaxHeight: 320,
                       items: [
                         // A route an older entry already carries stays
                         // listed so opening it does not change it.
@@ -1558,6 +1597,10 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                         initialValue: _userCardId,
                         style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                         decoration: inputDecoration('Card'),
+                        isExpanded: true,
+                        borderRadius: BorderRadius.circular(16),
+                        dropdownColor: BambooInk.paper,
+                        focusColor: Colors.transparent,
                         items: [
                           // Only credit cards for a credit-card payment; a
                           // card already chosen stays so it is not lost.
@@ -1611,7 +1654,7 @@ class _EditTransactionScreenState extends ConsumerState<EditTransactionScreen> {
                           color: BambooInk.ink500,
                         ),
                         onTap: () async {
-                          final picked = await showDatePicker(
+                          final picked = await showBambooDatePicker(
                             context: context,
                             initialDate: _occurredAt ?? DateTime.now(),
                             firstDate: DateTime(2000),

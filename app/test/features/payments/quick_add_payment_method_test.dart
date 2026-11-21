@@ -32,7 +32,7 @@ class _Repo extends UserCardsRepository {
   }
 
   @override
-  Future<void> ignoreTransaction(String id, {required String reason}) async {}
+  Future<void> ignoreTransaction(String id, {required String reason, DateTime? editedAt, void Function()? onStale}) async {}
 }
 
 Future<void> _pump(WidgetTester tester, _Repo repo) async {

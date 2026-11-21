@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/category_picker.dart';
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/required_field.dart';
 import '../../app/transaction_tag_picker.dart' show TransactionTagField;
 import '../../data/catalogue_repository.dart' show SpendCategory;
@@ -159,6 +160,9 @@ class VoiceEntryReview extends StatelessWidget {
         if (!isPoints) ...[
           if (isMoneyIn)
             DropdownButtonFormField<TxnInstrument>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: _moneyInHow.containsKey(editor.instrument)
                   ? editor.instrument
                   : TxnInstrument.other,
@@ -178,6 +182,9 @@ class VoiceEntryReview extends StatelessWidget {
             )
           else
             DropdownButtonFormField<TxnInstrument>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: editor.instrument,
               decoration: InputDecoration(
                 labelText: editor.type == VoiceActionType.refund
@@ -218,6 +225,9 @@ class VoiceEntryReview extends StatelessWidget {
                 editor.requiresWalletCard &&
                 !editor.hasWalletCard(cards),
             child: DropdownButtonFormField<String>(
+            borderRadius: BorderRadius.circular(16),
+            dropdownColor: BambooInk.paper,
+            focusColor: Colors.transparent,
             initialValue: cards.any((c) => c.id == editor.selectedCardId)
                 ? editor.selectedCardId
                 : null,
@@ -385,7 +395,7 @@ class VoiceEntryReview extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       onTap: () async {
         final today = DateTime(now.year, now.month, now.day);
-        final picked = await showDatePicker(
+        final picked = await showBambooDatePicker(
           context: context,
           initialDate: editor.occurredAt ?? today,
           firstDate: DateTime(now.year - 5),

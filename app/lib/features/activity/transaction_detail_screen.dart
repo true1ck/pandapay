@@ -27,6 +27,7 @@ import '../../app/design/widgets.dart';
 import '../../app/providers.dart';
 import '../../app/transaction_tag_picker.dart';
 import '../../data/merchant_identity.dart';
+import '../../data/server_clock.dart';
 import '../../data/api_exception.dart';
 import '../../data/connectivity/reachability.dart';
 import '../../data/local/split_repository.dart';
@@ -590,6 +591,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       await repo.updateTransactionNote(
         widget.entry.id,
         note.isEmpty ? null : note,
+        editedAt: ServerClock.instance.now(),
       );
       // The detail provider is refreshed below, but Activity, Home, and
       // Spending can still be holding the same transaction in their own

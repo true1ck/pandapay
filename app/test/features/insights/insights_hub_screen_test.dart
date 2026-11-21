@@ -234,7 +234,7 @@ void main() {
     expect(find.text('Your card benefits, together'), findsOneWidget);
   });
 
-  testWidgets('Custom dates uses the start and end calendar dialogs', (
+  testWidgets('Custom dates opens one calendar and applies the range', (
     tester,
   ) async {
     // Wide and tall, so the whole chip row is built and on screen.
@@ -246,17 +246,11 @@ void main() {
       tester.element(find.byType(MaterialApp)),
     );
 
-    Future<void> pickDay(String help, String day) async {
-      expect(find.text(help), findsOneWidget);
+    Future<void> tapDay(String day) async {
       await tester.tap(
-        find.descendant(
-          of: find.byType(DatePickerDialog),
-          matching: find.text(day),
-        ),
+        find.descendant(of: find.byType(Dialog), matching: find.text(day)),
       );
-      await tester.pump(const Duration(milliseconds: 200));
-      await tester.tap(find.text('OK'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
     }
 
     // The chip row is wider than the page; slide it to the last chip.
@@ -264,8 +258,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Custom dates'));
     await tester.pumpAndSettle();
-    await pickDay('Select start date', '1');
-    await pickDay('Select end date', '1');
+    expect(find.text('Choose insight dates'), findsOneWidget);
+    // Start and end are both picked in this one calendar.
+    await tapDay('1');
+    await tapDay('1');
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
 
     final range = container.read(insightsCustomRangeProvider);
     expect(range, isNotNull);

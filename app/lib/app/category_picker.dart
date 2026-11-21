@@ -46,6 +46,9 @@ Future<String?> showAddCategoryDialog(
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
+              borderRadius: BorderRadius.circular(16),
+              dropdownColor: BambooInk.paper,
+              focusColor: Colors.transparent,
               initialValue: parentId ?? '',
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Parent category'),
@@ -396,6 +399,9 @@ class CategoryPickerField extends ConsumerWidget {
         ? selectedId
         : null;
     return DropdownButtonFormField<String>(
+      borderRadius: BorderRadius.circular(16),
+      dropdownColor: BambooInk.paper,
+      focusColor: Colors.transparent,
       initialValue: validSelectedId,
       isExpanded: true,
       decoration: InputDecoration(labelText: label),

@@ -343,4 +343,78 @@ void main() {
       expect(row('v2:abc')['attempts'], 1);
     });
   });
+
+  group('the time the person acted travels with delete / restore / leave out', () {
+    // The server keeps the newest choice per transaction, so the time is the
+    // moment of the tap, stamped when queued (not when finally sent).
+    var tap = DateTime.utc(2026, 11, 20, 9);
+    late CommandOutbox timed;
+    setUp(() {
+      tap = DateTime.utc(2026, 11, 20, 9);
+      timed = CommandOutbox(
+        db,
+        namespace: 'timed',
+        now: () => clock,
+        editClock: () => tap,
+      );
+    });
+
+    Future<Map<String, Object?>> sent(String kind) async {
+      Map<String, Object?>? seen;
+      await timed.flush({kind: (p) async => seen = p});
+      return seen!;
+    }
+
+    test('each of the three kinds is stamped, others are not', () async {
+      for (final kind in CommandOutbox.editTimedKinds) {
+        timed.enqueue(kind: kind, target: 't-$kind', payload: {'id': 't-$kind'});
+      }
+      final seen = <String, Object?>{};
+      await timed.flush({
+        for (final kind in CommandOutbox.editTimedKinds)
+          kind: (p) async => seen[kind] = p['editedAt'],
+      });
+      expect(seen.keys.toSet(), CommandOutbox.editTimedKinds);
+      expect(seen.values.toSet(), {'2026-11-20T09:00:00.000Z'});
+
+      timed.enqueue(kind: 'card_fields_patch', target: 'c1', payload: {'id': 'c1'});
+      expect((await sent('card_fields_patch')).containsKey('editedAt'), isFalse);
+    });
+
+    test('the time is when it was queued, not when it is finally sent', () async {
+      timed.enqueue(kind: 'ignore_transaction', target: 't1', payload: {'id': 't1'});
+      tap = DateTime.utc(2026, 11, 21, 9); // a day later, back online
+      expect((await sent('ignore_transaction'))['editedAt'], '2026-11-20T09:00:00.000Z');
+    });
+
+    test('a time already on the payload is kept; the latest intent restamps', () async {
+      timed.enqueue(
+        kind: 'restore_transaction',
+        target: 't1',
+        payload: {'id': 't1', 'editedAt': '2026-11-19T00:00:00.000Z'},
+      );
+      expect((await sent('restore_transaction'))['editedAt'], '2026-11-19T00:00:00.000Z');
+
+      timed.enqueue(kind: 'set_spend_exclusion', target: 't2', payload: {'excluded': true});
+      tap = DateTime.utc(2026, 11, 20, 10);
+      timed.enqueue(kind: 'set_spend_exclusion', target: 't2', payload: {'excluded': false});
+      final latest = await sent('set_spend_exclusion');
+      expect(latest['excluded'], false);
+      expect(latest['editedAt'], '2026-11-20T10:00:00.000Z');
+    });
+
+    test('the clock is server-adjusted: a phone running behind stamps server time', () {
+      final adjusted = CommandOutbox(
+        db,
+        namespace: 'adjusted',
+        now: () => clock,
+        editClock: () => DateTime.utc(2026, 11, 20, 9, 5), // what ServerClock.now returns
+      );
+      adjusted.enqueue(kind: 'ignore_transaction', target: 't1', payload: {'id': 't1'});
+      final stored = db.db.select(
+        "SELECT payload_json FROM command_outbox WHERE namespace='adjusted'",
+      );
+      expect(stored.single['payload_json'], contains('2026-11-20T09:05:00.000Z'));
+    });
+  });
 }

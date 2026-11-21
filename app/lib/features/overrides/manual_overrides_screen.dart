@@ -356,6 +356,9 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
               invalid: _submitted && _selectedUserCardId == null,
               radius: 16,
               child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: _selectedUserCardId,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration('Card', required: true),
@@ -393,6 +396,9 @@ class _CreateOverrideSheetState extends ConsumerState<_CreateOverrideSheet> {
                 invalid: _submitted && _selectedCategoryId == null,
                 radius: 16,
                 child: DropdownButtonFormField<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   initialValue: _selectedCategoryId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: inputDecoration('Category', required: true),
@@ -574,6 +580,9 @@ class _EditOverrideSheetState extends ConsumerState<_EditOverrideSheet> {
               invalid: _submitted && _selectedUserCardId == null,
               radius: 16,
               child: DropdownButtonFormField<String>(
+                borderRadius: BorderRadius.circular(16),
+                dropdownColor: BambooInk.paper,
+                focusColor: Colors.transparent,
                 initialValue: _selectedUserCardId,
                 style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                 decoration: inputDecoration('Card', required: true),

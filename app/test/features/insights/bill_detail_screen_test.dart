@@ -188,4 +188,93 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('activity investments'), findsOneWidget);
   });
+
+  testWidgets('Home: tapping Money in opens the money-in transactions', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => Scaffold(
+            body: MoneyFlowLines(
+              totals: const Totals(
+                spendMinor: 100000,
+                refundMinor: 0,
+                incomeMinor: 200000,
+                investmentMinor: 0,
+                transactionCount: 2,
+                byCategory: {},
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/activity',
+          builder: (_, state) => Scaffold(
+            body: Text('activity ${state.uri.queryParameters['type']}'),
+          ),
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('home_money_in_line')));
+    await tester.pumpAndSettle();
+    expect(find.text('activity moneyIn'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Home: Money in and Investments open on the period the totals cover',
+    (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, _) => Scaffold(
+              body: MoneyFlowLines(
+                // Period end is exclusive, as in the spend report.
+                periodStart: DateTime(2026, 11),
+                periodEnd: DateTime(2026, 12),
+                totals: const Totals(
+                  spendMinor: 100000,
+                  refundMinor: 0,
+                  incomeMinor: 200000,
+                  investmentMinor: 500000,
+                  investmentOutMinor: 500000,
+                  transactionCount: 3,
+                  byCategory: {},
+                ),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/activity',
+            builder: (_, state) {
+              final q = state.uri.queryParameters;
+              return Scaffold(
+                body: Text('activity ${q['type']} ${q['from']} ${q['to']}'),
+              );
+            },
+          ),
+        ],
+      );
+      await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('home_money_in_line')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('activity moneyIn 2026-11-01 2026-11-30'),
+        findsOneWidget,
+      );
+      router.pop();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('home_investments_line')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('activity investments 2026-11-01 2026-11-30'),
+        findsOneWidget,
+      );
+    },
+  );
 }

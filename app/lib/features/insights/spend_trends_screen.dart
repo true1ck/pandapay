@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 
 import '../../app/design/app_theme.dart';
+import '../../app/design/bamboo_date_range_dialog.dart';
 import '../../app/design/app_icons.dart';
 import '../../app/design/merchant_brand.dart';
 import '../../app/design/merchant_brand_tile.dart';
@@ -791,36 +792,29 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
         '(${_monthCount(from, to)} ${_monthCount(from, to) == 1 ? 'month' : 'months'})';
   }
 
-  Future<void> _pickDate({required bool from}) async {
+  /// One calendar for the whole range: tap the first day, then the last day.
+  Future<void> _pickRange() async {
     final firstDate = DateTime(2020);
     final today = DateTime(widget.now.year, widget.now.month, widget.now.day);
     // Presets use complete calendar months, so a selected range can end
     // after today (for example, 31 Oct while the clock is 17 Oct). Keep that
-    // existing boundary selectable instead of handing showDatePicker an
-    // invalid initial date.
+    // existing boundary selectable.
     final lastDate = _customTo.isAfter(today) ? _customTo : today;
-    final requestedInitial = from ? _customFrom : _customTo;
-    final initialDate = requestedInitial.isBefore(firstDate)
-        ? firstDate
-        : requestedInitial.isAfter(lastDate)
-        ? lastDate
-        : requestedInitial;
-    final picked = await showDatePicker(
+    final start = _customFrom.isBefore(firstDate) ? firstDate : _customFrom;
+    final picked = await showBambooDateRangeDialog(
       context: context,
       firstDate: firstDate,
       lastDate: lastDate,
-      initialDate: initialDate,
-      helpText: from ? 'Select start date' : 'Select end date',
+      initialRange: DateTimeRange(
+        start: start,
+        end: _customTo.isBefore(start) ? start : _customTo,
+      ),
+      helpText: 'Select dates',
     );
     if (picked == null) return;
     setState(() {
-      if (from) {
-        _customFrom = picked;
-        if (_customFrom.isAfter(_customTo)) _customTo = picked;
-      } else {
-        _customTo = picked;
-        if (_customTo.isBefore(_customFrom)) _customFrom = picked;
-      }
+      _customFrom = picked.start;
+      _customTo = picked.end;
       _draft = _custom(_customFrom, _customTo);
     });
   }
@@ -1027,7 +1021,7 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
                   child: _DateField(
                     label: 'From',
                     value: _customFrom,
-                    onTap: () => _pickDate(from: true),
+                    onTap: _pickRange,
                   ),
                 ),
                 const SizedBox(width: AppSpace.sm),
@@ -1035,7 +1029,7 @@ class _SpendDateRangeSheetState extends State<_SpendDateRangeSheet> {
                   child: _DateField(
                     label: 'To',
                     value: _customTo,
-                    onTap: () => _pickDate(from: false),
+                    onTap: _pickRange,
                   ),
                 ),
               ],
@@ -1213,6 +1207,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
 
   void _setMonth(DateTime? month) {
     setState(() => _monthFilter = month);
+    _notifyFilters();
   }
 
   @override
@@ -1222,7 +1217,62 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         (oldWidget.report.periodStart != widget.report.periodStart ||
             oldWidget.report.periodEnd != widget.report.periodEnd)) {
       _monthFilter = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _notifyFilters();
+      });
     }
+    if (oldWidget.transactionDetailsLoading !=
+            widget.transactionDetailsLoading ||
+        oldWidget.transactions != widget.transactions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _dropStaleFilters();
+      });
+    }
+  }
+
+  /// A new date range keeps the filters, but one whose value has no spending
+  /// in that range (a category, merchant, account or payment method) would
+  /// only show an empty page, so it is cleared and the person is told.
+  void _dropStaleFilters() {
+    if (widget.transactionDetailsLoading || _spendEntries.isEmpty) return;
+    final cleared = <String>[];
+    final categories = _categoryOptions;
+    if (_categoryFilters.any((key) => !categories.containsKey(key))) {
+      _categoryFilters.removeWhere((key) => !categories.containsKey(key));
+      cleared.add('category');
+    }
+    bool missing(String? value, List<String> options) =>
+        value != null &&
+        !options.any(
+          (o) =>
+              SpendingSelection.normalize(o) ==
+              SpendingSelection.normalize(value),
+        );
+    if (missing(_merchantFilter, _merchantOptions)) {
+      _merchantFilter = null;
+      cleared.add('merchant');
+    }
+    if (missing(_cardFilter, _cardOptions)) {
+      _cardFilter = null;
+      cleared.add('account');
+    }
+    if (_paymentFilter != null &&
+        !_spendEntries.any(
+          (e) => SpendingSelection.effectiveInstrument(e) == _paymentFilter,
+        )) {
+      _paymentFilter = null;
+      cleared.add('payment method');
+    }
+    if (cleared.isEmpty) return;
+    setState(() {});
+    _notifyFilters();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Cleared the ${cleared.join(', ')} filter: nothing matched in this period.',
+        ),
+      ),
+    );
   }
 
   List<BankAccountSummary> get _bankAccounts =>
@@ -1239,14 +1289,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
         untagged: _untagged,
       ),
     );
-    widget.onFiltersActiveChanged(_sheetFiltersActive);
+    widget.onFiltersActiveChanged(_filtersActive);
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _notifyFilters();
+      if (!mounted) return;
+      _dropStaleFilters();
+      _notifyFilters();
     });
   }
 
@@ -1268,22 +1320,38 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
   /// The report's first and last day as the `from` / `to` Activity expects, so a
   /// list opened from here covers exactly the period on this screen.
   ({String from, String to}) _periodDateParams() {
-    DateTime day(DateTime value) =>
-        DateTime(value.year, value.month, value.day);
     String dateParam(DateTime value) =>
         '${value.year.toString().padLeft(4, '0')}-'
         '${value.month.toString().padLeft(2, '0')}-'
         '${value.day.toString().padLeft(2, '0')}';
 
-    final from = widget.query.isCustom
+    final days = _describedDays();
+    return (from: dateParam(days.from), to: dateParam(days.to));
+  }
+
+  /// First and last day (date only, inclusive) this screen is describing: the
+  /// report's period, or only the month picked on the chart, clipped to that
+  /// period (a custom range can start or end mid-month).
+  ({DateTime from, DateTime to}) _describedDays() {
+    DateTime day(DateTime value) =>
+        DateTime(value.year, value.month, value.day);
+
+    var from = widget.query.isCustom
         ? day(widget.query.from!)
         : day(widget.report.periodStart.toLocal());
-    final to = widget.query.isCustom
+    var to = widget.query.isCustom
         ? day(widget.query.to!)
         : day(
             widget.report.periodEnd.subtract(const Duration(days: 1)).toLocal(),
           );
-    return (from: dateParam(from), to: dateParam(to));
+    final month = _monthFilter;
+    if (month != null) {
+      final first = DateTime(month.year, month.month);
+      final last = DateTime(month.year, month.month + 1, 0);
+      if (first.isAfter(from)) from = first;
+      if (last.isBefore(to)) to = last;
+    }
+    return (from: from, to: to);
   }
 
   /// The investments of this period, in Activity's Investments filter: the one
@@ -1429,12 +1497,10 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     // that month so it agrees with the chart bar. Narrowing to saved rows
     // would drop ledger spend that has no saved transaction row yet.
     if (month != null && !_sheetFiltersActive) {
+      final days = _describedDays();
       return remember(
         model.spendReport(
-          SpendReportQuery.custom(
-            from: DateTime(month.year, month.month),
-            to: DateTime(month.year, month.month + 1, 0),
-          ),
+          SpendReportQuery.custom(from: days.from, to: days.to),
           ref.read(clockProvider).now(),
           bankAccounts: _bankAccounts,
           monthlySeries: true,
@@ -1920,7 +1986,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     // not in [total], not a slice of the mix, not a category percentage.
     final invested = summaryReport.investedOut;
     final showInvested = !invested.isZero;
-    final investedPeriodLabel = report.period == SpendPeriod.custom
+    // A month picked on the chart is what the figures describe, so say so.
+    final pickedMonth = _monthFilter;
+    final investedPeriodLabel = pickedMonth != null
+        ? 'in ${_monthlyPointLabel(pickedMonth)}'
+        : report.period == SpendPeriod.custom
         ? 'in ${report.displayLabel}'
         : report.period.label.toLowerCase();
     final series = _seriesFor(report);
@@ -1980,7 +2050,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               rows: categoryRows,
               total: total,
               compact: multiMonth,
-              rangeLabel: multiMonth ? _reportRangeLabel(report) : null,
+              rangeLabel: multiMonth
+                  ? (pickedMonth != null
+                        ? _monthlyPointLabel(pickedMonth)
+                        : _reportRangeLabel(report))
+                  : null,
               change: !_filtersActive && !multiMonth
                   ? report.changeVsPrevious
                   : null,
@@ -1989,6 +2063,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               invested: invested,
               investedPeriodLabel: investedPeriodLabel,
               onInvestedTap: _openInvestments,
+              investedPreview: _investmentsNewestFirst,
             ),
             const SizedBox(height: AppSpace.lg),
           ] else if (showInvested) ...[
@@ -1996,10 +2071,11 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             // line under, and must still say what was invested.
             CardSummaryPanel(
               padding: const EdgeInsets.all(AppSpace.md),
-              child: _InvestedLine(
+              child: _CollapsibleInvestedLine(
                 amount: invested,
                 periodLabel: investedPeriodLabel,
-                onTap: _openInvestments,
+                investments: _investmentsNewestFirst,
+                onViewAll: _openInvestments,
               ),
             ),
             const SizedBox(height: AppSpace.lg),
@@ -2070,12 +2146,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                       widget.initialCategory!.toLowerCase() ==
                           row.label.toLowerCase()),
             ),
-          // Shown like a category so an investment is not lost from this
+          // Behaves like a category so an investment is not lost from this
           // screen, but it is not one: no share of spending, not in the total
-          // or the mix, and it opens the investments flow instead of expanding.
+          // or the mix.
           if (showInvested)
-            (context) =>
-                _InvestmentsRow(amount: invested, onTap: _openInvestments),
+            (context) => _ExpandableInvestmentsRow(
+              amount: invested,
+              entries: _investmentEntries,
+              detailsLoading: widget.transactionDetailsLoading,
+              onOpenActivity: _openInvestments,
+            ),
           if (instrumentRows.isNotEmpty) ...[
             (context) => const SizedBox(height: AppSpace.md),
             (context) => _BreakdownPanel(
@@ -2202,7 +2282,8 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     );
   }
 
-  EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
+  /// Active rows of [kind] that pass the month and every filter on show.
+  List<TransactionEntry> _rowsOfKind(TxnEntryKind kind) {
     final selection = SpendingSelection(
       payment: _paymentFilter,
       categories: _categoryFilters,
@@ -2212,7 +2293,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       untagged: _untagged,
       month: _monthFilter,
     );
-    final rows = {for (final row in widget.transactions) row.id: row}.values
+    return {for (final row in widget.transactions) row.id: row}.values
         .where(
           (row) =>
               row.status == 'active' &&
@@ -2224,6 +2305,20 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               ),
         )
         .toList();
+  }
+
+  /// The payments the Investments row opens into: the same rows the invested
+  /// amount is made of, so a picked month or a filter narrows both alike.
+  List<TransactionEntry> get _investmentEntries =>
+      _rowsOfKind(TxnEntryKind.investment);
+
+  /// Every investment on show, newest first, for the Invested line to preview.
+  /// Only computed while that line is open, so a shut line costs nothing.
+  List<TransactionEntry> _investmentsNewestFirst() => _investmentEntries
+    ..sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+
+  EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
+    final rows = _rowsOfKind(kind);
     return EntryKindTotals(
       total: _sum(rows),
       txnCount: rows.length,
@@ -3581,7 +3676,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
               '$direction than ${_monthLabel(previous.periodStart)} '
               '(${(comparison.abs() * 100).toStringAsFixed(0)}%).';
 
-    return CardSummaryPanel(
+    final panel = CardSummaryPanel(
       padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3595,7 +3690,8 @@ class _MonthlyComparisonCard extends StatelessWidget {
                 ),
               ),
               Tooltip(
-                message: 'Tap a bar to show only that month below',
+                message:
+                    'Tap a bar to show only that month below; tap elsewhere on the card to show all',
                 child: Icon(
                   Icons.info_outline_rounded,
                   color: BambooInk.ink500,
@@ -3607,7 +3703,10 @@ class _MonthlyComparisonCard extends StatelessWidget {
           const SizedBox(height: 7),
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            // Fixed minimum height so the chart below does not jump when the
+            // larger ✕ appears.
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: BambooInk.paper,
               borderRadius: BorderRadius.circular(10),
@@ -3643,15 +3742,16 @@ class _MonthlyComparisonCard extends StatelessWidget {
                   const SizedBox(width: 6),
                   InkWell(
                     key: const ValueKey('monthly-comparison-clear'),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(18),
                     onTap: () => onMonthSelected(null),
                     child: Tooltip(
                       message: 'Show all months',
+                      // 36px target; the icon stays small.
                       child: const Padding(
-                        padding: EdgeInsets.all(4),
+                        padding: EdgeInsets.all(9),
                         child: Icon(
                           Icons.close_rounded,
-                          size: 16,
+                          size: 18,
                           color: BambooInk.ink700,
                         ),
                       ),
@@ -3702,7 +3802,7 @@ class _MonthlyComparisonCard extends StatelessWidget {
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    '$comparisonText\nTap a bar to show only that month below; tap it again to clear. Swipe sideways when months overflow.',
+                    '$comparisonText\nTap a bar to show only that month below. Tap anywhere else on this card to show all months. Swipe sideways when months overflow.',
                     style: BambooFonts.ui(10.5, color: BambooInk.ink900),
                   ),
                 ),
@@ -3711,6 +3811,18 @@ class _MonthlyComparisonCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    // A tap anywhere on the card that is not a month column clears the month.
+    // The chart's own tap and the ✕ sit deeper, so they win on their own area.
+    // Hidden from screen readers: the ✕ is their button, a whole-card tap
+    // action would only add noise.
+    return GestureDetector(
+      key: const ValueKey('monthly-comparison-card'),
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTap: selected == null ? null : () => onMonthSelected(null),
+      child: panel,
     );
   }
 }
@@ -4217,6 +4329,11 @@ class SpendingMixCard extends StatefulWidget {
   /// Opens the investments behind the figure. No tap target when null.
   final VoidCallback? onInvestedTap;
 
+  /// The latest investments, for the line to open onto in place. Asked for
+  /// only while the line is open. When given (with [onInvestedTap]) the line
+  /// opens and shuts; otherwise a tap goes straight to [onInvestedTap].
+  final List<TransactionEntry> Function()? investedPreview;
+
   const SpendingMixCard({
     required this.rows,
     required this.total,
@@ -4230,6 +4347,7 @@ class SpendingMixCard extends StatefulWidget {
     this.invested,
     this.investedPeriodLabel = 'this month',
     this.onInvestedTap,
+    this.investedPreview,
   });
 
   @override
@@ -4459,12 +4577,22 @@ class _SpendingMixCardState extends State<SpendingMixCard> {
             SizedBox(height: compact ? 6 : AppSpace.md),
             Container(height: 1, color: BambooInk.hairlineOnPaper),
             SizedBox(height: compact ? 6 : AppSpace.sm),
-            _InvestedLine(
-              amount: invested,
-              periodLabel: widget.investedPeriodLabel,
-              compact: compact,
-              onTap: widget.onInvestedTap,
-            ),
+            if (widget.investedPreview case final investments?
+                when widget.onInvestedTap != null)
+              _CollapsibleInvestedLine(
+                amount: invested,
+                periodLabel: widget.investedPeriodLabel,
+                compact: compact,
+                investments: investments,
+                onViewAll: widget.onInvestedTap!,
+              )
+            else
+              _InvestedLine(
+                amount: invested,
+                periodLabel: widget.investedPeriodLabel,
+                compact: compact,
+                onTap: widget.onInvestedTap,
+              ),
           ],
         ],
       ),
@@ -4850,11 +4978,18 @@ class _InvestedLine extends StatelessWidget {
   final bool compact;
   final VoidCallback? onTap;
 
+  /// The tap opens or shuts a preview below the line (see
+  /// [_CollapsibleInvestedLine]) instead of leaving the screen.
+  final bool expandable;
+  final bool expanded;
+
   const _InvestedLine({
     required this.amount,
     required this.periodLabel,
     this.compact = false,
     this.onTap,
+    this.expandable = false,
+    this.expanded = false,
   });
 
   @override
@@ -4894,7 +5029,11 @@ class _InvestedLine extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpace.xs),
-        Flexible(
+        // Not a Flexible: that splits the spare width with the title, which
+        // left the amount floating mid-row. A capped width lets the title take
+        // the rest, so the amount sits at the right edge (before the chevron).
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: compact ? 100 : 130),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
@@ -4911,14 +5050,21 @@ class _InvestedLine extends StatelessWidget {
           ),
         ),
         if (onTap != null)
-          const Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: BambooInk.ink500,
-          ),
+          expandable
+              ? _SpendingChevron(expanded: expanded)
+              : const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: BambooInk.ink500,
+                ),
       ],
     );
     final tap = onTap;
+    final hint = !expandable
+        ? 'Opens your investments'
+        : expanded
+        ? 'Hides your latest investments'
+        : 'Shows your latest investments';
     return KeyedSubtree(
       key: const ValueKey('spending_invested_line'),
       child: tap == null
@@ -4927,7 +5073,7 @@ class _InvestedLine extends StatelessWidget {
               button: true,
               label:
                   '$title ${amount.format(hidePaise: false)}, not counted in '
-                  'your spending. Opens your investments',
+                  'your spending. $hint',
               child: ExcludeSemantics(
                 child: InkWell(
                   onTap: tap,
@@ -4943,87 +5089,295 @@ class _InvestedLine extends StatelessWidget {
   }
 }
 
-/// Investments as a row of the Categories list, for showing only: the row has
-/// no share of spending and no bar, is not in the total or the mix, and opens
-/// the investments in Activity (the one investments flow) instead of
-/// expanding. It is not a category, so nothing else treats it as one.
-class _InvestmentsRow extends StatelessWidget {
+/// The Invested line that opens in place. Shut, it is the one line it always
+/// was. Open, it adds a caption ("Latest 2 of 4 · newest first" with a small
+/// "View all ›") and the two newest investments, each opening its own detail.
+/// Only "View all" leaves for Activity.
+class _CollapsibleInvestedLine extends StatefulWidget {
   final Money amount;
-  final VoidCallback onTap;
+  final String periodLabel;
+  final bool compact;
 
-  const _InvestmentsRow({required this.amount, required this.onTap});
+  /// Every investment on show, newest first. Asked for only while the line is
+  /// open, so a shut line costs nothing.
+  final List<TransactionEntry> Function() investments;
+
+  /// Opens the investments in Activity.
+  final VoidCallback onViewAll;
+
+  const _CollapsibleInvestedLine({
+    required this.amount,
+    required this.periodLabel,
+    required this.investments,
+    required this.onViewAll,
+    this.compact = false,
+  });
+
+  @override
+  State<_CollapsibleInvestedLine> createState() =>
+      _CollapsibleInvestedLineState();
+}
+
+class _CollapsibleInvestedLineState extends State<_CollapsibleInvestedLine> {
+  static const _previewCount = 2;
+  bool _expanded = false;
+
+  static String _day(DateTime date) {
+    const months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final local = date.toLocal();
+    return '${local.day} ${months[local.month - 1]}';
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CardSummaryPanel(
-      key: const ValueKey('spending_investments_row'),
-      padding: EdgeInsets.zero,
-      margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: Semantics(
-        button: true,
-        label:
-            'Investments ${amount.format(hidePaise: false)}, not counted in '
-            'your spending. Opens your investments',
-        child: ExcludeSemantics(
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.md,
-                AppSpace.sm,
-                AppSpace.sm,
-                AppSpace.sm,
-              ),
-              child: Row(
-                children: [
-                  _SpendingVisualBadge(visual: _investmentVisual, size: 38),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SpendingBreakdownHeader(
-                          label: Text(
-                            'Investments',
-                            style: BambooFonts.ui(
-                              13.5,
-                              color: BambooInk.ink900,
+    final compact = widget.compact;
+    final size = compact ? 10.5 : 11.5;
+    final captionSize = compact ? 9.5 : 10.5;
+    final all = _expanded ? widget.investments() : const <TransactionEntry>[];
+    final shown = all.take(_previewCount).toList();
+    // Say which rows these are: the newest ones, and how many there are.
+    final caption = all.isEmpty
+        ? 'Details are not available for this period yet.'
+        : all.length > shown.length
+        ? 'Latest ${shown.length} of ${all.length} · newest first'
+        : '${all.length} ${all.length == 1 ? 'investment' : 'investments'}'
+              ' · newest first';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _InvestedLine(
+          amount: widget.amount,
+          periodLabel: widget.periodLabel,
+          compact: compact,
+          expandable: true,
+          expanded: _expanded,
+          onTap: () => setState(() => _expanded = !_expanded),
+        ),
+        if (_expanded)
+          Padding(
+            key: const ValueKey('spending_invested_preview'),
+            padding: const EdgeInsets.only(top: 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        caption,
+                        style: BambooFonts.ui(
+                          captionSize,
+                          color: BambooInk.ink500,
+                        ),
+                      ),
+                    ),
+                    // The same small accent link the mix card uses; the only
+                    // thing here that leaves the page.
+                    Semantics(
+                      button: true,
+                      label: 'View all investments',
+                      child: ExcludeSemantics(
+                        child: InkWell(
+                          key: const ValueKey('spending_invested_view_all'),
+                          onTap: widget.onViewAll,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 2,
+                              horizontal: 2,
                             ),
-                            overflow: TextOverflow.ellipsis,
+                            child: Text(
+                              'View all  ›',
+                              style: BambooFonts.ui(
+                                captionSize,
+                                color: BambooChartColors.violet,
+                              ),
+                            ),
                           ),
-                          amount: MoneyText(
-                            amount,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                for (final entry in shown)
+                  InkWell(
+                    key: ValueKey('spending_invested_row_${entry.id}'),
+                    onTap: () =>
+                        context.push('/activity/${entry.id}', extra: entry),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: compact ? 38 : 44,
+                            child: Text(
+                              _day(entry.occurredAt),
+                              maxLines: 1,
+                              style: BambooFonts.ui(
+                                size,
+                                color: BambooInk.ink500,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              _merchantDisplayFor([
+                                entry,
+                              ], unknownLabel: 'Unknown').label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: BambooFonts.ui(
+                                size,
+                                color: BambooInk.ink900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpace.xs),
+                          MoneyText(
+                            entry.amount,
                             confidence: Confidence.confirmed,
                             showConfidenceIcon: false,
                             style: BambooFonts.ui(
-                              13.5,
+                              size,
                               weight: FontWeight.w600,
                               color: BambooInk.ink900,
                             ),
                           ),
-                          trailing: const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 20,
-                            color: BambooInk.ink500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Not counted in your spending · Tap to see them',
-                          style: BambooFonts.ui(
-                            11.5,
-                            color: BambooInk.ink500,
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ],
-              ),
+              ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// Investments as a row of the Categories list. It opens like any category,
+/// into its payees and then the payments, so it behaves the same as Education
+/// or Groceries. It is still not a category: no share of spending and no bar,
+/// not in the total or the mix, and "See all in Activity" opens the one
+/// investments flow.
+class _ExpandableInvestmentsRow extends StatelessWidget {
+  final Money amount;
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+  final VoidCallback onOpenActivity;
+
+  const _ExpandableInvestmentsRow({
+    required this.amount,
+    required this.entries,
+    required this.detailsLoading,
+    required this.onOpenActivity,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = _groupByPayee(entries, unknownLabel: 'Unknown');
+    final count = entries.length;
+    return CardSummaryPanel(
+      key: const ValueKey('spending_investments_row'),
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: AppSpace.sm),
+      child: _SpendingExpandableRow(
+        initiallyExpanded: false,
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
         ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        leading: _SpendingVisualBadge(visual: _investmentVisual, size: 38),
+        titleBuilder: (expanded) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SpendingBreakdownHeader(
+              label: Text(
+                'Investments',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                overflow: TextOverflow.ellipsis,
+              ),
+              amount: MoneyText(
+                amount,
+                confidence: Confidence.confirmed,
+                showConfidenceIcon: false,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
+              ),
+              trailing: _SpendingChevron(expanded: expanded),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              count == 0
+                  ? 'Not counted in your spending · Tap to see them'
+                  : '$count ${count == 1 ? 'transaction' : 'transactions'} · '
+                        'Not counted in your spending',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            for (final group in groups)
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+                isInvestment: true,
+              ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey('spending_investments_see_all'),
+              onPressed: onOpenActivity,
+              child: const Text('See all in Activity'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5487,16 +5841,21 @@ class _MerchantGroup extends ConsumerWidget {
   final List<TransactionEntry> entries;
   final bool isCollapsible;
 
+  /// Money put into investments: not spending, so the ledger's spend figure
+  /// would read ₹0 for it. Its amount is what the payments add up to.
+  final bool isInvestment;
+
   const _MerchantGroup({
     required this.merchant,
     required this.entries,
     this.vpa,
     this.isCollapsible = true,
+    this.isInvestment = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final model = ref.watch(smsV2ReportingEnabledProvider)
+    final model = ref.watch(smsV2ReportingEnabledProvider) && !isInvestment
         ? ref.watch(smsV2LedgerReadModelProvider).valueOrNull
         : null;
     final amount = model != null

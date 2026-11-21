@@ -86,6 +86,9 @@ class _EmiAdvisorScreenState extends ConsumerState<EmiAdvisorScreen> {
                 ),
                 const SizedBox(height: AppSpace.sm),
                 DropdownButtonFormField<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   initialValue: _selectedCardProductId,
                   style: BambooFonts.ui(14.5, color: BambooInk.ink900),
                   decoration: InputDecoration(

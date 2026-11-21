@@ -8,6 +8,7 @@ import 'package:pandapay_domain/sms_v2_template.dart';
 
 import '../../../data/local/financial_store.dart';
 import '../../../data/local/sms_learning_feedback.dart';
+import '../../../data/server_clock.dart';
 import '../category/category_snapshot.dart';
 import '../category/user_category_rules.dart';
 import '../ledger/projection_writer.dart';
@@ -79,12 +80,18 @@ class CorrectionsService {
     required this.namespace,
     required this.bundle,
     this.categoryIdBySlug = const {},
+    this.clock,
   });
 
   final FinancialStore financial;
   final String namespace;
   final RuleBundle bundle;
   final Map<String, String> categoryIdBySlug;
+
+  /// The time stamped on a decision (`Event.decidedAt`). Defaults to the
+  /// server-adjusted phone clock; tests pass their own.
+  final DateTime Function()? clock;
+  DateTime _decidedNow() => (clock ?? ServerClock.instance.now)().toUtc();
   late final _db = financial.database.db;
   late final _facts = FactStore(_db, namespace: namespace);
   late final _events = EventStore(_db, namespace: namespace);
@@ -459,7 +466,11 @@ class CorrectionsService {
           );
         }
         if (event != null) {
-          event = event!.copyWith(status: EventStatus.userConfirmed);
+          final decidedAt = _decidedNow();
+          event = event!.copyWith(
+            status: EventStatus.userConfirmed,
+            decidedAt: decidedAt,
+          );
           final check = event!.validate();
           if (!check.ok) throw ContractException(check.errors);
           event = _events.upsert(event!, fromUser: true);
@@ -485,6 +496,7 @@ class CorrectionsService {
               other.copyWith(
                 type: EventType.unknown,
                 status: EventStatus.userConfirmed,
+                decidedAt: decidedAt,
               ),
               fromUser: true,
             );

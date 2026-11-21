@@ -208,6 +208,9 @@ class _SmsImportScreenState extends ConsumerState<SmsImportScreen> {
                   style: BambooFonts.ui(13.5, color: BambooInk.clay),
                 ),
                 data: (cards) => DropdownButton<String>(
+                  borderRadius: BorderRadius.circular(16),
+                  dropdownColor: BambooInk.paper,
+                  focusColor: Colors.transparent,
                   hint: Text(
                     'Always use one card? (optional)',
                     style: BambooFonts.ui(13.5, color: BambooInk.ink500),

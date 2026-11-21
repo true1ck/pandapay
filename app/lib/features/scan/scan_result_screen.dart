@@ -871,6 +871,9 @@ class _CategoryPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
+      borderRadius: BorderRadius.circular(16),
+      dropdownColor: BambooInk.paper,
+      focusColor: Colors.transparent,
       key: ValueKey(selectedId),
       initialValue: categories.any((c) => c.id == selectedId) ? selectedId : null,
       isExpanded: true,

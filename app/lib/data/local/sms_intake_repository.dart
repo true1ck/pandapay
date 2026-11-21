@@ -213,6 +213,38 @@ class SmsIntakeRepository {
     );
   }
 
+  /// True when the same text was already captured under the same sender with or
+  /// without a carrier prefix (`VM-SBICRD-S` vs `SBICRD-S`). The live broadcast
+  /// and the inbox scan, or two carriers, can report the one SMS under both
+  /// addresses; the source key hashes the sender, so each would become its own
+  /// transaction. Also requires the same arrival time (within 10 s), which
+  /// uses the time index and never scans history.
+  bool hasSenderTwin(String namespace, QueuedSms sms) {
+    String bare(String s) => s
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .toUpperCase()
+        .replaceFirst(RegExp(r'^[A-Z]{2}-(?=.)'), '');
+    final own = sms.sender.replaceAll(RegExp(r'\s+'), ' ').trim().toUpperCase();
+    final at = sms.receivedAt.millisecondsSinceEpoch;
+    // Same arrival time too: broadcast and inbox stamps of one delivery differ
+    // by a few seconds (see remember()), so allow the same 10 s as there.
+    // A genuine repeat purchase arrives later and stays its own row.
+    const tolerance = 10000;
+    final rows = database.db.select(
+      'SELECT sender FROM sms_captured_messages WHERE namespace=? '
+      'AND received_at BETWEEN ? AND ? AND body=?',
+      [namespace, at - tolerance, at + tolerance, sms.body],
+    );
+    return rows.any((r) {
+      final other = (r['sender'] as String)
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim()
+          .toUpperCase();
+      return other != own && bare(other) == bare(own);
+    });
+  }
+
   /// True when this deduplicated source key was observed more than ten seconds
   /// apart. Its local record remains deduplicated, but it is unsafe to
   /// attribute a later correction to one particular SMS occurrence.

@@ -104,6 +104,11 @@ class SmsImportStore {
             intake.forgetRaw(namespace, sourceKey);
             continue;
           }
+          // Same SMS already captured under a carrier-prefixed twin address.
+          if (intake.decision(namespace, sourceKey) == null &&
+              intake.hasSenderTwin(namespace, message)) {
+            continue;
+          }
           intake.remember(namespace, message);
           if (pipeline == null) {
             db.execute(

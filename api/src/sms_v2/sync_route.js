@@ -48,6 +48,20 @@ function ledgerForClient(ledger, req) {
     ? { ...l, category: null, categorySource: null } : l));
 }
 
+// A client built before `decidedAt` rejects an instrument or event with a key it does not know, which would
+// stall its whole sync, so only a client that sends `X-Sms-Contract-Features: decided-at`
+// receives it.
+const supportsDecidedAt = (req) => String(req.get ? req.get('x-sms-contract-features') || '' : '')
+  .split(',').map((x) => x.trim().toLowerCase()).includes('decided-at');
+function instrumentsForClient(instruments, req) {
+  if (supportsDecidedAt(req)) return instruments;
+  return instruments.map(({ decidedAt, ...rest }) => rest);
+}
+function eventsForClient(events, req) {
+  if (supportsDecidedAt(req)) return events;
+  return events.map(({ decidedAt, ...rest }) => rest);
+}
+
 function createSyncHandler({ withUserClient, hooks }) {
   return async function syncHandler(req, res) {
     try {
@@ -71,8 +85,8 @@ function createSyncHandler({ withUserClient, hooks }) {
       res.set('X-Sms-Sync-Has-More', changes.hasMore ? '1' : '0');
       return res.status(200).json({
         cursor: changes.cursor,
-        instruments: changes.instruments,
-        events: changes.events,
+        instruments: instrumentsForClient(changes.instruments, req),
+        events: eventsForClient(changes.events, req),
         ledger: ledgerForClient(changes.ledger, req),
         facts: changes.facts,
         updatedAt: changes.updatedAt,
@@ -91,4 +105,4 @@ function registerSyncRoute(app, { requireSmsV2, requireMember, withUserClient, h
   app.get('/sms/v2/sync', requireSmsV2, requireMember, createSyncHandler({ withUserClient, hooks }));
 }
 
-module.exports = { registerSyncRoute, createSyncHandler, ledgerForClient, aiResultsForClient };
+module.exports = { registerSyncRoute, createSyncHandler, ledgerForClient, aiResultsForClient, instrumentsForClient, eventsForClient };
