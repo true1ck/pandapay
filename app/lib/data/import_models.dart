@@ -136,6 +136,35 @@ class ParsedStatementLine {
     this.reviewReasons = const [],
   });
 
+  /// The same row with [reasons] added for the person to look at, and the
+  /// direction changed when the statement's own balance proves it.
+  ParsedStatementLine withReview(List<String> reasons, {bool? isCredit}) =>
+      ParsedStatementLine(
+        date: date,
+        description: description,
+        amount: amount,
+        isCredit: isCredit ?? this.isCredit,
+        sourceAccount: sourceAccount,
+        bankReference: bankReference,
+        originalCurrency: originalCurrency,
+        originalAmount: originalAmount,
+        foreignSourceKey: foreignSourceKey,
+        categoryHint: categoryHint,
+        subcategoryHint: subcategoryHint,
+        tagNames: tagNames,
+        categoryId: categoryId,
+        userCategoryId: userCategoryId,
+        instrument: instrument,
+        rail: rail,
+        note: note,
+        status: status,
+        merchantNameMissing: merchantNameMissing,
+        isTransfer: isTransfer,
+        isInvestment: isInvestment,
+        sourceRowId: sourceRowId,
+        reviewReasons: [...reviewReasons, ...reasons],
+      );
+
   ParsedStatementLine reviewed({
     DateTime? date,
     String? description,

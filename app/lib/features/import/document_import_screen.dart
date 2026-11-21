@@ -7,7 +7,7 @@ import '../../app/design/widgets.dart';
 import '../../data/api_exception.dart';
 import '../../data/import_models.dart';
 import '../../data/pdf_statement_parser.dart'
-    show PdfStatementReader, StatementParseException;
+    show PdfExtraction, PdfStatementReader, StatementParseException;
 import '../../data/pdf_statement_ocr.dart';
 import '../../data/transaction_import_pipeline.dart';
 import 'import_mapping_dialog.dart';
@@ -85,8 +85,10 @@ class _DocumentImportScreenState extends State<DocumentImportScreen> {
     try {
       if (document.kind == ImportDocumentKind.pdf && document.pdfText == null) {
         final password = _password.text.isEmpty ? null : _password.text;
-        final pages = await compute(_readPdfPages, (document.bytes, password));
+        final extraction = await compute(_readPdf, (document.bytes, password));
+        final pages = extraction.pages;
         document.pdfText = pages.join('\n');
+        document.pdfWords = extraction.words;
         final scanned = [
           for (var i = 0; i < pages.length; i++)
             if (pages[i].replaceAll(RegExp(r'\s'), '').length < 32) i + 1,
@@ -100,6 +102,9 @@ class _DocumentImportScreenState extends State<DocumentImportScreen> {
               pageNumbers: scanned,
             );
             document.pdfText = '${document.pdfText}\n$text';
+            // OCR gives text without positions. Reading only the text pages as
+            // a table would silently leave the scanned pages out.
+            document.pdfWords = null;
             document.extractionWarnings.add(
               'Scanned pages were read with OCR. Check digits, dates, and the source totals.',
             );
@@ -320,5 +325,5 @@ ParsedStatement _parseDocument(
   tableOptions: data.$2,
 );
 
-List<String> _readPdfPages((Uint8List, String?) data) =>
-    PdfStatementReader().extractPages(data.$1, password: data.$2);
+PdfExtraction _readPdf((Uint8List, String?) data) =>
+    PdfStatementReader().extract(data.$1, password: data.$2);

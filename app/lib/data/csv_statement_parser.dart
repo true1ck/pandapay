@@ -69,20 +69,27 @@ ParsedStatement parseStatementRows(
   final firstDataRow = headerIndex == null ? 0 : headerIndex + 1;
   final rejected = <ImportRejectedRow>[];
   final transactions = <ParsedStatementLine>[];
+  final acceptedCells = <List<String>>[];
+  final signDerived = <bool>[];
   var inferredYear = const SystemClock().now().year;
   var skippedRows = 0;
 
   for (var rowIndex = firstDataRow; rowIndex < rows.length; rowIndex++) {
     final row = rows[rowIndex];
     if (row.every((cell) => cell.trim().isEmpty)) continue;
+    final meta = _RowMeta();
     final parsed = _parseRow(
       row,
       headers,
       inferredYear,
       options,
       '$sourceId:row:${rowIndex + 1}',
+      meta,
     );
     if (parsed == null) {
+      // A title, a disclaimer or a totals line is not a transaction and not a
+      // lost one: it is not reported as an unrecognised row.
+      if (_isMetadataRow(row)) continue;
       skippedRows++;
       rejected.add(
         ImportRejectedRow(
@@ -95,16 +102,173 @@ ParsedStatement parseStatementRows(
     }
     inferredYear = parsed.date.year;
     transactions.add(parsed);
+    acceptedCells.add(row);
+    signDerived.add(meta.signDerived);
   }
 
+  // A statement that prints a running balance proves its own rows: every row
+  // must move the balance by exactly its amount, in the direction it says.
+  final proof = _proveAgainstBalance(
+    lines: transactions,
+    cells: acceptedCells,
+    signDerived: signDerived,
+    headers: headers,
+    options: options,
+  );
+
   return ParsedStatement(
-    transactions: transactions,
+    transactions: proof.lines,
     rejectedRows: rejected,
     warnings: [
       if (skippedRows > 0)
         '$skippedRows nonempty rows were not recognized. Check the original export before importing. Only INR amounts are supported.',
+      ...proof.warnings,
     ],
   );
+}
+
+final RegExp _summaryLabel = RegExp(
+  r'^(?:total|grand total|closing balance|opening balance|balance (?:b/f|c/f|brought forward|carried forward)|statement\b|generated on|account (?:no|number|name|type|statement)|period|page\b|\*+|end of statement|this is a computer|computer generated|please do not share|disclaimer|note\b)',
+  caseSensitive: false,
+);
+final RegExp _datelike = RegExp(
+  r'\d{1,4}[./-]\d{1,2}[./-]\d{1,4}|\d{1,2}[\s./-]+[A-Za-z]{3,9}[\s,./-]+\d{2,4}',
+);
+
+/// Lines around a table that are not transactions: a title, a note, a footer, a
+/// totals or balance line. A line with a date or an amount that still could not
+/// be read is not one of these: it may be a transaction, and is reported.
+bool _isMetadataRow(List<String> row) {
+  final cells = [
+    for (final c in row)
+      if (c.trim().isNotEmpty) c.trim(),
+  ];
+  if (cells.isEmpty) return true;
+  if (_summaryLabel.hasMatch(cells.first)) return true;
+  final hasDate = cells.any(_datelike.hasMatch);
+  final hasNumber = cells.any((c) => _number(c) != null);
+  return !hasDate && !hasNumber;
+}
+
+const _chainBreak =
+    "This row does not follow the statement's running balance, so its date, amount or direction may be misread. Check it before importing.";
+
+/// Proves rows against the running balance column, when there is one.
+///
+/// Each row's balance must equal the row before it plus or minus its amount. A
+/// row that does not is flagged. Where a row's direction was only the sign of one
+/// amount column (a convention that differs between card and bank exports), the
+/// balance decides it. A table with no usable balance column is left as it was,
+/// with a note when its directions rest on a sign alone.
+({List<ParsedStatementLine> lines, List<String> warnings})
+_proveAgainstBalance({
+  required List<ParsedStatementLine> lines,
+  required List<List<String>> cells,
+  required List<bool> signDerived,
+  required List<String> headers,
+  required StatementTableOptions options,
+}) {
+  const signNote =
+      'Money in and out was read from the sign of the Amount column, with no balance to check it against. If incoming and outgoing look swapped, change the sign setting in Formats.';
+  final anySign = signDerived.any((s) => s);
+  var balanceIndex = -1;
+  for (var i = 0; i < headers.length; i++) {
+    final h = headers[i];
+    if (RegExp(r'\b(?:balance|bal)\b').hasMatch(h) &&
+        !RegExp(r'\b(?:opening|limit|available)\b').hasMatch(h)) {
+      balanceIndex = i;
+      if (RegExp(r'closing|running').hasMatch(h)) break;
+    }
+  }
+  if (balanceIndex < 0 || lines.length < 3) {
+    return (lines: lines, warnings: [if (anySign) signNote]);
+  }
+  final balances = <int?>[
+    for (final row in cells)
+      balanceIndex < row.length
+          ? _balancePaise(row[balanceIndex], options)
+          : null,
+  ];
+  // A balance that is printed but cannot be read is not a missing balance: the
+  // row cannot be checked, and the person is told so.
+  final unreadable = [
+    for (var j = 0; j < cells.length; j++)
+      balanceIndex < cells[j].length &&
+          cells[j][balanceIndex].trim().isNotEmpty &&
+          balances[j] == null,
+  ];
+  if (balances.where((b) => b != null).length < lines.length * 0.6) {
+    return (lines: lines, warnings: [if (anySign) signNote]);
+  }
+
+  final n = lines.length;
+  final reversed = lines.first.date.isAfter(lines.last.date);
+  final order = [for (var i = 0; i < n; i++) reversed ? n - 1 - i : i];
+
+  // What the balance says each row did: credit, debit, or neither (a break).
+  final said = List<bool?>.filled(n, null);
+  final compared = List<bool>.filled(n, false);
+  for (var k = 1; k < n; k++) {
+    final j = order[k], before = order[k - 1];
+    final b = balances[j], a = balances[before];
+    if (b == null || a == null) continue;
+    compared[j] = true;
+    final amount = lines[j].amount.paise;
+    if (b - a == amount) {
+      said[j] = true;
+    } else if (b - a == -amount) {
+      said[j] = false;
+    }
+  }
+
+  // A sign convention the balance contradicts is the convention to flip.
+  var agree = 0, disagree = 0;
+  for (var j = 0; j < n; j++) {
+    if (signDerived[j] && said[j] != null) {
+      said[j] == lines[j].isCredit ? agree++ : disagree++;
+    }
+  }
+  final flip = disagree > agree;
+
+  final out = <ParsedStatementLine>[];
+  var broken = 0;
+  for (var j = 0; j < n; j++) {
+    var credit = lines[j].isCredit;
+    if (signDerived[j]) credit = said[j] ?? (flip ? !credit : credit);
+    final reasons = <String>[];
+    if (compared[j] && (said[j] == null || said[j] != credit)) {
+      reasons.add(_chainBreak);
+      broken++;
+    } else if (unreadable[j]) {
+      reasons.add(
+        'The balance printed on this row could not be read, so the row could not be checked against the running balance.',
+      );
+      broken++;
+    }
+    out.add(
+      reasons.isEmpty && credit == lines[j].isCredit
+          ? lines[j]
+          : lines[j].withReview(reasons, isCredit: credit),
+    );
+  }
+  return (
+    lines: out,
+    warnings: [
+      if (flip)
+        'The balance column shows money out as the positive amounts in this file, so the Amount sign was read the other way round.',
+      if (broken > 0)
+        '$broken row(s) do not follow the running balance. Check them before importing.',
+    ],
+  );
+}
+
+final RegExp _debitWord = RegExp(r'\bdr\b', caseSensitive: false);
+
+int? _balancePaise(String raw, StatementTableOptions options) {
+  final value = _number(raw, options.numberFormat);
+  if (value == null) return null;
+  final paise = (value * 100).round();
+  return _debitWord.hasMatch(raw) ? -paise.abs() : paise;
 }
 
 List<List<String>> readDelimitedRows(String input) {
@@ -201,14 +365,16 @@ int _headerScore(String value) {
   var score = 0;
   if (_hasAny(value, ['date', 'time', 'posted', 'value'])) score += 2;
   if (_hasAny(value, [
-    'amount',
-    'debit',
-    'credit',
-    'withdraw',
-    'paid',
-    'spent',
-    'value',
-  ])) {
+        'amount',
+        'debit',
+        'credit',
+        'withdraw',
+        'paid',
+        'spent',
+        'value',
+      ]) ||
+      value == 'dr' ||
+      value == 'cr') {
     score += 2;
   }
   if (_hasAny(value, [
@@ -239,26 +405,47 @@ int _headerScore(String value) {
   return score;
 }
 
+/// What the row parser learned about a row beyond the row itself.
+class _RowMeta {
+  /// Money in/out was taken from the sign of a single amount column, which is a
+  /// convention (card exports print spending as positive, bank exports print it
+  /// as negative), not something the file says.
+  bool signDerived = false;
+}
+
 ParsedStatementLine? _parseRow(
   List<String> row,
   List<String> headers,
   int inferredYear,
   StatementTableOptions options,
-  String sourceRowId,
-) {
+  String sourceRowId, [
+  _RowMeta? meta,
+]) {
   double? number(String value) => _number(value, options.numberFormat);
   DateTime? dateValue(String value, int year) =>
       _parseDate(value, year, options);
   final currencyIndex =
       options.columns[ImportColumn.currency] ??
       _headerIndex(headers, ['currency']);
-  final billedInrIndex = _headerIndex(headers, [
-    'billed inr',
-    'amount inr',
-    'inr amount',
-    'settled inr',
-    'billed amount inr',
-  ]);
+  // "Withdrawal Amount (INR)" contains "amount inr" but is a bank statement's
+  // debit column, not the billed-INR column of a foreign-currency card export.
+  final billedInrIndex = _headerIndex(
+    [
+      for (final h in headers)
+        RegExp(
+              r'\b(?:withdraw\w*|deposit\w*|debit|credit|balance|dr|cr)\b',
+            ).hasMatch(h)
+            ? ''
+            : h,
+    ],
+    [
+      'billed inr',
+      'amount inr',
+      'inr amount',
+      'settled inr',
+      'billed amount inr',
+    ],
+  );
   final printedCurrency =
       currencyIndex == null || currencyIndex < 0 || currencyIndex >= row.length
       ? null
@@ -305,6 +492,7 @@ ParsedStatementLine? _parseRow(
         'expense',
         'spent',
         'paid',
+        'dr',
       ]);
   final creditIndex =
       options.columns[ImportColumn.credit] ??
@@ -314,6 +502,7 @@ ParsedStatementLine? _parseRow(
         'refund',
         'income',
         'received',
+        'cr',
       ]);
   // Do not treat a "Value Date" column as the amount merely because it
   // contains the word value. A plain "Value" column is still handled by the
@@ -391,6 +580,7 @@ ParsedStatementLine? _parseRow(
     isCredit = options.negativeIsExpense
         ? candidates.first.value > 0
         : candidates.first.value < 0;
+    meta?.signDerived = true;
   }
   if (!dedicatedDirection &&
       amountIndex != null &&
@@ -402,6 +592,7 @@ ParsedStatementLine? _parseRow(
     final numeric = number(amountRaw);
     if (numeric != null) {
       isCredit = options.negativeIsExpense ? numeric > 0 : numeric < 0;
+      meta?.signDerived = true;
     }
   }
   final directionIndex =
@@ -421,9 +612,11 @@ ParsedStatementLine? _parseRow(
     final direction = _normalise(row[directionIndex]);
     if (['cr', 'credit', 'income', 'refund'].contains(direction)) {
       isCredit = true;
+      meta?.signDerived = false;
     }
     if (['dr', 'debit', 'expense', 'spend'].contains(direction)) {
       isCredit = false;
+      meta?.signDerived = false;
     }
   }
   final amountValue = number(amountRaw);
@@ -521,7 +714,7 @@ ParsedStatementLine? _parseRow(
   final transfer =
       importedKind == 'transfer' ||
       RegExp(
-        r'\b(?:self\s+transfer|own\s+account|transfer|repayment|emi|loan\s+(?:payment|repayment|disbursement)|salary\s+advance|credit\s+card\s+(?:bill\s+)?(?:payment|pmt)|card\s+bill\s+pay|wallet\s+(?:load|top[ -]?up)|top[ -]?up|cash\s+(?:withdrawal|deposit)|refund(?:ed)?|chargeback|revers(?:al|ed)|cashback|reward|statement\s+credit|balance\s+adjustment|card\s+adjustment|gift|reimburse(?:ment|d)?|investment\s+proceeds|redemption|fd\s+maturity|fixed\s+deposit\s+maturity)\b',
+        r'\b(?:self\s+transfer|own\s+account|transfer|repayment|emi|loan\s+(?:payment|repayment|disbursement)|salary\s+advance|credit\s+card\s+(?:bill\s+)?(?:payment|pmt)|card\s+bill\s+pay|cc\s*bill\s*pay(?:ment)?|auto\s*debit\s*cc\w*|wallet\s+(?:load|top[ -]?up)|top[ -]?up|cash\s+(?:withdrawal|deposit)|refund(?:ed)?|chargeback|revers(?:al|ed)|cashback|reward|statement\s+credit|balance\s+adjustment|card\s+adjustment|gift|reimburse(?:ment|d)?|investment\s+proceeds|redemption|fd\s+maturity|fixed\s+deposit\s+maturity)\b',
         caseSensitive: false,
       ).hasMatch(description) ||
       (expenseIndex >= 0 && expenseIndex < row.length
@@ -720,8 +913,14 @@ int? _headerIndex(List<String> headers, List<String> keywords) {
             headers[i] == 'debit credit')) {
       continue;
     }
+    // A short keyword ("dr", "cr", "id") is a whole word: "cr" is in
+    // "description" and "id" is in "paid".
     if (keywords.any(
-      (keyword) => headers[i] == keyword || headers[i].contains(keyword),
+      (keyword) =>
+          headers[i] == keyword ||
+          (keyword.length <= 3
+              ? RegExp('\\b$keyword\\b').hasMatch(headers[i])
+              : headers[i].contains(keyword)),
     )) {
       return i;
     }

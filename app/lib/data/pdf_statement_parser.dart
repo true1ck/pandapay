@@ -18,13 +18,26 @@ class StatementParseException implements Exception {
   String toString() => message;
 }
 
+/// What a PDF's text layer holds: each page as plain text, and every word with
+/// where it sits on the page. Plain text puts a table cell on a line of its own
+/// and forgets the column, so a debit cannot be told from a credit; the words
+/// carry the positions the table reader needs.
+class PdfExtraction {
+  const PdfExtraction(this.pages, this.words);
+  final List<String> pages;
+  final List<layouts.PdfWord> words;
+}
+
 /// Extracts a PDF text layer on-device. An empty result is intentional: it
 /// lets the caller try the image/OCR path for scanned statements.
 class PdfStatementReader {
   String extractText(Uint8List bytes, {String? password}) =>
       extractPages(bytes, password: password).join('\n');
 
-  List<String> extractPages(Uint8List bytes, {String? password}) {
+  List<String> extractPages(Uint8List bytes, {String? password}) =>
+      extract(bytes, password: password).pages;
+
+  PdfExtraction extract(Uint8List bytes, {String? password}) {
     late final PdfDocument document;
     try {
       document = PdfDocument(inputBytes: bytes, password: password);
@@ -35,10 +48,30 @@ class PdfStatementReader {
     }
     try {
       final extractor = PdfTextExtractor(document);
-      return [
-        for (var i = 0; i < document.pages.count; i++)
-          extractor.extractText(startPageIndex: i, endPageIndex: i),
-      ];
+      final pages = <String>[];
+      final words = <layouts.PdfWord>[];
+      for (var i = 0; i < document.pages.count; i++) {
+        pages.add(extractor.extractText(startPageIndex: i, endPageIndex: i));
+        for (final line in extractor.extractTextLines(
+          startPageIndex: i,
+          endPageIndex: i,
+        )) {
+          for (final word in line.wordCollection) {
+            words.add(
+              layouts.PdfWord(
+                page: i,
+                left: word.bounds.left,
+                top: word.bounds.top,
+                right: word.bounds.right,
+                bottom: word.bounds.bottom,
+                text: word.text,
+                fontSize: word.fontSize,
+              ),
+            );
+          }
+        }
+      }
+      return PdfExtraction(pages, words);
     } finally {
       document.dispose();
     }
@@ -66,7 +99,7 @@ final _closingBalanceLine = RegExp(
 );
 
 bool _isRepaymentOrTransfer(String description) => RegExp(
-  r'\b(?:TRANSFER|SELF\s+TRANSFER|OWN\s+ACCOUNT|REPAYMENT|EMI|LOAN\s+(?:PAYMENT|REPAYMENT|DISBURSEMENT)|SALARY\s+ADVANCE|CREDIT\s+CARD\s+(?:BILL\s+)?(?:PAYMENT|PMT)|CARD\s+BILL\s+PAY|WALLET\s+(?:LOAD|TOP[ -]?UP)|TOP[ -]?UP|CASH\s+WITHDRAW(?:AL)?|CASH\s+DEPOSIT|REFUND(?:ED)?|CHARGEBACK|REVERS(?:AL|ED)|CASHBACK|REWARD|STATEMENT\s+CREDIT|BALANCE\s+ADJUSTMENT|CARD\s+ADJUSTMENT|GIFT|REIMBURSE(?:MENT|D)?|INVESTMENT\s+PROCEEDS|REDEMPTION|FD\s+MATURITY|FIXED\s+DEPOSIT\s+MATURITY|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
+  r'\b(?:TRANSFER|SELF\s+TRANSFER|OWN\s+ACCOUNT|REPAYMENT|EMI|LOAN\s+(?:PAYMENT|REPAYMENT|DISBURSEMENT)|SALARY\s+ADVANCE|CREDIT\s+CARD\s+(?:BILL\s+)?(?:PAYMENT|PMT)|CARD\s+BILL\s+PAY|CC\s*BILL\s*PAY(?:MENT)?|AUTO\s*DEBIT\s*CC\w*|WALLET\s+(?:LOAD|TOP[ -]?UP)|TOP[ -]?UP|CASH\s+WITHDRAW(?:AL)?|CASH\s+DEPOSIT|REFUND(?:ED)?|CHARGEBACK|REVERS(?:AL|ED)|CASHBACK|REWARD|STATEMENT\s+CREDIT|BALANCE\s+ADJUSTMENT|CARD\s+ADJUSTMENT|GIFT|REIMBURSE(?:MENT|D)?|INVESTMENT\s+PROCEEDS|REDEMPTION|FD\s+MATURITY|FIXED\s+DEPOSIT\s+MATURITY|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
   caseSensitive: false,
 ).hasMatch(description);
 
@@ -74,7 +107,7 @@ bool _isRepaymentOrTransfer(String description) => RegExp(
 // flag can conflict with a clearly labeled card bill repayment, but ordinary
 // card purchases and generic payments should continue to follow the flag.
 bool _isCardRepaymentDescription(String description) => RegExp(
-  r'\b(?:CREDIT\s+CARD\s+(?:BILL\s+)?(?:REPAY(?:MENT)?|PAYMENT|PMT)|CARD\s+BILL\s+(?:REPAY(?:MENT)?|PAY|PAYMENT|PMT)|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
+  r'\b(?:CREDIT\s+CARD\s+(?:BILL\s+)?(?:REPAY(?:MENT)?|PAYMENT|PMT)|CARD\s+BILL\s+(?:REPAY(?:MENT)?|PAY|PAYMENT|PMT)|CC\s*BILL\s*PAY(?:MENT)?|AUTO\s*DEBIT\s*CC\w*|(?:PAYMENT|PAID)\s+(?:TO|FOR)\s+(?:(?:AXIS|HDFC|ICICI|SBI|BANK|FLIPKART)\s+){0,5}CREDIT\s+CARD)\b',
   caseSensitive: false,
 ).hasMatch(description);
 final _monthNames = <String, int>{
@@ -162,6 +195,38 @@ String _cleanDescription(String value) {
       .trim();
 }
 
+/// The amounts in a row's text. A number counts only when it stands alone: a
+/// reference inside a narration ("Bank/968211034483/YBL...", "IMPS/P2A/1819...")
+/// is part of that word and is never money. When the row prints amounts with
+/// decimals, whole numbers are not considered at all, so a reference number can
+/// never be taken for the amount.
+final RegExp _spaceOrOpen = RegExp(r'[\s(]');
+final RegExp _spaceOrClose = RegExp(r'[\s)]');
+final RegExp _hasDecimals = RegExp(r'\d\.\d{2}');
+
+List<RegExpMatch> _moneyCandidates(String text) {
+  bool standalone(RegExpMatch m) {
+    // The amount pattern swallows the spaces on both sides of a number, so judge
+    // the characters just outside the number itself.
+    final raw = m.group(0)!;
+    final start = m.start + (raw.length - raw.trimLeft().length);
+    final end = m.start + raw.trimRight().length;
+    final before = start == 0 ? ' ' : text[start - 1];
+    final after = end >= text.length ? ' ' : text[end];
+    return _spaceOrOpen.hasMatch(before) && _spaceOrClose.hasMatch(after);
+  }
+
+  final alone = [
+    for (final m in _amountToken.allMatches(text))
+      if (standalone(m)) m,
+  ];
+  final withDecimals = [
+    for (final m in alone)
+      if (_hasDecimals.hasMatch(m.group(0)!)) m,
+  ];
+  return withDecimals.isNotEmpty ? withDecimals : alone;
+}
+
 ParsedStatementLine? _parseTransactionBlock(
   String block,
   StatementTableOptions options,
@@ -247,7 +312,7 @@ ParsedStatementLine? _parseTransactionBlock(
       isInvestment: isInvestmentMovementDescription(description),
     );
   }
-  final candidates = _amountToken.allMatches(afterDate).toList();
+  final candidates = _moneyCandidates(afterDate);
   if (candidates.isEmpty) return null;
 
   // In common bank table extraction, debit/credit is followed by a running
@@ -404,12 +469,29 @@ ParsedStatement parseStatementText(
 ParsedStatement? _parseKnownBankStatement(String text) {
   final read = layouts.readBankStatement(text);
   if (read == null || read.rows.isEmpty) return null;
+  return _statementFromRead(read);
+}
+
+/// Reads a PDF statement the safest way available: from the words and where
+/// they sit (columns, so debit and credit are read, not guessed), proven against
+/// the statement's own running balance. When the words are not a table that can
+/// be proven (a scan read by OCR, an unfamiliar layout) it falls back to the
+/// text reader.
+ParsedStatement parseStatementPdf(
+  String text, {
+  List<layouts.PdfWord> words = const [],
+  StatementTableOptions options = const StatementTableOptions(),
+}) {
+  if (words.isNotEmpty) {
+    final read = layouts.readStatementTable(words);
+    if (read != null) return _statementFromRead(read);
+  }
+  return parseStatementText(text, options: options);
+}
+
+ParsedStatement _statementFromRead(layouts.BankStatementRead read) {
   final check = read.check;
-  final label = switch (read.issuerSlug) {
-    'sbi' => 'SBI',
-    'icici' => 'ICICI',
-    final other => other.toUpperCase(),
-  };
+  final label = layouts.bankLabel(read.issuerSlug);
   final account = read.accountMask == null
       ? '$label statement'
       : '$label ••${read.accountMask}';
@@ -424,7 +506,8 @@ ParsedStatement? _parseKnownBankStatement(String text) {
         'The statement does not say whether this was money in or out, and the balance before it is not printed. Choose the direction before importing.',
       if (suspect.contains(row.index))
         "This row does not follow the statement's running balance, so its date, amount or direction may be misread. Check it before importing.",
-      if (description.isEmpty) 'This row has no description. Add one before importing.',
+      if (description.isEmpty)
+        'This row has no description. Add one before importing.',
     ];
     final references = stmt.extractReferences(row.narration);
     lines.add(
@@ -432,7 +515,9 @@ ParsedStatement? _parseKnownBankStatement(String text) {
         date: DateTime(row.date.year, row.date.month, row.date.day),
         description: description.isEmpty ? 'Statement row' : description,
         amount: Money.fromPaise(row.amountMinor),
-        isCredit: row.direction == null ? false : row.direction == sms.Direction.credit,
+        isCredit: row.direction == null
+            ? false
+            : row.direction == sms.Direction.credit,
         sourceAccount: account,
         bankReference: references.isEmpty ? null : references.first,
         sourceRowId: 'pdf:row:${row.index}',
@@ -455,6 +540,8 @@ ParsedStatement? _parseKnownBankStatement(String text) {
       ...check.problems,
       if (read.skipped.isNotEmpty)
         '${read.skipped.length} dated line(s) could not be read and are listed as rejected rows.',
+      for (final page in read.unreadPages)
+        'Page $page prints dated lines that could not be read, so its transactions are not in this list. Export that period again or add them by hand.',
     ],
     rejectedRows: [
       for (final line in read.skipped)

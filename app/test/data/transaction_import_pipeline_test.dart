@@ -57,6 +57,46 @@ void main() {
   });
 
   test(
+    'a PDF narration wrapped across lines still matches the same transaction saved from a CSV',
+    () {
+      // The PDF broke a long UPI reference over two lines and put a space where
+      // it broke; the CSV of the same account holds it in one piece.
+      final row = ParsedStatementLine(
+        date: DateTime(2026, 1, 13),
+        description:
+            'UPI/ASHA VERMA/asha@okhdfc/UPI/HDFC BANK/117122178920/HDFb5e5d27754ee4ba0b91f bbbd69ec3062',
+        amount: Money.fromRupees(99000),
+        isCredit: true,
+        sourceAccount: 'ICICI ••4911',
+        sourceRowId: 'pdf:row:7',
+      );
+      final saved = TransactionEntry(
+        id: 'saved-csv',
+        amount: Money.fromRupees(99000),
+        occurredAt: DateTime(2026, 1, 13),
+        merchantName:
+            'UPI/ASHA VERMA/asha@okhdfc/UPI/HDFC BANK/117122178920/HDFb5e5d27754ee4ba0b91fbbbd69ec3062',
+        entryKind: TxnEntryKind.income,
+        userCardId: 'account',
+        source: 'statement',
+        status: 'active',
+      );
+      final session = TransactionImportSession(
+        fileDigest: 'pdf',
+        importSource: 'statement',
+        statement: ParsedStatement(transactions: [row]),
+      );
+      session.destinations['ICICI ••4911'] = 'account';
+      session.checkSavedDuplicates([saved]);
+      expect(session.selected, isEmpty);
+      expect(
+        session.exclusionReason(0),
+        contains('Possible duplicate of saved'),
+      );
+    },
+  );
+
+  test(
     'same place with a different amount or time is not a saved duplicate',
     () {
       final row = ParsedStatementLine(

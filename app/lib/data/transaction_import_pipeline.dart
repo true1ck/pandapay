@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
+import 'package:pandapay_domain/statement_layouts.dart' show PdfWord;
 import 'package:uuid/uuid.dart';
 
 import 'api_exception.dart';
@@ -12,7 +13,7 @@ import 'import_repository.dart';
 import 'statement_import_continuation.dart';
 import 'user_cards_repository.dart';
 import 'pdf_statement_parser.dart'
-    show parseStatementText, StatementParseException;
+    show parseStatementPdf, StatementParseException;
 import 'spreadsheet_statement_parser.dart';
 import 'statement_sms_match.dart';
 
@@ -27,6 +28,11 @@ class ImportDocument {
   final String digest;
   Map<String, List<List<String>>>? _tables;
   String? pdfText;
+
+  /// Every word of a PDF's text layer with its position, so the table reader can
+  /// tell a debit column from a credit column. Null for a scan read by OCR, which
+  /// has text only.
+  List<PdfWord>? pdfWords;
   final List<String> extractionWarnings = [];
 
   ImportDocument._(this.bytes, this.name, this.kind)
@@ -122,7 +128,11 @@ class ImportDocument {
     Map<String, StatementTableOptions> tableOptions = const {},
   }) {
     if (kind == ImportDocumentKind.pdf) {
-      final parsed = parseStatementText(pdfText ?? '', options: options);
+      final parsed = parseStatementPdf(
+        pdfText ?? '',
+        words: pdfWords ?? const [],
+        options: options,
+      );
       return ParsedStatement(
         transactions: parsed.transactions,
         closingBalance: parsed.closingBalance,
@@ -454,8 +464,11 @@ class TransactionImportSession {
   /// Candidates are deliberately described as possible matches, never proof.
   void checkSavedDuplicates(List<TransactionEntry> existing) {
     savedDuplicates.clear();
+    // Letters and digits only. The same narration reads differently in a PDF
+    // (a long reference wrapped across lines, with a space where it broke), a CSV
+    // and a workbook, and that must not hide a transaction that is already saved.
     String merchant(String value) =>
-        value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+        value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
     const maxTransactionTimeDifference = Duration(minutes: 10);
     for (var i = 0; i < rows.length; i++) {
       final row = rows[i];

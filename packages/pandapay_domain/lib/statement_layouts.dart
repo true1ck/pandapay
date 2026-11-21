@@ -6,3 +6,4 @@
 library;
 
 export 'src/statements/bank_layouts.dart';
+export 'src/statements/table_reader.dart';

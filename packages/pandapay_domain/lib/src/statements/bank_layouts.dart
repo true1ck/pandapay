@@ -21,6 +21,7 @@ final class BankStatementRead {
     required this.issuerSlug,
     required this.rows,
     required this.skipped,
+    this.unreadPages = const [],
     this.accountMask,
     this.openingMinor,
     this.closingMinor,
@@ -30,8 +31,9 @@ final class BankStatementRead {
     this.printedCreditCount,
   });
 
-  /// `sbi` or `icici`.
-  final String issuerSlug;
+  /// The issuer the statement names (`sbi`, `icici`, `hdfc`...), or null when it
+  /// names none, or more than one, so the layout alone was read.
+  final String? issuerSlug;
 
   /// The last digits of the account number as printed, when the statement
   /// prints one.
@@ -43,6 +45,10 @@ final class BankStatementRead {
   /// Lines that began like a row but could not be read. Never silently dropped:
   /// a caller shows them.
   final List<String> skipped;
+
+  /// Pages (1-based) that print dated lines but whose table could not be read.
+  /// Their transactions are missing from [rows]; a caller says so.
+  final List<int> unreadPages;
 
   final int? openingMinor;
   final int? closingMinor;
@@ -63,10 +69,34 @@ final class BankStatementRead {
   );
 }
 
-final RegExp _sbiRowStart = RegExp(r'^\s*(\d{2})/(\d{2})/(\d{4})\s+(\d{2})/(\d{2})/(\d{4})\s+(.*)$');
-final RegExp _iciciRowStart = RegExp(r'^\s*(\d{1,6})\s+(\d{2})\.(\d{2})\.(\d{4})\s*(.*)$');
+final RegExp _sbiRowStart = RegExp(
+  r'^\s*(\d{2})/(\d{2})/(\d{4})\s+(\d{2})/(\d{2})/(\d{4})\s+(.*)$',
+);
+final RegExp _iciciRowStart = RegExp(
+  r'^\s*(\d{1,6})\s+(\d{2})\.(\d{2})\.(\d{4})\s*(.*)$',
+);
 final RegExp _amount = RegExp(r'^\d[\d,]*\.\d\d$');
 final RegExp _amountAnywhere = RegExp(r'\d[\d,]*\.\d\d');
+
+/// How a statement names its bank to the person, from the issuer slug.
+String bankLabel(String? slug) => switch (slug) {
+  'sbi' => 'SBI',
+  'icici' => 'ICICI',
+  'hdfc' => 'HDFC',
+  'axis' => 'Axis',
+  'kotak' => 'Kotak',
+  'yes' => 'Yes Bank',
+  'idfc' => 'IDFC First',
+  'federal' => 'Federal Bank',
+  'pnb' => 'PNB',
+  'bob' => 'Bank of Baroda',
+  'canara' => 'Canara',
+  'union' => 'Union Bank',
+  'indusind' => 'IndusInd',
+  'rbl' => 'RBL',
+  'bandhan' => 'Bandhan',
+  _ => 'Bank',
+};
 
 /// Which layout [text] is, or null when it is neither. Decided by how many lines
 /// look like a row of each layout, not by a bank name, so a statement whose
@@ -76,7 +106,8 @@ String? detectBankLayout(String text) {
   for (final line in text.split('\n')) {
     if (_sbiRowStart.hasMatch(line)) sbi++;
     final m = _iciciRowStart.firstMatch(line);
-    if (m != null && _amountAnywhere.allMatches(m.group(5)!).length >= 2) icici++;
+    if (m != null && _amountAnywhere.allMatches(m.group(5)!).length >= 2)
+      icici++;
   }
   if (sbi >= 2 && sbi > icici) return 'sbi';
   if (icici >= 2 && icici > sbi) return 'icici';
@@ -84,11 +115,12 @@ String? detectBankLayout(String text) {
 }
 
 /// Reads [text] as an SBI or ICICI statement, or returns null when it is neither.
-BankStatementRead? readBankStatement(String text) => switch (detectBankLayout(text)) {
-  'sbi' => readSbiStatement(text),
-  'icici' => readIciciStatement(text),
-  _ => null,
-};
+BankStatementRead? readBankStatement(String text) =>
+    switch (detectBankLayout(text)) {
+      'sbi' => readSbiStatement(text),
+      'icici' => readIciciStatement(text),
+      _ => null,
+    };
 
 int? _paise(String printed) {
   final clean = printed.replaceAll(',', '');
@@ -100,14 +132,18 @@ int? _paise(String printed) {
 DateTime? _date(String d, String m, String y) {
   final day = int.parse(d), month = int.parse(m), year = int.parse(y);
   final date = DateTime.utc(year, month, day);
-  return date.year == year && date.month == month && date.day == day ? date : null;
+  return date.year == year && date.month == month && date.day == day
+      ? date
+      : null;
 }
 
 String _tidy(String s) {
   var out = s.replaceAll(RegExp(r'\s+'), ' ').trim();
   // A page footer can run into the last row: "... 50,021.34CR" is a balance
   // printed with its sign, never part of a narration.
-  final footer = RegExp(r'\s[\d,]+\.\d\dCR\b|\s[\d,]+\.\d\dDR\b').firstMatch(out);
+  final footer = RegExp(
+    r'\s[\d,]+\.\d\dCR\b|\s[\d,]+\.\d\dDR\b',
+  ).firstMatch(out);
   if (footer != null) out = out.substring(0, footer.start).trim();
   return out;
 }
@@ -126,18 +162,37 @@ String? _accountMask(String text) {
 int? _labelled(String text, RegExp label) {
   final m = label.firstMatch(text);
   if (m == null) return null;
-  final amount = RegExp(r'\d[\d,]*\.\d\d').firstMatch(text.substring(m.end, m.end + 60 > text.length ? text.length : m.end + 60));
+  final amount = RegExp(r'\d[\d,]*\.\d\d').firstMatch(
+    text.substring(m.end, m.end + 60 > text.length ? text.length : m.end + 60),
+  );
   return amount == null ? null : _paise(amount.group(0)!);
 }
 
 /// Opening and closing balance and the printed totals, where a labelled line
 /// gives them. Printed row counts are not read: no label is known well enough,
 /// and a loose pattern finds the word "credit" inside a narration.
-({int? opening, int? closing, int? debits, int? credits}) _summary(String text) => (
-  opening: _labelled(text, RegExp(r'(?:brought\s+forward|opening\s+balance)[^0-9\n]{0,30}', caseSensitive: false)),
-  closing: _labelled(text, RegExp(r'closing\s+balance[^0-9\n]{0,30}', caseSensitive: false)),
-  debits: _labelled(text, RegExp(r'total\s+debits?[^0-9\n]{0,30}', caseSensitive: false)),
-  credits: _labelled(text, RegExp(r'total\s+credits?[^0-9\n]{0,30}', caseSensitive: false)),
+({int? opening, int? closing, int? debits, int? credits}) _summary(
+  String text,
+) => (
+  opening: _labelled(
+    text,
+    RegExp(
+      r'(?:brought\s+forward|opening\s+balance)[^0-9\n]{0,30}',
+      caseSensitive: false,
+    ),
+  ),
+  closing: _labelled(
+    text,
+    RegExp(r'closing\s+balance[^0-9\n]{0,30}', caseSensitive: false),
+  ),
+  debits: _labelled(
+    text,
+    RegExp(r'total\s+debits?[^0-9\n]{0,30}', caseSensitive: false),
+  ),
+  credits: _labelled(
+    text,
+    RegExp(r'total\s+credits?[^0-9\n]{0,30}', caseSensitive: false),
+  ),
 );
 
 final RegExp _sbiNoise = RegExp(
@@ -186,13 +241,17 @@ BankStatementRead readSbiStatement(String text) {
       final d = _date(m.group(1)!, m.group(2)!, m.group(3)!);
       // A page footer can run into the last row of a page: drop a balance
       // printed with its sign ("4,15,548.85CR") and whatever follows it.
-      final rowText = m.group(7)!.replaceFirst(RegExp(r'\s+[\d,]+\.\d\d\s?(?:CR|DR)\b.*$'), '');
+      final rowText = m
+          .group(7)!
+          .replaceFirst(RegExp(r'\s+[\d,]+\.\d\d\s?(?:CR|DR)\b.*$'), '');
       final tokens = rowText.trim().split(RegExp(r'\s+'));
       if (d == null || tokens.length < 4) {
         skipped.add(raw.trim());
         continue;
       }
-      final b = tokens[tokens.length - 1], c = tokens[tokens.length - 2], dr = tokens[tokens.length - 3];
+      final b = tokens[tokens.length - 1],
+          c = tokens[tokens.length - 2],
+          dr = tokens[tokens.length - 3];
       final bal = _amount.hasMatch(b) ? _paise(b) : null;
       final cr = _amount.hasMatch(c) ? _paise(c) : null;
       final de = _amount.hasMatch(dr) ? _paise(dr) : null;
@@ -233,7 +292,10 @@ final RegExp _iciciNoise = RegExp(
   r'^\s*(?:s\.?\s*no\.?|transaction|date|remarks|withdrawals?|deposits?|cheque|number|amount|balance|\(inr\)|statement\s+of\s+transactions|your\s+base\s+branch.*|page\s+\d+(?:\s+of\s+\d+)?|\d{1,3}|\s)*$',
   caseSensitive: false,
 );
-final RegExp _iciciStop = RegExp(r'legends\s+for\s+transactions|sincer[el]y', caseSensitive: false);
+final RegExp _iciciStop = RegExp(
+  r'legends\s+for\s+transactions|sincer[el]y',
+  caseSensitive: false,
+);
 
 /// ICICI: `serial  dd.mm.yyyy  remarks  amount  balance`. No debit/credit is
 /// printed, so direction is left null and [verifyStatement] reads it from the
@@ -272,7 +334,9 @@ BankStatementRead readIciciStatement(String text) {
     }
     if (stopped) continue;
     final m = _iciciRowStart.firstMatch(raw);
-    final amounts = m == null ? const <RegExpMatch>[] : _amountAnywhere.allMatches(m.group(5)!).toList();
+    final amounts = m == null
+        ? const <RegExpMatch>[]
+        : _amountAnywhere.allMatches(m.group(5)!).toList();
     if (m != null && amounts.length >= 2) {
       flush();
       final d = _date(m.group(2)!, m.group(3)!, m.group(4)!);
@@ -289,7 +353,9 @@ BankStatementRead readIciciStatement(String text) {
       narration = rest.substring(0, amounts[amounts.length - 2].start);
     } else if (m != null) {
       skipped.add(raw.trim());
-    } else if (narration != null && raw.trim().isNotEmpty && !_iciciNoise.hasMatch(raw)) {
+    } else if (narration != null &&
+        raw.trim().isNotEmpty &&
+        !_iciciNoise.hasMatch(raw)) {
       narration = '$narration ${raw.trim()}';
     }
   }

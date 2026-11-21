@@ -1,11 +1,34 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pandapay/data/csv_statement_parser.dart';
 import 'package:pandapay/data/pdf_statement_parser.dart';
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 void main() {
+  group('card payments made from a bank account are transfers', () {
+    // Wordings ICICI prints for paying a credit card from the savings account.
+    const wordings = [
+      'BIL/INFT/001141158665/CC BillPay-9008/Self',
+      'AutoDebit trxn ATD/Auto Debit CC0xx1724',
+    ];
+    for (final w in wordings) {
+      test(w, () {
+        final pdf = parseStatementText('30/06/2026 $w 50,625.32 DR');
+        expect(pdf.transactions.single.isTransfer, isTrue);
+        final csv = parseFlexibleCsvStatement(
+          'Date,Narration,Debit,Credit,Balance\n30/06/2026,$w,50625.32,,100.00\n',
+        );
+        expect(csv.transactions.single.isTransfer, isTrue);
+      });
+    }
+    test('an ordinary purchase is not', () {
+      final pdf = parseStatementText('30/06/2026 UPI/ZEPTO/shop 446.00 DR');
+      expect(pdf.transactions.single.isTransfer, isFalse);
+    });
+  });
+
   group('parseStatementText', () {
     test('separates a bank statement card repayment from a card purchase', () {
       final result = parseStatementText('''
