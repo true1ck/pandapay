@@ -1548,7 +1548,7 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                   ForeignTransactionInfo(transactionId: entry.id),
                   const SizedBox(height: AppSpace.md),
                   _suspectedRefundBanner(entry),
-                  _DetailRow(label: 'Card', value: _cardOrPaymentLabel(entry)),
+                  _DetailRow(label: 'Payment type', value: _cardOrPaymentLabel(entry)),
                   if (transactionRewardLabel(entry) case final reward?)
                     _DetailRow(
                       key: const ValueKey('transaction-reward-row'),
