@@ -85,7 +85,7 @@ class TemplateUpload {
     queue.db.execute('SAVEPOINT sms_v2_template_revoke');
     try {
       queue.db.execute(
-        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'template:refused:%' OR key LIKE 'template:retry:%' OR key='template:resend:at' OR key LIKE 'draft:%')",
+        "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'ai:%' OR key LIKE 'template:sent:%' OR key LIKE 'template:origins:%' OR key LIKE 'template:scanned:%' OR key LIKE 'template:refused:%' OR key LIKE 'template:retry:%' OR key='template:resend:at' OR key='template:solo:at' OR key='template:sentcheck:at' OR key LIKE 'draft:%')",
         [queue.namespace],
       );
       queue.db.execute(
@@ -133,6 +133,16 @@ class TemplateUpload {
   /// whole request that would pass it, so a big batch can fail for ever once a
   /// few have been sent; small ones always fit what is left.
   static const _batchSize = 10;
+
+  /// A request also never carries more than this much JSON (a few long layouts could pass the server's body limit
+  /// together although each is fine alone, and a 413 answer blames all of them).
+  static const _batchBytes = 60 * 1024;
+
+  /// Set when a batch of several layouts got a 5xx: for [_soloFor] after that, layouts go one to a request, so a layout
+  /// that makes the server fail fails alone and the rest go up. It is a `template:` key (never `ai:`, see
+  /// template_resend.dart) and is simply let to expire.
+  static const _soloKey = 'template:solo:at';
+  static const _soloFor = Duration(hours: 24);
 
   /// Flat wait after a failure that is the session's or the server's, not the layout's.
   static const _transientRetry = Duration(seconds: 60);
@@ -199,8 +209,10 @@ class TemplateUpload {
     _consentConfirmed = null; // every pass asks the server afresh
     // One layout the server refuses (400) must not hold up the ones behind it:
     // after a 400 the next requests carry one layout each until it is found.
-    var singly = false;
+    final soloAt = DateTime.tryParse(SyncStateStore(queue.db, namespace: queue.namespace).get(_soloKey) ?? '');
+    var singly = soloAt != null && clock().difference(soloAt).abs() < _soloFor;
     var refused = 0;
+    var acceptedInPass = 0;
     if (!await _canShare()) return;
     _clearWaitsLeftByOlderBuilds();
     // The server told us to wait (HTTP 429): hold the whole queue until then.
@@ -253,7 +265,17 @@ class TemplateUpload {
       // A layout the server has refused is never put in a batch with others: its failed request would carry them
       // too, and charge the person's daily allowance for all of them. It goes alone, after the rest.
       final clean = waiting.where((record) => !refusals.containsKey(hashOf(record))).toList();
-      final records = clean.isNotEmpty ? clean.take(singly ? 1 : _batchSize).toList() : [waiting.first];
+      final records = <OutboxRecord>[];
+      if (clean.isEmpty) {
+        records.add(waiting.first);
+      } else {
+        var bytes = 0;
+        for (final record in clean.take(singly ? 1 : _batchSize)) {
+          bytes += record.payload.length;
+          if (records.isNotEmpty && bytes > _batchBytes) break;
+          records.add(record);
+        }
+      }
       try {
         final admission = await headers();
         if (!await _canShare()) return;
@@ -298,8 +320,8 @@ class TemplateUpload {
           ).put('template:wait', clock().add(wait).toUtc().toIso8601String());
           return;
         }
-        if (response.statusCode == 400) {
-          // The server refused the request as invalid. With several layouts in
+        if (response.statusCode == 400 || response.statusCode == 413) {
+          // The server refused the request as invalid (413: too large, which one long layout can cause). With several layouts in
           // it, send them one at a time to find the one it dislikes; a single
           // refused layout is set aside (not lost, and it blocks nothing): six
           // hours, then four times as long each time it is refused again, to a
@@ -329,9 +351,20 @@ class TemplateUpload {
           final wait = response.statusCode >= 500
               ? _serverWait(response)
               : _transientRetry;
+          // A 5xx on a batch may be one layout the server chokes on, which would block the nine beside it for ever:
+          // from the next attempt they go one to a request. A 503 that names a Retry-After is an outage or a pause
+          // of the intake, not a layout, and keeps the old behaviour.
+          if (response.statusCode >= 500 &&
+              records.length > 1 &&
+              !(response.statusCode == 503 && response.headers.containsKey('retry-after'))) {
+            state.put(_soloKey, clock().toUtc().toIso8601String());
+          }
           for (final record in records) {
             queue.retry(record, clock(), after: wait);
           }
+          // One layout alone failing, after others went up in this very pass, is that layout's doing and not the
+          // server's: it waits on its own and the rest carry on. Any other failure ends the pass, as it always did.
+          if (response.statusCode >= 500 && records.length == 1 && singly && acceptedInPass > 0) continue;
           return;
         }
         if (response.statusCode != 200 && response.statusCode != 202) {
@@ -361,6 +394,7 @@ class TemplateUpload {
             queue.retry(record, clock());
           }
         }
+        acceptedInPass += accepted.length;
         if (accepted.isEmpty) return;
       } catch (error) {
         // A timeout or a dropped connection says nothing about the layout either.
@@ -371,6 +405,60 @@ class TemplateUpload {
         return;
       }
     }
+  }
+
+  /// How often [_forgetUnansweredSentMarks] looks, how long a sent layout is left to be answered first, and how many
+  /// marks one look may clear (the server takes 50 new layouts a day per person; the rest is cleared at the next look).
+  static const _unansweredEvery = Duration(days: 7);
+  static const _unansweredAfter = Duration(hours: 24);
+  static const _unansweredMaxPerLook = 50;
+  static const _unansweredKey = 'template:sentcheck:at';
+
+  /// After the server's database is restored it no longer knows layouts this phone marked as sent, and a sent layout
+  /// is never uploaded again, so the message waits for ever. A sent layout that still has no AI answer at all a day
+  /// later and belongs to an open message has its mark cleared, so the normal scan queues it again (the server takes
+  /// a layout it already holds without harm). At most once a week, from keys already loaded: one more read of the
+  /// open items' source keys and of the answer keys, no per-message work. Not an `ai:` key (see template_resend.dart).
+  void _forgetUnansweredSentMarks(SyncStateStore state, Map<String, String> scannedMarks, Map<String, String> sentHashes) {
+    if (sentHashes.isEmpty) return;
+    final now = clock();
+    final last = DateTime.tryParse(state.get(_unansweredKey) ?? '');
+    if (last != null && now.difference(last).abs() < _unansweredEvery) return;
+    final db = queue.db;
+    final answered = <String>{
+      for (final row in db.select("SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'ai:%'", [queue.namespace]))
+        (row['key'] as String).substring('ai:'.length),
+    };
+    final stale = <String>{};
+    var young = false; // a sent layout still inside its day: look again tomorrow, not next week
+    for (final row in db.select(
+      "SELECT json_extract(payload,'\$.sourceKey') AS k FROM v2_review_items "
+      "WHERE namespace=? AND kind='template' AND status='open' AND json_extract(payload,'\$.aiHold') IS NULL",
+      [queue.namespace],
+    )) {
+      final hash = scannedMarks[row['k']];
+      if (hash == null || hash == _skipMark || answered.contains(hash)) continue;
+      final at = DateTime.tryParse(sentHashes[hash] ?? '');
+      if (at == null) continue;
+      if (now.difference(at) > _unansweredAfter) {
+        stale.add(hash);
+      } else {
+        young = true;
+      }
+    }
+    // Oldest mark first, so the layouts a look had no room for are the first at the next one.
+    final clear = (stale.toList()..sort((a, b) => sentHashes[a]!.compareTo(sentHashes[b]!))).take(_unansweredMaxPerLook).toList();
+    for (final hash in clear) {
+      db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [queue.namespace, 'template:sent:$hash']);
+      sentHashes.remove(hash);
+    }
+    // A look that hit the cap, or that met a layout not yet a day old, is repeated in a day, not in a week.
+    state.put(
+      _unansweredKey,
+      (clear.length < stale.length || young ? now.subtract(_unansweredEvery - const Duration(days: 1)) : now)
+          .toUtc()
+          .toIso8601String(),
+    );
   }
 
   /// Reads the open Needs-review messages that have not been looked at yet, at most [maxScannedPerPass] of them,
@@ -388,12 +476,12 @@ class TemplateUpload {
       ))
         (row['key'] as String).substring('template:scanned:'.length): row['value'] as String,
     };
-    final sentHashes = <String>{
+    final sentHashes = <String, String>{
       for (final row in db.select(
-        "SELECT key FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:sent:%'",
+        "SELECT key,value FROM v2_sync_state WHERE namespace=? AND key LIKE 'template:sent:%'",
         [queue.namespace],
       ))
-        (row['key'] as String).substring('template:sent:'.length),
+        (row['key'] as String).substring('template:sent:'.length): row['value'] as String,
     };
     final queuedIds = <String>{
       for (final row in db.select(
@@ -402,6 +490,7 @@ class TemplateUpload {
       ))
         row['id'] as String,
     };
+    _forgetUnansweredSentMarks(state, scannedMarks, sentHashes);
     var read = 0;
     var inChunk = 0;
     void openChunk() => db.execute('SAVEPOINT sms_v2_template_scan');
@@ -423,7 +512,7 @@ class TemplateUpload {
         final scanned = scannedMarks[key];
         if (scanned != null &&
             (scanned == _skipMark ||
-                sentHashes.contains(scanned) ||
+                sentHashes.containsKey(scanned) ||
                 queuedIds.contains('template:$scanned'))) {
           continue;
         }
@@ -444,7 +533,7 @@ class TemplateUpload {
           state.put('template:scanned:$key', _skipMark);
           scannedMarks[key] = _skipMark;
         } else {
-          if (!sentHashes.contains(upload.hash) && !queuedIds.contains('template:${upload.hash}')) {
+          if (!sentHashes.containsKey(upload.hash) && !queuedIds.contains('template:${upload.hash}')) {
             queue.enqueue('template', upload.hash, upload.payload);
             queuedIds.add('template:${upload.hash}');
           }
