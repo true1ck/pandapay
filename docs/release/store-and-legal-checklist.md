@@ -115,6 +115,32 @@ Checks before submitting:
 - [ ] The privacy policy version (`consentPolicyVersion`) and the opt-in policy version (`sms-shared-learning-v3`) were bumped together if any wording changed.
 - [ ] `docs/release/learning-data-flows.md` was read by the lawyer (section 1, "Before anything is published", last item) and its open points are answered.
 
+### 3.4 Planned: AI spending analysis (chat with an LLM such as Gemini)
+
+Planned for Dec 2026 or Jan 2027. People ask "which card for this purchase", "how do I budget", "where am I overspending", and an LLM answers from their collected data. **Do these before the build that ships it reaches any tester or store track.** Declarations must match what the shipped version does, so do not pre-declare it now.
+
+What does NOT change (no build or review problem from these):
+
+- Android permissions and the manifest: an LLM call is a network request, and `INTERNET` is already declared.
+- The SMS, location and foreground-service declarations.
+- Content rating "Everyone" is likely to stay, but redo the IARC questionnaire (it has AI-generated-content questions) and check the result.
+
+What changes:
+
+- **Financial features (Play):** add **Financial advice** (under Support services) next to the existing "Other". Check whether Play then asks for extra documentation.
+- **Data safety (Play):** the question text people type is user content; add it to the existing "Other user-generated content" answer (or "Other in-app messages") and say it goes to an LLM provider. The transaction data sent to answer a question is already declared as Financial info. Keep "Shared: No" only if the provider is a processor acting for you under paid-API terms that forbid training on the data (same open point as `docs/release/learning-data-flows.md` point 1); otherwise declare it as shared with a third party.
+- **Privacy policy and in-app consent:** name the LLM provider, what is sent, retention, and that answers can be wrong. Make it an opt-in separate from "Help PandaPay get better for everyone". Bump `consentPolicyVersion` (`app/lib/data/consent_policy.dart`) and the server's `PRODUCT_TERMS_VERSION` together with the published pages (`deploy/legal/*.html` and `legal_text.dart`, which a test keeps identical).
+- **Play AI-generated content policy:** an in-app way to report or flag a bad AI answer, and no harmful output. Keep a visible "not financial advice, check before acting" line.
+- **Apple:** update App Privacy labels, and the review notes should say that personal data goes to a third-party AI service only after consent (check guideline 5.1.2 wording at submission).
+
+Design rules that keep it safe and the declarations simple:
+
+1. Call the LLM from the PandaPay server, never from the app, so the API key never ships in the build and can be rotated.
+2. Send the least data: monthly totals by category, merchant names and card names, not raw SMS text, account numbers, phone numbers, or the names of people paid. Reuse the redaction already used for learning.
+3. No training on the data and short retention at the provider; record this in writing before launch.
+4. Rate-limit per account and cap tokens, because the prod VM is small.
+5. Use deterministic card-reward maths from the existing engine for "which card" and let the LLM only explain it, so reward figures are not invented.
+
 ## 4. Apple App Store
 
 ### 4.1 App Privacy labels (draft)
