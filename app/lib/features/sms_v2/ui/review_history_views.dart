@@ -1035,7 +1035,11 @@ class _GeminiStatusBarState extends ConsumerState<GeminiStatusBar> {
       unreadOnPhone: ref.watch(aiUnreadCountProvider).valueOrNull ?? 0,
       openItems: widget.openItems,
       aiReadMessages: widget.aiReadMessages,
-      unreadMessages: widget.unreadMessages,
+      // The phone's own count of messages no rule has read yet (the same number Phone details shows). Counting the open
+      // review cards here said "14 could not be read" for payment questions that are not unreadable messages.
+      unreadMessages:
+          ref.watch(aiPhoneDiagnosticsProvider).valueOrNull?.unknownMessages ??
+          widget.unreadMessages,
       // No consent record: sharing is off and nothing is sent.
       sharingOff: consent.hasValue && consent.value == null,
     );

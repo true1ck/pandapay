@@ -545,12 +545,6 @@ class _ReviewInboxScreenState extends ConsumerState<ReviewInboxScreen> {
               // Per MESSAGE, from this phone: what the AI read (the AI
               // auto-resolved list) and what still waits for a reading.
               aiReadMessages: settled?.auto.length,
-              unreadMessages: [
-                for (final item in openItems)
-                  if (item.kind == 'template' &&
-                      item.payload['hasReading'] != true)
-                    item,
-              ].length,
             ),
             Expanded(
               child: _tab == 3
