@@ -49,6 +49,57 @@ class SpendingSelection {
     return true;
   }
 
+  /// This selection as the parameters of a link to Activity, for what Activity
+  /// can apply exactly as [matches] does. What it cannot is named in
+  /// `notCarried`, so the person can be told rather than shown a list that
+  /// quietly disagrees with the figure they tapped. Activity has no payment
+  /// method, no source that is not a saved card, and does not match this
+  /// selection's `custom:` category keys, nor a row with no merchant.
+  ///
+  /// [cardIdForSource] turns the source name this selection filters on into
+  /// the one saved card's id, or null when it is not exactly one saved card.
+  /// The month is the link's date range, not a parameter here.
+  ({Map<String, List<String>> params, List<String> notCarried}) toActivityLink({
+    required String? Function(String source) cardIdForSource,
+  }) {
+    final params = <String, List<String>>{};
+    final notCarried = <String>[];
+    void cannot(String what) {
+      if (!notCarried.contains(what)) notCarried.add(what);
+    }
+
+    if (tagIds.isNotEmpty) params['tag'] = [...tagIds];
+    if (untagged) params['untagged'] = ['true'];
+    for (final key in categories) {
+      if (key.startsWith('custom:')) {
+        cannot('category');
+      } else if (key.startsWith('label:')) {
+        (params['categoryLabel'] ??= []).add(key.substring('label:'.length));
+      } else {
+        (params['category'] ??= []).add(key);
+      }
+    }
+    final merchantFilter = merchant;
+    if (merchantFilter != null) {
+      if (normalize(merchantFilter) == normalize('Unknown merchant')) {
+        cannot('merchant');
+      } else {
+        params['merchant'] = [merchantFilter];
+      }
+    }
+    final source = card;
+    if (source != null) {
+      final id = cardIdForSource(source);
+      if (id == null) {
+        cannot('account');
+      } else {
+        params['card'] = [id];
+      }
+    }
+    if (payment != null) cannot('payment method');
+    return (params: params, notCarried: notCarried);
+  }
+
   static String normalize(String text) =>
       text.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
   static String merchantName(TransactionEntry entry) =>

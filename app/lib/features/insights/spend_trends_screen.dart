@@ -1,4 +1,5 @@
 import 'package:pandapay_domain/sms_v2.dart' show Totals;
+import '../sms_v2/ledger/adapters.dart' show moneyInKindLabels;
 import '../sms_v2/ledger/providers.dart';
 import '../sms_v2/ledger/reports.dart';
 import 'dart:math' as math;
@@ -1354,34 +1355,114 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     return (from: from, to: to);
   }
 
-  /// The investments of this period, in Activity's Investments filter: the one
-  /// place the investments flow lives (Home's Investments line opens the same).
-  void _openInvestments() {
+  /// The filters on this screen that Activity can apply exactly as this screen
+  /// does, as link parameters. The ones it cannot are named in `notCarried`, so
+  /// the person is told instead of being shown a list that quietly disagrees
+  /// with the tile they tapped.
+  ///
+  /// Activity matches a saved card by its id, categories by id or label, and a
+  /// merchant by name; it has no payment method, no bank account that is not a
+  /// saved card, and no custom category by id (this screen's `custom:` keys).
+  ({Map<String, List<String>> params, List<String> notCarried})
+  _activityFilters() => SpendingSelection(
+    payment: _paymentFilter,
+    categories: _categoryFilters,
+    merchant: _merchantFilter,
+    card: _cardFilter,
+    tagIds: _tagFilters,
+    untagged: _untagged,
+  ).toActivityLink(
+    // This screen filters by the name of a source; Activity by card id.
+    cardIdForSource: (source) {
+      final ids = <String?>{
+        for (final entry in widget.transactions)
+          if (SpendingSelection.sourceName(entry, bankAccounts: _bankAccounts) ==
+              source)
+            entry.userCardId,
+      };
+      return ids.length == 1 ? ids.single : null;
+    },
+  );
+
+  /// One line, so a list that cannot hold every filter on this screen does not
+  /// look like it does. Shown over the page the person is sent to.
+  void _saySomeFiltersDoNotCarry(List<String> names, String where) {
+    if (names.isEmpty) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          "$where can't filter by ${names.join(', ')}, so it shows more than "
+          'this screen does.',
+        ),
+      ),
+    );
+  }
+
+  /// Opens Activity on [type] for exactly what this screen is describing: its
+  /// range, or the month picked on the chart, and every filter that can carry.
+  /// [kinds] narrows Money in; [net] counts Spending the way this screen does.
+  void _openActivity({
+    required String type,
+    Set<String> kinds = const {},
+    bool net = false,
+  }) {
     final period = _periodDateParams();
+    final filters = _activityFilters();
+    _saySomeFiltersDoNotCarry(filters.notCarried, 'Activity');
     context.push(
       Uri(
         path: AppRoute.activity,
-        queryParameters: {
-          'type': 'investments',
+        queryParameters: <String, Object>{
+          'type': type,
           'from': period.from,
           'to': period.to,
+          ...filters.params,
+          if (kinds.isNotEmpty) 'kinds': kinds.join(','),
+          if (net) 'net': 'true',
         },
       ).toString(),
     );
   }
 
+  /// The investments of this period, in Activity's Investments filter: the one
+  /// place the investments flow lives (Home's Investments line opens the same).
+  void _openInvestments() => _openActivity(type: 'investments');
+
   /// Money in for this period, in Activity, where it splits into salary,
-  /// dividends, refunds, cashback and the rest.
-  void _openMoneyIn() {
+  /// dividends, cashback and the rest. The tile counts everything but refunds
+  /// and money back from investments, so the list does too and the totals
+  /// agree.
+  void _openMoneyIn() => _openActivity(
+    type: 'moneyIn',
+    kinds: {
+      for (final (kind, _) in moneyInKindLabels)
+        if (kind != 'refund') kind,
+    },
+  );
+
+  /// Spent for this period, in Activity: the same rows, with refunds listed
+  /// since they come off the total (the strip then reads Spent).
+  void _openSpent() => _openActivity(
+    type: 'spending',
+    net: ref.read(smsV2ReportingEnabledProvider),
+  );
+
+  /// Rewards for this period. That page keeps its own card and category
+  /// filters and cannot take this screen's, so the person is told when any are
+  /// on.
+  void _openRewards() {
     final period = _periodDateParams();
+    _saySomeFiltersDoNotCarry([
+      if (_paymentFilter != null) 'payment method',
+      if (_categoryFilters.isNotEmpty) 'category',
+      if (_merchantFilter != null) 'merchant',
+      if (_cardFilter != null) 'account',
+      if (_tagFilters.isNotEmpty || _untagged) 'tag',
+    ], 'Rewards');
     context.push(
       Uri(
-        path: AppRoute.activity,
-        queryParameters: {
-          'type': 'moneyIn',
-          'from': period.from,
-          'to': period.to,
-        },
+        path: AppRoute.rewardsGroup,
+        queryParameters: {'from': period.from, 'to': period.to},
       ).toString(),
     );
   }
@@ -2080,7 +2161,12 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
             ),
             const SizedBox(height: AppSpace.lg),
           ],
-          _SpendMetricsCard(report: summaryReport, onMoneyIn: _openMoneyIn),
+          _SpendMetricsCard(
+            report: summaryReport,
+            onMoneyIn: _openMoneyIn,
+            onSpent: _openSpent,
+            onRewards: _openRewards,
+          ),
           const SizedBox(height: AppSpace.lg),
           if (multiMonth) ...[
             _MonthlyComparisonCard(
@@ -3360,8 +3446,15 @@ class _FilterLabel extends StatelessWidget {
 class _SpendMetricsCard extends StatelessWidget {
   final SpendReport report;
   final VoidCallback onMoneyIn;
+  final VoidCallback onSpent;
+  final VoidCallback onRewards;
 
-  const _SpendMetricsCard({required this.report, required this.onMoneyIn});
+  const _SpendMetricsCard({
+    required this.report,
+    required this.onMoneyIn,
+    required this.onSpent,
+    required this.onRewards,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3401,12 +3494,17 @@ class _SpendMetricsCard extends StatelessWidget {
                     chevron: true,
                   ),
                 ),
-                _SpendMetricTile(
-                  label: 'Spent',
-                  amount: report.spend.total,
-                  icon: Icons.north_rounded,
-                  accent: BambooInk.ink700,
-                  tint: BambooInk.paperCool,
+                InkWell(
+                  onTap: onSpent,
+                  borderRadius: BorderRadius.circular(12),
+                  child: _SpendMetricTile(
+                    label: 'Spent',
+                    amount: report.spend.total,
+                    icon: Icons.north_rounded,
+                    accent: BambooInk.ink700,
+                    tint: BambooInk.paperCool,
+                    chevron: true,
+                  ),
                 ),
                 _SpendMetricTile(
                   label: shortBy.isNegative ? 'Surplus' : 'Short by',
@@ -3418,13 +3516,18 @@ class _SpendMetricsCard extends StatelessWidget {
                   tint: (shortBy.isNegative ? BambooInk.jade : BambooInk.clay)
                       .withValues(alpha: .09),
                 ),
-                _SpendMetricTile(
-                  label: 'Rewards earned',
-                  amount: report.spend.rewards,
-                  icon: Icons.emoji_events_outlined,
-                  accent: BambooInk.amber,
-                  tint: BambooInk.amber.withValues(alpha: .10),
-                  amountColor: BambooInk.jade,
+                InkWell(
+                  onTap: onRewards,
+                  borderRadius: BorderRadius.circular(12),
+                  child: _SpendMetricTile(
+                    label: 'Rewards earned',
+                    amount: report.spend.rewards,
+                    icon: Icons.emoji_events_outlined,
+                    accent: BambooInk.amber,
+                    tint: BambooInk.amber.withValues(alpha: .10),
+                    amountColor: BambooInk.jade,
+                    chevron: true,
+                  ),
                 ),
               ];
               if (constraints.maxWidth < 280) {

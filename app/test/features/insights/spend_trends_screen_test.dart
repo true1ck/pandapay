@@ -10,8 +10,13 @@ import 'package:pandapay/data/spend_reports_repository.dart';
 import 'package:pandapay/data/user_cards_repository.dart';
 import 'package:pandapay/features/cards/card_summary.dart';
 import 'package:pandapay/features/insights/spend_trends_screen.dart';
+import 'package:pandapay/features/sms_v2/ledger/providers.dart'
+    show smsV2LedgerReadModelProvider, smsV2ReportingEnabledProvider;
+import 'package:pandapay/features/sms_v2/ledger/reports.dart'
+    show LedgerReadModel;
 import 'package:pandapay_domain/pandapay_domain.dart';
 import 'package:pandapay_domain/sms_v2.dart' show Totals;
+import 'package:pandapay_domain/sms_v2_ledger.dart' show LedgerSnapshot;
 
 final _reportRefreshGeneration = StateProvider<int>((ref) => 0);
 
@@ -2264,6 +2269,8 @@ void main() {
       required DateTime to,
       required List<TransactionEntry> rows,
       required SpendReport report,
+      Set<String> tagIds = const {},
+      List<Override> overrides = const [],
     }) async {
       await tester.binding.setSurfaceSize(const Size(400, 1400));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -2272,12 +2279,20 @@ void main() {
         routes: [
           GoRoute(
             path: '/spending',
-            builder: (context, state) => const SpendTrendsScreen(),
+            builder: (context, state) =>
+                SpendTrendsScreen(initialTagIds: tagIds),
           ),
           GoRoute(
             path: '/activity',
             builder: (context, state) =>
                 Text(state.uri.toString(), key: const ValueKey('activity-uri')),
+          ),
+          GoRoute(
+            path: '/insights/rewards',
+            builder: (context, state) => Text(
+              state.uri.toString(),
+              key: const ValueKey('rewards-uri'),
+            ),
           ),
           GoRoute(
             path: '/activity/:id',
@@ -2300,6 +2315,7 @@ void main() {
               (ref, query) async => rows,
             ),
             bankAccountSummariesProvider.overrideWith((ref) async => const []),
+            ...overrides,
           ],
           child: MaterialApp.router(routerConfig: router),
         ),
@@ -2506,35 +2522,183 @@ void main() {
         rows: const [],
       );
 
+      Map<String, String> range() {
+        final p = Uri.parse(activityUri(tester)).queryParameters;
+        return {'type': p['type']!, 'from': p['from']!, 'to': p['to']!};
+      }
+
       await pumpRange();
       await tapMonth(tester, 0);
       await tester.ensureVisible(find.text('Money in'));
       await tester.tap(find.text('Money in'));
       await tester.pumpAndSettle();
-      expect(
-        activityUri(tester),
-        '/activity?type=moneyIn&from=2026-08-15&to=2026-08-31',
-      );
+      expect(range(), {
+        'type': 'moneyIn',
+        'from': '2026-08-15',
+        'to': '2026-08-31',
+      });
 
       await pumpRange();
       await tapMonth(tester, 2);
       await tester.ensureVisible(find.text('Money in'));
       await tester.tap(find.text('Money in'));
       await tester.pumpAndSettle();
-      expect(
-        activityUri(tester),
-        '/activity?type=moneyIn&from=2026-10-01&to=2026-10-20',
-      );
+      expect(range(), {
+        'type': 'moneyIn',
+        'from': '2026-10-01',
+        'to': '2026-10-20',
+      });
 
       // With no month picked it is still the whole range.
       await pumpRange();
       await tester.ensureVisible(find.text('Money in'));
       await tester.tap(find.text('Money in'));
       await tester.pumpAndSettle();
-      expect(
-        activityUri(tester),
-        '/activity?type=moneyIn&from=2026-08-15&to=2026-10-20',
+      expect(range(), {
+        'type': 'moneyIn',
+        'from': '2026-08-15',
+        'to': '2026-10-20',
+      });
+    });
+
+    testWidgets('Money in lists what the tile counted: not refunds, not '
+        'money back from investments', (tester) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        report: _report(spend: 1500, income: 90000),
+        rows: const [],
       );
+      await tester.ensureVisible(find.text('Money in'));
+      await tester.tap(find.text('Money in'));
+      await tester.pumpAndSettle();
+      final kinds = Uri.parse(
+        activityUri(tester),
+      ).queryParameters['kinds']!.split(',');
+      expect(
+        kinds,
+        unorderedEquals(['salary', 'dividend', 'cashback', 'person', 'other']),
+      );
+      expect(kinds, isNot(contains('refund')));
+      expect(kinds, isNot(contains('investment_return')));
+    });
+
+    testWidgets('Spent opens Activity on spending for the range and the '
+        'picked month', (tester) async {
+      Future<void> pumpAndTapSpent({int? month}) async {
+        await pumpRouted(
+          tester,
+          from: DateTime(2026, 8, 15),
+          to: DateTime(2026, 10, 20),
+          report: _report(spend: 1500, income: 90000),
+          rows: const [],
+        );
+        if (month != null) await tapMonth(tester, month);
+        await tester.ensureVisible(find.text('Spent').first);
+        await tester.tap(find.text('Spent').first);
+        await tester.pumpAndSettle();
+      }
+
+      await pumpAndTapSpent();
+      var p = Uri.parse(activityUri(tester)).queryParameters;
+      expect(p['type'], 'spending');
+      expect(p['from'], '2026-08-15');
+      expect(p['to'], '2026-10-20');
+      // Without the ledger there is no netting to ask for.
+      expect(p.containsKey('net'), isFalse);
+
+      await pumpAndTapSpent(month: 2);
+      p = Uri.parse(activityUri(tester)).queryParameters;
+      expect(p['from'], '2026-10-01');
+      expect(p['to'], '2026-10-20');
+    });
+
+    testWidgets('Spent asks for refunds netted off on the ledger path', (
+      tester,
+    ) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        report: _report(spend: 1500, income: 90000),
+        rows: const [],
+        overrides: [
+          smsV2ReportingEnabledProvider.overrideWithValue(true),
+          smsV2LedgerReadModelProvider.overrideWith(
+            (ref) async => LedgerReadModel(
+              ledger: LedgerSnapshot(entries: [], events: []),
+              transactions: const [],
+            ),
+          ),
+        ],
+      );
+      await tester.ensureVisible(find.text('Spent').first);
+      await tester.tap(find.text('Spent').first);
+      await tester.pumpAndSettle();
+      expect(
+        Uri.parse(activityUri(tester)).queryParameters['net'],
+        'true',
+      );
+    });
+
+    testWidgets('a tag on this screen goes to Activity with the tile', (
+      tester,
+    ) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        report: _report(spend: 1500, income: 90000),
+        rows: const [],
+        tagIds: const {'trip'},
+      );
+      await tester.ensureVisible(find.text('Spent').first);
+      await tester.tap(find.text('Spent').first);
+      await tester.pumpAndSettle();
+      expect(
+        Uri.parse(activityUri(tester)).queryParametersAll['tag'],
+        ['trip'],
+      );
+    });
+
+    testWidgets('Rewards earned opens the Rewards page for the same range', (
+      tester,
+    ) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 15),
+        to: DateTime(2026, 10, 20),
+        report: _report(spend: 1500, income: 90000, rewards: 120),
+        rows: const [],
+      );
+      await tapMonth(tester, 2);
+      await tester.ensureVisible(find.text('Rewards earned'));
+      await tester.tap(find.text('Rewards earned'));
+      await tester.pumpAndSettle();
+      final uri = Uri.parse(
+        tester
+            .widget<Text>(find.byKey(const ValueKey('rewards-uri')))
+            .data!,
+      );
+      expect(uri.path, '/insights/rewards');
+      expect(uri.queryParameters['from'], '2026-10-01');
+      expect(uri.queryParameters['to'], '2026-10-20');
+    });
+
+    testWidgets('Short by is a result, not a link', (tester) async {
+      await pumpRouted(
+        tester,
+        from: DateTime(2026, 8, 1),
+        to: DateTime(2026, 10, 31),
+        report: _report(spend: 90000, income: 40000),
+        rows: const [],
+      );
+      await tester.ensureVisible(find.text('Short by'));
+      await tester.tap(find.text('Short by'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
+      expect(find.byKey(const ValueKey('rewards-uri')), findsNothing);
     });
   });
 
