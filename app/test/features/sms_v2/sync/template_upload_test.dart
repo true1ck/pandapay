@@ -832,7 +832,7 @@ void main() {
         ),
       );
       // A private AI rule reports under its layout's AI id (never its
-      // per-phone local id), counted as sent to review.
+      // per-phone local id); a confident reading is not counted as sent to review.
       final stats = db.db.select(
         'SELECT rule_id,rule_version,hits,to_review,corrected FROM v2_rule_stats_by_account WHERE namespace=?',
         [namespace],
@@ -845,7 +845,7 @@ void main() {
           stats.single['to_review'],
           stats.single['corrected'],
         ],
-        [1, 1, 0],
+        [1, 0, 0],
       );
       expect(
         ProvisionalStore(
