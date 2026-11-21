@@ -1110,7 +1110,7 @@ String _messagesLine(
   final head = read == 0
       ? 'AI has not read any of your messages yet'
       : 'AI read $read of your messages'
-            '${needCheck > 0 ? ' · $needCheck of them need your check in Needs review' : ''}';
+            '${needCheck > 0 ? ' · $needCheck ${needCheck == 1 ? 'needs' : 'need'} your check in Needs review' : ''}';
   if (notRead <= 0) return head;
   return '$head · $notRead could not be read yet${retrying ? ', retrying' : ''}';
 }
@@ -1158,7 +1158,7 @@ GeminiBarState geminiBarState({
     final waiting = local?.checkingTemplates.length ?? 0;
     final phone =
         'AI read $read of your messages'
-        '${aiNeedsCheck > 0 ? ' · $aiNeedsCheck need your check' : ''}'
+        '${aiNeedsCheck > 0 ? ' · $aiNeedsCheck ' '${aiNeedsCheck == 1 ? 'needs' : 'need'} your check' : ''}'
         '${notRead > 0 ? ' · $notRead could not be read yet' : ''}'
         ' · $openItems still need you';
     // No connection: say so, and say it is not Gemini or the server that is
