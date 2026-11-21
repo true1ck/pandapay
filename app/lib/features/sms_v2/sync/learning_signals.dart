@@ -198,7 +198,7 @@ class LearningSignalUpload {
         // Without these the shops could never be reported again after the
         // server deleted them on withdrawal.
         queue.db.execute(
-          "DELETE FROM v2_sync_state WHERE namespace=? AND key LIKE 'signal:uncat:%'",
+          "DELETE FROM v2_sync_state WHERE namespace=? AND (key LIKE 'signal:uncat:%' OR key LIKE 'signal:refused:%')",
           [queue.namespace],
         );
         queue.db.execute('RELEASE sms_v2_signal_revoke');
@@ -243,13 +243,14 @@ class LearningSignalUpload {
   Future<void> drain() async {
     if (!await _canShare()) return;
     collectUncategorised();
+    // A 400 means the server dislikes at least one record of the request: the next requests carry one each until
+    // the one it dislikes is found, so it cannot hold back the other 49.
+    var singly = false;
+    var refusedInPass = 0;
+    final state = SyncStateStore(queue.db, namespace: queue.namespace);
     while (accountIsCurrent()) {
       if (!await _canShare()) return;
-      final records = queue
-          .due(clock(), limit: 2500)
-          .where((item) => item.kind == 'signal')
-          .take(50)
-          .toList();
+      final records = queue.due(clock(), limit: 50, kind: 'signal').take(singly ? 1 : 50).toList();
       if (records.isEmpty) return;
       try {
         final admission = await headers();
@@ -279,11 +280,42 @@ class LearningSignalUpload {
         if (!await _canShare()) return;
         // 503 learning_paused, 429 and 403 are all "not now": the outbox backs
         // off and keeps the signal.
+        if (response.statusCode == 400) {
+          // A server that refuses everything is not one bad record: stop after a few refusals and try next pass.
+          if (++refusedInPass > 6) {
+            for (final record in records) {
+              queue.retry(record, clock());
+            }
+            return;
+          }
+          if (records.length > 1) {
+            singly = true;
+            continue;
+          }
+          // The one record, refused alone: kept for one more try (a refusal can be the server's fault), dropped
+          // when it is refused alone a second time.
+          final marker = 'signal:refused:${records.single.id}';
+          if (state.get(marker) == null) {
+            state.put(marker, '1');
+            queue.retry(records.single, clock());
+          } else {
+            queue.acknowledge(records.single);
+            queue.db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [queue.namespace, marker]);
+          }
+          singly = false;
+          continue;
+        }
         if (response.statusCode != 200 && response.statusCode != 202) {
           throw const FormatException('Signal upload failed');
         }
         for (final record in records) {
           queue.acknowledge(record);
+        }
+        if (records.length == 1 && state.get('signal:refused:${records.single.id}') != null) {
+          queue.db.execute('DELETE FROM v2_sync_state WHERE namespace=? AND key=?', [
+            queue.namespace,
+            'signal:refused:${records.single.id}',
+          ]);
         }
       } catch (_) {
         for (final record in records) {

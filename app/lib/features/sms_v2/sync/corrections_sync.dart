@@ -92,11 +92,8 @@ class CorrectionsSync {
     var handled = 0;
     while (accountIsCurrent() && handled < 50) {
       final pending = queue
-          .due(clock(), limit: 500)
-          .where(
-            (record) =>
-                record.kind == 'correction' && !waiting.contains(record.id),
-          )
+          .due(clock(), limit: 500, kind: 'correction')
+          .where((record) => !waiting.contains(record.id))
           .firstOrNull;
       if (pending == null) return sent;
       handled++;
