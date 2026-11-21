@@ -213,8 +213,7 @@ class DraftRejectionUpload {
     var sent = 0;
     for (var handled = 0; handled < 20 && accountIsCurrent(); handled++) {
       final pending = queue
-          .due(clock(), limit: 500)
-          .where((record) => record.kind == kind)
+          .due(clock(), limit: 500, kind: kind)
           .firstOrNull;
       if (pending == null) return sent;
       final Map<String, Object?> payload;
