@@ -77,13 +77,16 @@ function isSystemicProviderAnswer(status, bodyText) {
 }
 // The wait the provider itself asks for, in ms (0 when it does not say): the Retry-After header, or the
 // retryDelay Gemini puts in the body of a 429 ("34s").
+// A provider's own wait is passed on, but never beyond a day: a Retry-After of years would park a layout for ever (and
+// run_after is a timestamp).
+const MAX_PROVIDER_DELAY_MS = 86_400_000;
 function providerDelayMs(bodyText, headers) {
   const seconds = Number(headers?.get?.("retry-after"));
-  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000;
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds * 1000, MAX_PROVIDER_DELAY_MS);
   try {
     for (const detail of JSON.parse(bodyText)?.error?.details ?? []) {
       const match = /^([0-9.]+)s$/i.exec(String(detail?.retryDelay ?? ""));
-      if (match && Number(match[1]) > 0) return Math.round(Number(match[1]) * 1000);
+      if (match && Number(match[1]) > 0) return Math.min(Math.round(Number(match[1]) * 1000), MAX_PROVIDER_DELAY_MS);
     }
   } catch {
     // Not JSON: no delay given.
@@ -639,6 +642,7 @@ function draftUsage(response, config, layoutOnly) {
 // consenting people submitted a layout, in either mode.
 const DRAFT_JOB_DEADLINE_MS = 90000;
 const DRAFT_JOB_LEASE_MS = 120000;
+const TRANSIENT_REPLY_REASONS = new Set(["empty", "no_usage"]);
 const MAX_DRAFT_ROUTE_CALLS = 15; // Up to seven providers, one re-ask of each that answered wrongly, and one exhaustion response.
 // A job that ends with a rejected draft or the 90 s budget run out while "some route had trouble" is retried
 // (5 min, 30 min, 24 h) without counting against the layout. Three such exhausted cycles in a row (nine jobs) fail it
@@ -659,6 +663,12 @@ async function reapExpiredDraftJobs(client, draftingVersion) {
        ai_drafting_version=coalesce(t.ai_drafting_version,$1),ai_job_attempts=greatest(t.ai_job_attempts,1),
        ai_run_after=clock_timestamp()+pandapay.sms_v2_draft_retry_delay(greatest(t.ai_job_attempts,1)),
        failure_code=CASE WHEN t.ai_job_attempts=3 THEN 'draft_infrastructure_exhausted' ELSE 'worker_interrupted' END,
+       -- Three abandoned jobs in a row end a cycle and count it: a layout that crashes the worker every time reaches the
+       -- per-version cap (draft_layout_cap) after five cycles instead of looping for ever (22 Nov 2026 audit).
+       ai_counted_jobs=least(5,t.ai_counted_jobs+CASE WHEN t.ai_job_attempts=3 AND t.ai_drafting_version IS NOT NULL THEN 1 ELSE 0 END),
+       ai_counted_jobs_by_version=CASE WHEN t.ai_job_attempts=3 AND t.ai_drafting_version IS NOT NULL
+         THEN jsonb_set(t.ai_counted_jobs_by_version,ARRAY[t.ai_drafting_version],to_jsonb(least(5,t.ai_counted_jobs+1)))
+         ELSE t.ai_counted_jobs_by_version END,
        result_revision=nextval('sms_v2_template_revision')
        FROM expired WHERE t.template_hash=expired.template_hash`,
     [draftingVersion],
@@ -675,7 +685,7 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
   const outageDeferred = `t.ai_status='queued' AND t.failure_detail[1]='systemic'
     AND t.failure_code IN ('provider_unavailable','draft_infrastructure_exhausted')
     AND t.ai_run_after > clock_timestamp() + interval '2 minutes' AND ${currentConsent}`;
-  return {
+  const store = {
     // Admin-set values, read fresh at each loop (settings.js).
     settings() {
       return tx((client) => readSettings(client, { force: true }));
@@ -854,6 +864,11 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
         ),
       );
     },
+    // The slow automatic retry (migration 20261127000300): layouts that failed for reasons that can pass go back in the queue
+    // after 1, 3, 9 and 27 days, a few at a time. Returns how many.
+    requeueStale() {
+      return tx(async (client) => Number((await client.query("SELECT pandapay.sms_v2_ai_requeue_stale() AS n")).rows[0].n));
+    },
     async beginAttempt(template, attempt, prompt, config) {
       return tx(async (client) => {
         const row = (
@@ -952,7 +967,21 @@ function createPgWorkerStore({ withAdminClient, adminId, transaction, draftingVe
       });
     },
   };
+  // Saving the answer is the one write that must not be lost: it was paid for. A lock or statement timeout, a deadlock or a
+  // dropped connection is tried once more after a short pause (the write is conditional on the lease, so a repeat is safe).
+  const finishOnce = store.finish;
+  store.finish = async (...args) => {
+    try {
+      return await finishOnce(...args);
+    } catch (error) {
+      if (!TRANSIENT_DB_CODES.has(error?.code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return finishOnce(...args);
+    }
+  };
+  return store;
 }
+const TRANSIENT_DB_CODES = new Set(["55P03", "57014", "40001", "40P01", "ECONNRESET", "ETIMEDOUT", "57P01"]);
 
 // What went wrong in an attempt, as codes only (never text): kept on the attempt row and on the layout.
 function failureOf(error) {
@@ -961,7 +990,9 @@ function failureOf(error) {
   if (error instanceof SyntaxError)
     return error.noRouteLeft
       ? { kind: "no_route_left", codes: ["ai_service_no_route_left"], status: null }
-      : { kind: "json_invalid", codes: ["answer_not_json"], status: null };
+      // The reason the service gave (blocked, truncated, empty, not_json, bad_shape...) is kept: it used to be dropped and
+      // every one of them was stored as "answer_not_json".
+      : { kind: "json_invalid", codes: [typeof error.serviceReason === "string" ? error.serviceReason : "answer_not_json"], status: null };
   if (error instanceof AnswerError || error instanceof LayoutError) return { kind: "answer_invalid", codes: [error.code], status: null };
   return { kind: "provider_error", codes: [String(error?.message ?? "provider_error").slice(0, 60)], status: null };
 }
@@ -1108,6 +1139,9 @@ async function runTemplateWorkerOnce({
         errors = failure.codes;
         if (error instanceof ProviderBusyError) busy = error;
         if (layoutOnly && error instanceof LayoutError) layoutError = error.code;
+        // A reply with nothing in it (or no usage at all) is a provider in trouble, not a layout the AI cannot read: it is
+        // retried as infrastructure, which never counts against the layout.
+        if (durable && error instanceof SyntaxError && TRANSIENT_REPLY_REASONS.has(error.serviceReason)) routing.hadInfrastructureFailure = true;
         if (durable && failure.kind === "provider_error") {
           busy = new ProviderBusyError("draft_worker_unavailable", { systemic: true });
           failure = failureOf(busy);
