@@ -2144,12 +2144,16 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
                       widget.initialCategory!.toLowerCase() ==
                           row.label.toLowerCase()),
             ),
-          // Shown like a category so an investment is not lost from this
+          // Behaves like a category so an investment is not lost from this
           // screen, but it is not one: no share of spending, not in the total
-          // or the mix, and it opens the investments flow instead of expanding.
+          // or the mix.
           if (showInvested)
-            (context) =>
-                _InvestmentsRow(amount: invested, onTap: _openInvestments),
+            (context) => _ExpandableInvestmentsRow(
+              amount: invested,
+              entries: _investmentEntries,
+              detailsLoading: widget.transactionDetailsLoading,
+              onOpenActivity: _openInvestments,
+            ),
           if (instrumentRows.isNotEmpty) ...[
             (context) => const SizedBox(height: AppSpace.md),
             (context) => _BreakdownPanel(
@@ -2276,7 +2280,8 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
     );
   }
 
-  EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
+  /// Active rows of [kind] that pass the month and every filter on show.
+  List<TransactionEntry> _rowsOfKind(TxnEntryKind kind) {
     final selection = SpendingSelection(
       payment: _paymentFilter,
       categories: _categoryFilters,
@@ -2286,7 +2291,7 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
       untagged: _untagged,
       month: _monthFilter,
     );
-    final rows = {for (final row in widget.transactions) row.id: row}.values
+    return {for (final row in widget.transactions) row.id: row}.values
         .where(
           (row) =>
               row.status == 'active' &&
@@ -2298,6 +2303,15 @@ class _ReportBodyState extends ConsumerState<_ReportBody> {
               ),
         )
         .toList();
+  }
+
+  /// The payments the Investments row opens into: the same rows the invested
+  /// amount is made of, so a picked month or a filter narrows both alike.
+  List<TransactionEntry> get _investmentEntries =>
+      _rowsOfKind(TxnEntryKind.investment);
+
+  EntryKindTotals _filteredKindTotals(TxnEntryKind kind) {
+    final rows = _rowsOfKind(kind);
     return EntryKindTotals(
       total: _sum(rows),
       txnCount: rows.length,
@@ -4985,7 +4999,11 @@ class _InvestedLine extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpace.xs),
-        Flexible(
+        // Not a Flexible: that splits the spare width with the title, which
+        // left the amount floating mid-row. A capped width lets the title take
+        // the rest, so the amount sits at the right edge (before the chevron).
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: compact ? 100 : 130),
           child: FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerRight,
@@ -5034,84 +5052,115 @@ class _InvestedLine extends StatelessWidget {
   }
 }
 
-/// Investments as a row of the Categories list, for showing only: the row has
-/// no share of spending and no bar, is not in the total or the mix, and opens
-/// the investments in Activity (the one investments flow) instead of
-/// expanding. It is not a category, so nothing else treats it as one.
-class _InvestmentsRow extends StatelessWidget {
+/// Investments as a row of the Categories list. It opens like any category,
+/// into its payees and then the payments, so it behaves the same as Education
+/// or Groceries. It is still not a category: no share of spending and no bar,
+/// not in the total or the mix, and "See all in Activity" opens the one
+/// investments flow.
+class _ExpandableInvestmentsRow extends StatelessWidget {
   final Money amount;
-  final VoidCallback onTap;
+  final List<TransactionEntry> entries;
+  final bool detailsLoading;
+  final VoidCallback onOpenActivity;
 
-  const _InvestmentsRow({required this.amount, required this.onTap});
+  const _ExpandableInvestmentsRow({
+    required this.amount,
+    required this.entries,
+    required this.detailsLoading,
+    required this.onOpenActivity,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final groups = _groupByPayee(entries, unknownLabel: 'Unknown');
+    final count = entries.length;
     return CardSummaryPanel(
       key: const ValueKey('spending_investments_row'),
       padding: EdgeInsets.zero,
       margin: const EdgeInsets.only(bottom: AppSpace.sm),
-      child: Semantics(
-        button: true,
-        label:
-            'Investments ${amount.format(hidePaise: false)}, not counted in '
-            'your spending. Opens your investments',
-        child: ExcludeSemantics(
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpace.md,
-                AppSpace.sm,
-                AppSpace.sm,
-                AppSpace.sm,
+      child: _SpendingExpandableRow(
+        initiallyExpanded: false,
+        tilePadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          AppSpace.sm,
+          AppSpace.sm,
+          AppSpace.sm,
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpace.md,
+          0,
+          AppSpace.md,
+          AppSpace.sm,
+        ),
+        leading: _SpendingVisualBadge(visual: _investmentVisual, size: 38),
+        titleBuilder: (expanded) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SpendingBreakdownHeader(
+              label: Text(
+                'Investments',
+                style: BambooFonts.ui(13.5, color: BambooInk.ink900),
+                overflow: TextOverflow.ellipsis,
               ),
-              child: Row(
-                children: [
-                  _SpendingVisualBadge(visual: _investmentVisual, size: 38),
-                  const SizedBox(width: AppSpace.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SpendingBreakdownHeader(
-                          label: Text(
-                            'Investments',
-                            style: BambooFonts.ui(
-                              13.5,
-                              color: BambooInk.ink900,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          amount: MoneyText(
-                            amount,
-                            confidence: Confidence.confirmed,
-                            showConfidenceIcon: false,
-                            style: BambooFonts.ui(
-                              13.5,
-                              weight: FontWeight.w600,
-                              color: BambooInk.ink900,
-                            ),
-                          ),
-                          trailing: const Icon(
-                            Icons.chevron_right_rounded,
-                            size: 20,
-                            color: BambooInk.ink500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Not counted in your spending · Tap to see them',
-                          style: BambooFonts.ui(11.5, color: BambooInk.ink500),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              amount: MoneyText(
+                amount,
+                confidence: Confidence.confirmed,
+                showConfidenceIcon: false,
+                style: BambooFonts.ui(
+                  13.5,
+                  weight: FontWeight.w600,
+                  color: BambooInk.ink900,
+                ),
               ),
+              trailing: _SpendingChevron(expanded: expanded),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              count == 0
+                  ? 'Not counted in your spending · Tap to see them'
+                  : '$count ${count == 1 ? 'transaction' : 'transactions'} · '
+                        'Not counted in your spending',
+              style: BambooFonts.ui(11.5, color: BambooInk.ink500),
+            ),
+          ],
+        ),
+        children: [
+          if (detailsLoading && entries.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Loading transaction details…'),
+              ),
+            )
+          else if (groups.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpace.sm),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Transaction details are not available for this period yet.',
+                  style: BambooFonts.ui(12, color: BambooInk.ink500),
+                ),
+              ),
+            )
+          else
+            for (final group in groups)
+              _MerchantGroup(
+                merchant: group.label,
+                vpa: group.vpa,
+                entries: group.entries,
+                isInvestment: true,
+              ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey('spending_investments_see_all'),
+              onPressed: onOpenActivity,
+              child: const Text('See all in Activity'),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -5575,16 +5624,21 @@ class _MerchantGroup extends ConsumerWidget {
   final List<TransactionEntry> entries;
   final bool isCollapsible;
 
+  /// Money put into investments: not spending, so the ledger's spend figure
+  /// would read ₹0 for it. Its amount is what the payments add up to.
+  final bool isInvestment;
+
   const _MerchantGroup({
     required this.merchant,
     required this.entries,
     this.vpa,
     this.isCollapsible = true,
+    this.isInvestment = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final model = ref.watch(smsV2ReportingEnabledProvider)
+    final model = ref.watch(smsV2ReportingEnabledProvider) && !isInvestment
         ? ref.watch(smsV2LedgerReadModelProvider).valueOrNull
         : null;
     final amount = model != null

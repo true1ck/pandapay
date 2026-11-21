@@ -2399,6 +2399,26 @@ void main() {
       // The mix names the month, not the whole range.
       expect(find.text('Spending mix · Oct 2026'), findsOneWidget);
 
+      // The Investments row below is made of that month's payments only.
+      final row = find.byKey(const ValueKey('spending_investments_row'));
+      // The chart is a second scrollable; drive the page's own list.
+      await tester.scrollUntilVisible(
+        row,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('1 transaction · Not counted in your spending'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: row, matching: find.text('₹7,000.00')),
+        findsOneWidget,
+      );
+
       await tester.ensureVisible(line);
       await tester.tap(line);
       await tester.pumpAndSettle();
@@ -2975,8 +2995,8 @@ void main() {
       );
     });
 
-    testWidgets('tapping the line or the row opens Activity on this '
-        "period's investments", (tester) async {
+    testWidgets('tapping the line, or See all in the opened row, opens Activity '
+        "on this period's investments", (tester) async {
       await tester.binding.setSurfaceSize(const Size(400, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       const expected =
@@ -2997,13 +3017,82 @@ void main() {
         tester,
         _report(spend: 42000, investment: 15000, byCategory: mix),
       );
+      // The row opens like a category; Activity is one tap further.
       final row = find.byKey(const ValueKey('spending_investments_row'));
       await tester.scrollUntilVisible(row, 300);
       await tester.tap(row);
       await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('activity-uri')), findsNothing);
+      final seeAll = find.byKey(const ValueKey('spending_investments_see_all'));
+      await tester.ensureVisible(seeAll);
+      await tester.tap(seeAll);
+      await tester.pumpAndSettle();
       expect(
         tester.widget<Text>(find.byKey(const ValueKey('activity-uri'))).data,
         expected,
+      );
+    });
+
+    testWidgets('the Investments row opens into payees and payments like a '
+        'category', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(400, 1600));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(
+        tester,
+        _report(spend: 42000, investment: 8000, byCategory: mix),
+        transactions: [
+          _detailEntry(
+            id: 'fund-a-1',
+            merchant: 'Fund A',
+            amount: 3000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 5),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'fund-a-2',
+            merchant: 'Fund A',
+            amount: 2000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 20),
+            entryKind: TxnEntryKind.investment,
+          ),
+          _detailEntry(
+            id: 'fund-b-1',
+            merchant: 'Fund B',
+            amount: 3000,
+            categoryId: 'investments',
+            categoryName: 'Investments',
+            occurredAt: DateTime(2026, 8, 25),
+            entryKind: TxnEntryKind.investment,
+          ),
+        ],
+      );
+      final row = find.byKey(const ValueKey('spending_investments_row'));
+      await tester.scrollUntilVisible(row, 300);
+      // Counted, labelled as not spending, and shut until it is tapped.
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('3 transactions · Not counted in your spending'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Fund A'), findsNothing);
+
+      await tester.tap(row);
+      await tester.pumpAndSettle();
+      // Payees, each with what it adds up to (not the ledger's spend of 0).
+      expect(find.text('Fund A'), findsOneWidget);
+      expect(find.text('Fund B'), findsOneWidget);
+      expect(find.text('₹5,000.00'), findsOneWidget);
+      expect(find.text('₹3,000.00'), findsWidgets);
+      // Still outside every spending figure.
+      expect(
+        find.descendant(of: row, matching: find.textContaining('%')),
+        findsNothing,
       );
     });
 
