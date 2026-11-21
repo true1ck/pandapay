@@ -17,7 +17,7 @@ import 'package:sqlite3/sqlite3.dart';
 const _namespace = 'user:private-stats';
 
 void main() {
-  test('a hit on a private AI rule is reported under the layout AI id, as sent to review', () {
+  test('a hit on a private AI rule is reported under the layout AI id', () {
     final database = AppDatabase.forTesting(sqlite3.openInMemory());
     addTearDown(() {
       database.db.dispose();
@@ -68,7 +68,9 @@ void main() {
     );
     expect(rows.map((row) => row['rule_id']), [rule.id], reason: 'the same id on every phone');
     expect(rows.single['hits'], 1);
-    expect(rows.single['to_review'], 1);
+    // A confident reading raises no review question, so it is not counted as sent to review (only a low-confidence
+    // or contradicting one is).
+    expect(rows.single['to_review'], 0);
     final payload = StatsStore(database.db, namespace: _namespace)
         .payload(DateTime.utc(2026, 11, 4, 8), appVersion: '2', bundleVersion: 1)!;
     expect((payload['stats'] as List).single, containsPair('ruleId', rule.id));
