@@ -755,18 +755,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoute.activity,
         builder: (context, state) => Scaffold(
           appBar: AppBar(title: const Text('Activity')),
-          body: ActivityScreen(
-            initialTagIds: {?state.uri.queryParameters['tag']},
-            initialCategoryId: state.uri.queryParameters['category'],
-            initialCategoryLabel: state.uri.queryParameters['categoryLabel'],
-            initialFrom: DateTime.tryParse(
-              state.uri.queryParameters['from'] ?? '',
-            ),
-            initialTo: DateTime.tryParse(state.uri.queryParameters['to'] ?? ''),
-            initialSpendOnly: state.uri.queryParameters['spendOnly'] == 'true',
-            initialQuery: state.uri.queryParameters['q'],
-            initialType: state.uri.queryParameters['type'],
-          ),
+          body: activityScreenForUri(state.uri),
         ),
       ),
       // D2/D3 — deep-linkable per ui-spec §1 ("transaction detail" named
@@ -1739,6 +1728,40 @@ class _FloatingNavBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// What Activity opens on for [uri]. The long-standing `tag`, `category`,
+/// `categoryLabel`, `from`, `to`, `spendOnly`, `q` and `type` read as before;
+/// `tag`, `category` and `categoryLabel` may now repeat, and these are new:
+/// `merchant` and `card` (repeatable), `untagged=true`, `kinds` (Money in kinds,
+/// comma-separated) and `net=true` (the Spending page's own count of spending).
+/// They let a Spending tile open the list that tile added up.
+ActivityScreen activityScreenForUri(Uri uri) {
+  final all = uri.queryParametersAll;
+  Set<String> many(String key) => {
+    for (final v in all[key] ?? const <String>[])
+      if (v.isNotEmpty) v,
+  };
+  return ActivityScreen(
+    initialTagIds: many('tag'),
+    initialCategoryId: uri.queryParameters['category'],
+    initialCategoryLabel: uri.queryParameters['categoryLabel'],
+    initialCategoryIds: many('category'),
+    initialCategoryLabels: many('categoryLabel'),
+    initialMerchants: many('merchant'),
+    initialCardIds: many('card'),
+    initialUntagged: uri.queryParameters['untagged'] == 'true',
+    initialMoneyInKinds: {
+      for (final kind in (uri.queryParameters['kinds'] ?? '').split(','))
+        if (kind.isNotEmpty) kind,
+    },
+    initialNetSpending: uri.queryParameters['net'] == 'true',
+    initialFrom: DateTime.tryParse(uri.queryParameters['from'] ?? ''),
+    initialTo: DateTime.tryParse(uri.queryParameters['to'] ?? ''),
+    initialSpendOnly: uri.queryParameters['spendOnly'] == 'true',
+    initialQuery: uri.queryParameters['q'],
+    initialType: uri.queryParameters['type'],
+  );
 }
 
 /// The Rewards page on [tab], keeping any `period` / `from` / `to` the old

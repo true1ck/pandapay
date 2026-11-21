@@ -101,6 +101,76 @@ void main() {
     );
   });
 
+  group('as a link to Activity', () {
+    String? noCard(String source) => null;
+
+    test('nothing selected carries nothing', () {
+      final link = const SpendingSelection().toActivityLink(
+        cardIdForSource: noCard,
+      );
+      expect(link.params, isEmpty);
+      expect(link.notCarried, isEmpty);
+    });
+
+    test('tags, untagged, ids, labels and a merchant carry as they are', () {
+      final link =
+          const SpendingSelection(
+            tagIds: {'a', 'b'},
+            untagged: true,
+            categories: {'food', 'label:dining out'},
+            merchant: 'Corner Shop',
+          ).toActivityLink(
+            cardIdForSource: noCard,
+          );
+      expect(link.params, {
+        'tag': ['a', 'b'],
+        'untagged': ['true'],
+        'category': ['food'],
+        'categoryLabel': ['dining out'],
+        'merchant': ['Corner Shop'],
+      });
+      expect(link.notCarried, isEmpty);
+    });
+
+    test('a source carries only when it is exactly one saved card', () {
+      const selection = SpendingSelection(card: 'HDFC Millennia');
+      final saved = selection.toActivityLink(
+        cardIdForSource: (source) => source == 'HDFC Millennia' ? 'uc1' : null,
+      );
+      expect(saved.params, {
+        'card': ['uc1'],
+      });
+      expect(saved.notCarried, isEmpty);
+
+      // A bank account, a wallet, UPI or two cards under one name is not one.
+      final other = const SpendingSelection(
+        card: 'Bank account ••1234',
+      ).toActivityLink(cardIdForSource: noCard);
+      expect(other.params, isEmpty);
+      expect(other.notCarried, ['account']);
+    });
+
+    test('what Activity cannot filter on is named, not silently dropped', () {
+      final link =
+          const SpendingSelection(
+            payment: TxnInstrument.upiBank,
+            categories: {'custom:abc', 'food'},
+            merchant: 'Unknown merchant',
+          ).toActivityLink(
+            cardIdForSource: noCard,
+          );
+      // The one category it can take still goes.
+      expect(link.params, {
+        'category': ['food'],
+      });
+      expect(
+        link.notCarried,
+        containsAll(['payment method', 'category', 'merchant']),
+      );
+      expect(link.notCarried.length, 3);
+    });
+  });
+
   test('a masked source account is filterable as an account', () {
     final upi = TransactionEntry(
       id: 'upi',
