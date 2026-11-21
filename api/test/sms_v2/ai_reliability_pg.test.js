@@ -9,7 +9,7 @@ const { createPgWorkerStore } = require("../../src/sms_v2/template_worker");
 
 const workerUrl = process.env.SMS_V2_TEST_AI_WORKER_DATABASE_URL;
 const skip = loopSkip || !workerUrl;
-const hashOf = (c) => c.repeat(64);
+const hashOf = (c) => c.repeat(Math.floor(64 / c.length));
 const RETRYABLE = "draft_validation_failed";
 
 async function rig_(t, profileCount = 2) {
